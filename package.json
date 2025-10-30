@@ -1,0 +1,20 @@
+{
+  "name": "hydroline-hydcraft-services",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "backend:dev": "pnpm --filter @hydroline/backend run dev",
+    "backend:build": "pnpm --filter @hydroline/backend run build",
+    "backend:db:generate": "pnpm --filter @hydroline/backend run db:generate",
+    "backend:db:migrate": "pnpm --filter @hydroline/backend run db:migrate",
+    "backend:db:studio": "pnpm --filter @hydroline/backend run db:studio",
+    "backend:test": "pnpm --filter @hydroline/backend run test",
+    "frontend:dev": "pnpm --filter @hydroline/frontend run dev",
+    "frontend:build": "pnpm --filter @hydroline/frontend run build",
+    "frontend:type-check": "pnpm --filter @hydroline/frontend run type-check",
+    "frontend:lint": "pnpm --filter @hydroline/frontend run lint",
+    "frontend:format": "pnpm --filter @hydroline/frontend run format",
+    "frontend:format:write": "pnpm --filter @hydroline/frontend run format:write"
+  }
+}

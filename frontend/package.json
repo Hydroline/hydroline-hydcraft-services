@@ -1,0 +1,33 @@
+{
+  "name": "@hydroline/frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "format:write": "prettier --write ."
+  },
+  "dependencies": {
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "@rushstack/eslint-patch": "^1.10.3",
+    "@tsconfig/node20": "^20.1.4",
+    "@types/node": "^22.10.7",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/eslint-config-prettier": "^9.0.0",
+    "@vue/eslint-config-typescript": "^14.1.2",
+    "@vue/tsconfig": "^0.5.0",
+    "eslint": "^9.18.0",
+    "eslint-plugin-vue": "^9.30.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "vite": "^7.1.12",
+    "vue-tsc": "^2.1.10"
+  }
+}
