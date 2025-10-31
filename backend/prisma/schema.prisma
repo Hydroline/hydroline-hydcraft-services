@@ -1,47 +1,110 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// Prisma schema for hydroline-hydcraft-services backend
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  name      String?
-  email     String   @unique
-  password  String?
-  emailVerified DateTime?
-  image     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum PlayerStatus {
+  ACTIVE
+  AWAY
+  UNKNOWN
+  BANNED
+  ABNORMAL
+}
 
-  accounts Account[]
-  sessions Session[]
+enum StatusSource {
+  SYSTEM
+  ADMIN
+  EXTERNAL
+}
+
+enum LifecycleEventType {
+  REGISTERED
+  MC_JOIN
+  MC_LEAVE
+  ACCOUNT_BIND
+  ACCOUNT_UNBIND
+  STATUS_CHANGE
+  PROFILE_UPDATE
+  CONTACT_UPDATE
+  OTHER
+}
+
+enum ContactVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum MinecraftProfileSource {
+  MANUAL
+  LUCKPERMS
+  AUTHME
+  MOJANG
+  IMPORT
+  OTHER
+}
+
+enum GenderType {
+  UNSPECIFIED
+  MALE
+  FEMALE
+  NON_BINARY
+  OTHER
+}
+
+enum PIICStatus {
+  ACTIVE
+  REVOKED
+}
+
+model User {
+  id             String   @id @default(uuid())
+  name           String?
+  email          String   @unique
+  password       String?
+  emailVerified  Boolean  @default(false)
+  image          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  profile        UserProfile?
+  minecraftIds   UserMinecraftProfile[]
+  statusEvents   UserStatusEvent[]
+  statusSnapshot UserStatusSnapshot?
+  lifecycle      UserLifecycleEvent[]
+  contacts       UserContact[]
+  piicHistory    UserPiicHistory[]
+  roles          UserRole[]
 
   @@map("users")
 }
 
 model Account {
-  id                String  @id @default(cuid())
+  id                String  @id @default(uuid())
+  accountId         String  @unique
   userId            String
-  type              String
+  providerId        String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
+  type              String
+  accessToken       String?
+  refreshToken      String?
+  idToken           String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
   scope             String?
-  id_token          String?
-  session_state     String?
+  password          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -50,20 +113,232 @@ model Account {
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  token      String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  ipAddress  String?
+  userAgent  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
 }
 
-model VerificationToken {
+model Verification {
+  id         String   @id @default(uuid())
   identifier String
-  token      String   @unique
-  expires    DateTime
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  @@unique([identifier, token])
-  @@map("verificationtokens")
+  @@unique([identifier, value])
+  @@map("verifications")
+}
+
+model UserProfile {
+  id                         String   @id @default(uuid())
+  userId                     String   @unique
+  primaryMinecraftProfileId  String?
+  piic                       String?  @unique
+  piicAssignedAt             DateTime?
+  displayName                String?
+  birthday                   DateTime?
+  gender                     GenderType? @default(UNSPECIFIED)
+  motto                      String?
+  timezone                   String?
+  locale                     String?
+  extra                      Json?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  user                       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryMinecraftProfile    UserMinecraftProfile? @relation("PrimaryMinecraftProfile", fields: [primaryMinecraftProfileId], references: [id])
+
+  @@map("user_profiles")
+}
+
+model UserPiicHistory {
+  id              String     @id @default(uuid())
+  userId          String
+  piic            String
+  status          PIICStatus @default(ACTIVE)
+  reason          String?
+  metadata        Json?
+  generatedAt     DateTime   @default(now())
+  revokedAt       DateTime?
+  generatedById   String?
+  revokedById     String?
+
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_piic_history")
+  @@index([piic], map: "idx_user_piic_history_piic")
+  @@index([userId, generatedAt], map: "idx_user_piic_history_user")
+}
+
+model UserMinecraftProfile {
+  id                String                  @id @default(uuid())
+  userId            String
+  playerUuid        String?                 @unique
+  minecraftId       String
+  nickname          String?
+  isPrimary         Boolean                 @default(false)
+  source            MinecraftProfileSource  @default(MANUAL)
+  verifiedAt        DateTime?
+  verificationNote  String?
+  metadata          Json?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryProfileFor UserProfile[]           @relation("PrimaryMinecraftProfile")
+
+  @@map("user_minecraft_profiles")
+  @@index([userId, isPrimary], map: "idx_user_minecraft_primary")
+  @@index([minecraftId], map: "idx_user_minecraft_id")
+}
+
+model UserStatusEvent {
+  id             String       @id @default(uuid())
+  userId         String
+  status         PlayerStatus
+  reasonCode     String?
+  reasonDetail   String?
+  source         StatusSource @default(SYSTEM)
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  createdById    String?
+
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshot       UserStatusSnapshot? @relation("StatusSnapshotEvent")
+
+  @@map("user_status_events")
+  @@index([userId, createdAt], map: "idx_user_status_user_time")
+}
+
+model UserStatusSnapshot {
+  userId        String   @id
+  statusEventId String   @unique
+  status        PlayerStatus
+  updatedAt     DateTime @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event         UserStatusEvent @relation("StatusSnapshotEvent", fields: [statusEventId], references: [id], onDelete: Cascade)
+
+  @@map("user_status_snapshot")
+}
+
+model UserLifecycleEvent {
+  id           String              @id @default(uuid())
+  userId       String
+  eventType    LifecycleEventType
+  occurredAt   DateTime
+  source       String?
+  notes        String?
+  metadata     Json?
+  createdAt    DateTime            @default(now())
+  createdById  String?
+
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_lifecycle_events")
+  @@index([userId, eventType], map: "idx_user_lifecycle_type")
+}
+
+model ContactChannel {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  displayName     String
+  description     String?
+  validationRegex String?
+  isRequired      Boolean  @default(false)
+  allowMultiple   Boolean  @default(true)
+  isVerifiable    Boolean  @default(false)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  contacts        UserContact[]
+
+  @@map("contact_channels")
+}
+
+model UserContact {
+  id             String                     @id @default(uuid())
+  userId         String
+  channelId      String
+  value          String
+  isPrimary      Boolean                    @default(false)
+  verification   ContactVerificationStatus @default(UNVERIFIED)
+  verifiedAt     DateTime?
+  verificationCode String?
+  metadata       Json?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel        ContactChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("user_contacts")
+  @@unique([userId, channelId, value], map: "uq_user_contact_value")
+}
+
+model Role {
+  id           String   @id @default(uuid())
+  key          String   @unique
+  name         String
+  description  String?
+  isSystem     Boolean  @default(false)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userRoles        UserRole[]
+  rolePermissions  RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String  @id @default(uuid())
+  roleId       String
+  permissionId String
+
+  role        Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission  Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@map("role_permissions")
+  @@unique([roleId, permissionId], map: "uq_role_permission")
+}
+
+model UserRole {
+  id             String   @id @default(uuid())
+  userId         String
+  roleId         String
+  assignedById   String?
+  assignedAt     DateTime @default(now())
+  metadata       Json?
+
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@map("user_roles")
+  @@unique([userId, roleId], map: "uq_user_role")
+  @@index([roleId], map: "idx_user_roles_role")
 }

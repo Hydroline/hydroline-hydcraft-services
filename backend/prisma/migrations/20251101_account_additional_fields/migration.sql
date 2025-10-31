@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "accounts" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "password" TEXT,
+ADD COLUMN     "providerId" TEXT NOT NULL,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL;
+

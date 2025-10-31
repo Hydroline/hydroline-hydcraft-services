@@ -1,43 +1,90 @@
-import { Controller, Post, Body, Get, Req } from '@nestjs/common';
-import { Request } from 'express';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
+import { SignUpDto } from './dto/sign-up.dto';
+import { SignInDto } from './dto/sign-in.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { AuthGuard } from './auth.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
-  async signUp(
-    @Body() body: { email: string; password: string; name?: string },
-  ) {
-    const { email, password, name } = body;
-    return this.authService.signUp(email, password, name);
+  async signUp(@Body() dto: SignUpDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.signUp(dto);
+    this.attachCookies(res, result.cookies);
+    return {
+      tokens: {
+        accessToken: result.tokens.accessToken,
+        refreshToken: result.tokens.refreshToken,
+      },
+      user: result.user,
+    };
   }
 
   @Post('signin')
-  async signIn(@Body() body: { email: string; password: string }) {
-    const { email, password } = body;
-    return this.authService.signIn(email, password);
+  async signIn(@Body() dto: SignInDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.signIn(dto);
+    this.attachCookies(res, result.cookies);
+    return {
+      tokens: {
+        accessToken: result.tokens.accessToken,
+        refreshToken: result.tokens.refreshToken,
+      },
+      user: result.user,
+    };
+  }
+
+  @Post('refresh')
+  async refreshToken(
+    @Body() dto: RefreshTokenDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.refresh(dto);
+    this.attachCookies(res, result.cookies);
+    return {
+      tokens: {
+        accessToken: result.tokens.accessToken,
+        refreshToken: result.tokens.refreshToken,
+      },
+      user: result.user,
+    };
   }
 
   @Post('signout')
   async signOut(@Req() req: Request) {
-    const authorization = req.headers.authorization;
-    if (!authorization) {
-      return { success: false, message: 'No authorization header' };
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Missing Authorization header');
     }
-    const token = authorization.replace('Bearer ', '');
-    const success = await this.authService.signOut(token);
-    return { success };
+    const token = authHeader.slice(7);
+    return this.authService.signOut(token);
   }
 
   @Get('session')
+  @UseGuards(AuthGuard)
   async getSession(@Req() req: Request) {
-    const authorization = req.headers.authorization;
-    if (!authorization) {
-      return null;
+    return {
+      user: req.user,
+    };
+  }
+
+  private attachCookies(res: Response, cookies: string[]) {
+    if (!cookies || cookies.length === 0) {
+      return;
     }
-    const token = authorization.replace('Bearer ', '');
-    return this.authService.getSession(token);
+    cookies.forEach((cookie) => {
+      res.append('Set-Cookie', cookie);
+    });
   }
 }
