@@ -3,6 +3,10 @@
   "include": ["vite.config.ts"],
   "compilerOptions": {
     "composite": true,
-    "types": ["node"]
+    "baseUrl": ".",
+    "types": ["node"],
+    "paths": {
+      "#build/ui": ["./node_modules/.nuxt-ui/ui"]
+    }
   }
 }

@@ -1,0 +1,85 @@
+@font-face {
+  font-family: 'Inter';
+  src: url('@/assets/fonts/Inter.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'BricolageGrotesque';
+  src: url('@/assets/fonts/BricolageGrotesque.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'MiSans Latin';
+  src: url('@/assets/fonts/MiSans_Latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'BoutiqueBitmap';
+  font-weight: normal;
+  src: url('@/assets/fonts/BoutiqueBitmap.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'BoutiqueBitmap';
+  font-weight: bold;
+  src: url('@/assets/fonts/BoutiqueBitmap_Bold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('@/assets/fonts/JetBrains_Mono.woff2') format('woff2');
+}
+
+:root {
+  --font-family:
+    'BricolageGrotesque', 'Helvetica Neue', 'Helvetica', 'Roboto', 'BlinkMacSystemFont',
+    'MiSans', 'HarmonyOS Sans SC', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  line-height: 1.5;
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: radial-gradient(ellipse at left bottom,
+      var(--color-surface-0) 0% 50%,
+      var(--color-surface-1) 120% 175%);
+  min-height: 100vh;
+}
+
+*,
+*::before,
+*::after {
+  scrollbar-color: var(--color-surface-3) transparent;
+  scrollbar-width: thin;
+  box-sizing: border-box;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ui-color-primary-500) 85%, transparent);
+  color: var(--ui-primary-foreground);
+}
+
+::-moz-selection {
+  background: color-mix(in srgb, var(--ui-color-primary-500) 85%, transparent);
+  color: var(--ui-primary-foreground);
+}
+
+.dark ::selection {
+  background: color-mix(in srgb, var(--color-primary--hover) 70%, transparent);
+  color: var(--ui-primary-foreground);
+}
+
+.dark ::-moz-selection {
+  background: color-mix(in srgb, var(--color-primary--hover) 70%, transparent);
+  color: var(--ui-primary-foreground);
+}
