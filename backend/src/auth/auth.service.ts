@@ -6,6 +6,7 @@ import { SignInDto } from './dto/sign-in.dto';
 import { SignUpDto } from './dto/sign-up.dto';
 import { UsersService } from './users.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { generateRandomString, hashPassword } from 'better-auth/crypto';
 
 interface AuthResponse {
   token: string | null;
@@ -247,33 +248,70 @@ export class AuthService {
 
   private async ensureDefaultAdmin() {
     const adminEmail = 'admin@hydcraft.local';
-    const admin = await this.prisma.user.findUnique({ where: { email: adminEmail } });
-    if (admin) {
-      return;
-    }
-
-    const headers = new Headers();
     const password = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123456';
-    const result = await auth.api.signUpEmail({
-      body: {
-        email: adminEmail,
-        password,
-        name: 'Administrator',
-        rememberMe: false,
-      },
-      headers,
-      returnHeaders: true,
+    let admin = await this.prisma.user.findUnique({
+      where: { email: adminEmail },
+      include: { accounts: true },
     });
 
-    const payload = result.response as AuthResponse;
-    if (!payload.user?.id) {
-      throw new BadRequestException('Failed to bootstrap admin user');
+    if (!admin) {
+      const headers = new Headers();
+      const result = await auth.api.signUpEmail({
+        body: {
+          email: adminEmail,
+          password,
+          name: 'Administrator',
+          rememberMe: false,
+        },
+        headers,
+        returnHeaders: true,
+      });
+
+      const payload = result.response as AuthResponse;
+      if (!payload.user?.id) {
+        throw new BadRequestException('Failed to bootstrap admin user');
+      }
+
+      admin = await this.prisma.user.findUnique({
+        where: { id: payload.user.id },
+        include: { accounts: true },
+      });
+
+      if (!admin) {
+        throw new BadRequestException('Failed to bootstrap admin user');
+      }
     }
 
-    await this.usersService.initializeUserRecords(payload.user.id, {
-      displayName: 'Administrator',
+    const credentialAccount = admin.accounts.find(
+      (account) => account.provider === 'credential' || account.providerId === 'credential',
+    );
+
+    if (!credentialAccount) {
+      const hashedPassword = await hashPassword(password);
+      const accountIdentifier = generateRandomString(32, 'a-z', 'A-Z', '0-9');
+      await this.prisma.account.create({
+        data: {
+          userId: admin.id,
+          accountId: accountIdentifier,
+          type: 'credential',
+          provider: 'credential',
+          providerId: 'credential',
+          providerAccountId: accountIdentifier,
+          password: hashedPassword,
+        },
+      });
+    } else if (!credentialAccount.password) {
+      const hashedPassword = await hashPassword(password);
+      await this.prisma.account.update({
+        where: { id: credentialAccount.id },
+        data: { password: hashedPassword },
+      });
+    }
+
+    await this.usersService.initializeUserRecords(admin.id, {
+      displayName: admin.name ?? 'Administrator',
     });
-    await this.assignDefaultRole(payload.user.id, DEFAULT_ROLES.ADMIN);
+    await this.assignDefaultRole(admin.id, DEFAULT_ROLES.ADMIN);
   }
 
   private async assignDefaultRole(userId: string, roleKey: string = DEFAULT_ROLES.PLAYER) {
