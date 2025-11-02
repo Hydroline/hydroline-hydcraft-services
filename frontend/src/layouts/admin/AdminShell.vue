@@ -44,7 +44,9 @@ onMounted(() => {
   <div class="relative min-h-screen bg-slate-50 dark:bg-slate-950">
     <AppLoadingBar />
 
-    <header class="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-950/80">
+    <header
+      class="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-950/80"
+    >
       <div class="flex items-center gap-3">
         <UButton
           color="neutral"
@@ -54,18 +56,36 @@ onMounted(() => {
           icon="i-lucide-menu"
           @click="sidebarOpen = !sidebarOpen"
         />
-        <h1 class="text-lg font-semibold text-slate-900 dark:text-white">Hydroline 管理后台</h1>
+        <h1 class="text-lg font-semibold text-slate-900 dark:text-white">
+          Hydroline Admin
+        </h1>
       </div>
 
       <div class="flex items-center gap-2">
+        <div
+          class="flex items-center gap-2 rounded-full px-2 py-1 text-sm hover:bg-elevated"
+        >
+          <span class="hidden text-slate-700 dark:text-slate-200 sm:block">{{
+            authStore.displayName ?? authStore.user?.email
+          }}</span>
+          <UserAvatar
+            :name="authStore.displayName"
+            :src="authStore.user?.image ?? null"
+            size="sm"
+          />
+        </div>
         <UTooltip text="前台首页">
-          <UButton to="/" color="neutral" variant="ghost" size="xs" class="rounded-full" icon="i-lucide-home" />
+          <UButton
+            to="/"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            class="rounded-full h-9 w-9 justify-center items-center"
+          >
+            <UIcon name="i-lucide-home" class="h-6 w-6" />
+          </UButton>
         </UTooltip>
         <ThemeToggle />
-        <div class="flex items-center gap-2 rounded-full bg-white/70 px-2 py-1 text-sm shadow-sm dark:bg-slate-900/70">
-          <UserAvatar :name="authStore.displayName" :src="authStore.user?.image ?? null" size="sm" />
-          <span class="hidden text-slate-700 dark:text-slate-200 sm:block">{{ authStore.displayName ?? authStore.user?.email }}</span>
-        </div>
       </div>
     </header>
 
@@ -94,7 +114,9 @@ onMounted(() => {
         </aside>
       </transition>
 
-      <aside class="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r border-slate-200/60 bg-white/70 p-4 dark:border-slate-800/60 dark:bg-slate-950/70 lg:block">
+      <aside
+        class="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r border-slate-200/60 bg-white/70 p-4 dark:border-slate-800/60 dark:bg-slate-950/70 lg:block"
+      >
         <nav class="space-y-2 text-sm">
           <RouterLink
             v-for="item in menu"
@@ -112,14 +134,26 @@ onMounted(() => {
           </RouterLink>
         </nav>
 
-        <div class="mt-6 space-y-3 rounded-xl border border-slate-200/70 bg-white/70 p-4 text-xs text-slate-500 dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300">
-          <p class="font-medium text-slate-700 dark:text-slate-200">附件系统总览</p>
+        <div
+          class="mt-6 space-y-3 rounded-xl border border-slate-200/70 bg-white/70 p-4 text-xs text-slate-500 dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300"
+        >
+          <p class="font-medium text-slate-700 dark:text-slate-200">
+            附件系统总览
+          </p>
           <p>已存储：{{ admin?.attachments.total ?? 0 }} 个附件</p>
-          <p>公共资源：{{ admin?.attachments.recent.filter((item) => item.isPublic).length ?? 0 }} 个</p>
+          <p>
+            公共资源：{{
+              admin?.attachments.recent.filter((item) => item.isPublic)
+                .length ?? 0
+            }}
+            个
+          </p>
         </div>
       </aside>
 
-      <main class="flex-1 bg-white/70 px-4 pb-12 pt-6 backdrop-blur-sm dark:bg-slate-950/80">
+      <main
+        class="flex-1 bg-white/70 px-4 pb-12 pt-6 backdrop-blur-sm dark:bg-slate-950/80"
+      >
         <RouterView />
       </main>
     </div>
@@ -129,7 +163,9 @@ onMounted(() => {
 <style scoped>
 .slide-fade-enter-active,
 .slide-fade-leave-active {
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .slide-fade-enter-from,

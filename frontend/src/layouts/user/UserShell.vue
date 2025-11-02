@@ -55,6 +55,16 @@ const headerTitle = computed(() => {
   return 'Hydroline'
 })
 
+const headerStateKey = computed(() => {
+  if (!isMainPage.value) {
+    return 'other-page'
+  }
+  if (heroInView.value) {
+    return `title:${headerTitle.value}`
+  }
+  return 'logo'
+})
+
 const userAvatarUrl = computed(() => {
   const user = authStore.user as any
   if (!user) return null
@@ -148,7 +158,7 @@ const routerPush = (path: string) => {
     <AuthDialog />
 
     <header
-      class="fixed inset-x-0 top-0 z-100 grid grid-cols-[1fr_auto_1fr] h-16 items-center border-slate-200/60 px-4 dark:border-slate-800/60"
+      class="fixed inset-x-0 top-0 z-50 grid grid-cols-[1fr_auto_1fr] h-16 items-center border-slate-200/60 px-4 dark:border-slate-800/60"
       :class="{
         'bg-white/60 dark:bg-slate-950/70 border-b backdrop-blur-xl':
           !isMainPage,
@@ -163,23 +173,26 @@ const routerPush = (path: string) => {
           icon="i-lucide-menu"
           @click="menuOpen = !menuOpen"
         />
-        <div class="hidden text-sm text-slate-600 dark:text-slate-300 sm:block">
-          <p class="font-medium">Minecraft 状态</p>
-          <p class="text-xs text-slate-500">实时占位，等待后端数据</p>
+        <div
+          class="hidden text-sm text-slate-600 dark:text-slate-300 sm:block"
+        >
+          <p class="font-medium">Aurora_Lemon</p>
         </div>
       </div>
 
       <div class="flex items-center justify-center text-center">
-        <Transition name="fade-slide" mode="out-in" v-if="isMainPage">
-          <p
-            v-if="heroInView"
-            key="header-title"
-            class="text-lg text-slate-400 dark:text-white/50"
-          >
-            {{ headerTitle }}
-          </p>
-          <div v-else key="header-logo">
-            <HydrolineSvg class="h-6 text-slate-500 dark:text-white/75" />
+        <Transition v-if="isMainPage" name="fade-slide" mode="out-in" appear>
+          <div :key="headerStateKey">
+            <p
+              v-if="heroInView"
+              class="text-lg text-slate-400 dark:text-white/50"
+            >
+              {{ headerTitle }}
+            </p>
+            <HydrolineSvg
+              v-else
+              class="h-6 text-slate-500 dark:text-white/75"
+            />
           </div>
         </Transition>
       </div>
@@ -260,17 +273,14 @@ const routerPush = (path: string) => {
     <transition name="slide-fade">
       <aside
         v-if="menuOpen"
-        class="fixed inset-y-0 left-0 z-40 w-72 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:bg-slate-950/95"
+        class="fixed inset-y-0 left-0 z-100 w-72 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:bg-slate-950/95"
       >
         <div class="mb-6 flex items-center justify-between">
-          <span class="text-lg font-semibold text-slate-900 dark:text-white"
-            >导航</span
-          >
           <UButton
             icon="i-lucide-x"
             variant="ghost"
             size="xs"
-            class="h-8 w-8"
+            class="flex justify-center items-center h-9 w-9"
             @click="menuOpen = false"
           />
         </div>
@@ -290,26 +300,6 @@ const routerPush = (path: string) => {
             {{ item.name }}
           </RouterLink>
         </nav>
-
-        <div class="mt-6 space-y-2">
-          <p
-            class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
-          >
-            快捷入口
-          </p>
-          <a
-            v-for="link in navigationLinks"
-            :key="link.id"
-            :href="link.url ?? undefined"
-            class="flex items-center justify-between rounded-xl border border-slate-200/70 px-3 py-2 text-sm transition hover:bg-slate-100/70 dark:border-slate-700/60 dark:hover:bg-slate-800/70"
-            :class="{ 'pointer-events-none opacity-60': !link.available }"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span>{{ link.label }}</span>
-            <UIcon name="i-lucide-external-link" class="text-slate-400 h-fit" />
-          </a>
-        </div>
       </aside>
     </transition>
 

@@ -65,6 +65,12 @@
 ## 环境变量
 - 新增：`APP_PUBLIC_BASE_URL`（默认 `http://localhost:3000`），用于生成绝对资源路径。
 
+## 数据初始化
+- 提供一次性脚本 `pnpm --filter @hydroline/backend seed:portal-home` 初始化 `portal.home/config`：
+  - 写入默认副标题、默认卡片可见性；
+  - 若尚未设置背景图，则自动将前端资源 `image_home_background_240730.webp` 种入附件系统并登记为首张背景。
+- 可按需多次运行，该脚本仅在缺少数据时才写入，避免运行时自动改写配置。
+
 ## 测试与验证
 - `pnpm --filter @hydroline/backend build`
 - 手动调用 `GET /portal/home` 验证响应结构。

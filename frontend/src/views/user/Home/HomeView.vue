@@ -41,8 +41,8 @@ const activeHeroImage = computed(
   () => activeHeroBackground.value?.imageUrl ?? fallbackHeroImage,
 )
 
-const activeHeroDescription = computed(
-  () => activeHeroBackground.value?.description ?? 'Hydroline 城景',
+const activeHeroDescription = computed(() =>
+  (activeHeroBackground.value?.description ?? '').trim(),
 )
 
 const showHeroIndicators = computed(() => navigationLinks.value.length > 1)

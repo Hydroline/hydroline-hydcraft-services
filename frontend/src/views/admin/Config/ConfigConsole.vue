@@ -49,6 +49,7 @@ const editingEntry = ref<ConfigEntry | null>(null)
 const editingValue = ref('')
 const editingDescription = ref('')
 const editModalOpen = ref(false)
+const createModalOpen = ref(false)
 
 const selectedNamespace = computed(() =>
   namespaces.value.find((item) => item.id === selectedNamespaceId.value) ?? null,
@@ -148,7 +149,9 @@ async function createEntry() {
   uiStore.startLoading()
   try {
     const value = parseJsonInput(entryForm.value)
-    const created = await apiFetch<ConfigEntry>(`/config/namespaces/${selectedNamespaceId.value}/entries`, {
+    const created = await apiFetch<ConfigEntry>(
+      `/config/namespaces/${selectedNamespaceId.value}/entries`,
+      {
       method: 'POST',
       token: authStore.token ?? undefined,
       body: {
@@ -156,18 +159,34 @@ async function createEntry() {
         value,
         description: entryForm.description.trim() || undefined,
       },
-    })
+      },
+    )
     entries.value.push(created)
     namespaceFormUpdateCount(selectedNamespaceId.value, 1)
-    entryForm.key = ''
-    entryForm.value = '{\n  \n}'
-    entryForm.description = ''
+    resetCreateForm()
+    createModalOpen.value = false
   } catch (error) {
     handleError(error, '新增配置项失败')
   } finally {
     submitting.value = false
     uiStore.stopLoading()
   }
+}
+
+function resetCreateForm() {
+  entryForm.key = ''
+  entryForm.value = '{\n  \n}'
+  entryForm.description = ''
+}
+
+function openCreateModal() {
+  resetCreateForm()
+  createModalOpen.value = true
+}
+
+function closeCreateModal() {
+  createModalOpen.value = false
+  resetCreateForm()
 }
 
 function namespaceFormUpdateCount(namespaceId: string, delta: number) {
@@ -182,6 +201,11 @@ function openEdit(entry: ConfigEntry) {
   editingValue.value = JSON.stringify(entry.value, null, 2)
   editingDescription.value = entry.description ?? ''
   editModalOpen.value = true
+}
+
+function closeEditModal() {
+  editModalOpen.value = false
+  editingEntry.value = null
 }
 
 async function saveEdit() {
@@ -199,7 +223,7 @@ async function saveEdit() {
       },
     })
     entries.value = entries.value.map((item) => (item.id === updated.id ? updated : item))
-    editModalOpen.value = false
+    closeEditModal()
   } catch (error) {
     handleError(error, '更新配置项失败')
   } finally {
@@ -299,7 +323,7 @@ onMounted(() => {
               <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
               <UTextarea v-model="namespaceForm.description" placeholder="补充说明（可选）" :rows="2" />
             </label>
-            <UButton type="submit" color="primary" :loading="submitting" class="w-full">创建命名空间</UButton>
+            <UButton type="submit" color="primary" :loading="submitting" class="w-full justify-center items-center">创建命名空间</UButton>
           </form>
         </UCard>
       </aside>
@@ -307,7 +331,7 @@ onMounted(() => {
       <main class="space-y-6">
         <UCard class="bg-white/80 p-6 dark:bg-slate-900/70">
           <template #header>
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
                   {{ selectedNamespace?.name ?? '未选择命名空间' }}
@@ -316,6 +340,15 @@ onMounted(() => {
                   {{ selectedNamespace?.description ?? selectedNamespace?.key ?? '请选择左侧命名空间以查看配置项' }}
                 </p>
               </div>
+              <UButton
+                v-if="selectedNamespaceId"
+                size="sm"
+                color="primary"
+                class="shrink-0 justify-center items-center"
+                @click="openCreateModal"
+              >
+                新增配置项
+              </UButton>
             </div>
           </template>
 
@@ -352,53 +385,88 @@ onMounted(() => {
             </p>
           </div>
         </UCard>
-
-        <UCard v-if="selectedNamespaceId" class="bg-white/80 p-6 dark:bg-slate-900/70">
-          <template #header>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">新增配置项</h2>
-          </template>
-          <form class="space-y-3 text-sm" @submit.prevent="createEntry">
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="flex flex-col gap-1">
-                <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Key</span>
-                <UInput v-model="entryForm.key" placeholder="例如 wiki" required />
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
-                <UInput v-model="entryForm.description" placeholder="补充说明（可选）" />
-              </label>
-            </div>
-            <label class="flex flex-col gap-1">
-              <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
-              <UTextarea v-model="entryForm.value" :rows="6" spellcheck="false" />
-            </label>
-            <div class="flex justify-end">
-              <UButton type="submit" color="primary" :loading="submitting">新增</UButton>
-            </div>
-          </form>
-        </UCard>
       </main>
     </div>
-
-    <UModal v-model="editModalOpen">
-      <div class="space-y-4 rounded-2xl border border-slate-200/60 bg-white/90 p-6 shadow-lg backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/80">
-        <header>
-          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">编辑配置项 {{ editingEntry?.key }}</h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400">修改值请保持合法 JSON。</p>
-        </header>
-        <label class="flex flex-col gap-1">
-          <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
-          <UInput v-model="editingDescription" placeholder="描述（可选）" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
-          <UTextarea v-model="editingValue" :rows="10" spellcheck="false" />
-        </label>
-        <div class="flex justify-end gap-2">
-          <UButton color="neutral" variant="ghost" @click="editModalOpen = false">取消</UButton>
-          <UButton color="primary" :loading="submitting" @click="saveEdit">保存</UButton>
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="editModalOpen"
+          class="fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="closeEditModal" />
+          <div class="relative w-full max-w-2xl space-y-4 rounded-2xl border border-slate-200/60 bg-white/95 p-6 shadow-2xl dark:border-slate-700/60 dark:bg-slate-900/85">
+            <header>
+              <h3 class="text-lg font-semibold text-slate-900 dark:text-white">编辑配置项 {{ editingEntry?.key }}</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">修改值请保持合法 JSON。</p>
+            </header>
+            <label class="flex flex-col gap-1">
+              <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
+              <UInput v-model="editingDescription" placeholder="描述（可选）" />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
+              <UTextarea v-model="editingValue" :rows="10" spellcheck="false" />
+            </label>
+            <div class="flex justify-end gap-2">
+              <UButton color="neutral" variant="ghost" @click="closeEditModal">取消</UButton>
+              <UButton color="primary" :loading="submitting" @click="saveEdit">保存</UButton>
+            </div>
+          </div>
         </div>
-      </div>
-    </UModal>
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="createModalOpen"
+          class="fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="closeCreateModal" />
+          <div class="relative w-full max-w-2xl space-y-4 rounded-2xl border border-slate-200/60 bg-white/95 p-6 shadow-2xl dark:border-slate-700/60 dark:bg-slate-900/85">
+            <header class="flex items-center justify-between">
+              <div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">新增配置项</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  创建时请确保 Key 唯一且值为合法 JSON。
+                </p>
+              </div>
+            </header>
+            <form class="space-y-3 text-sm" @submit.prevent="createEntry">
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="flex flex-col gap-1">
+                  <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Key</span>
+                  <UInput v-model="entryForm.key" placeholder="例如 wiki" required />
+                </label>
+                <label class="flex flex-col gap-1">
+                  <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
+                  <UInput v-model="entryForm.description" placeholder="补充说明（可选）" />
+                </label>
+              </div>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
+                <UTextarea v-model="entryForm.value" :rows="10" spellcheck="false" />
+              </label>
+              <div class="flex justify-end gap-2">
+                <UButton type="button" color="neutral" variant="ghost" @click="closeCreateModal">取消</UButton>
+                <UButton type="submit" color="primary" :loading="submitting">保存</UButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

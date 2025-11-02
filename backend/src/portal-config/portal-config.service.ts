@@ -5,8 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
-import { promises as fs } from 'node:fs';
 import { ConfigService } from '../config/config.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import {
@@ -33,12 +31,6 @@ interface SaveOptions {
 export class PortalConfigService {
   private readonly logger = new Logger(PortalConfigService.name);
   private readonly baseUrl: string;
-  private cachedFallbackBackground:
-    | {
-        imageUrl: string;
-        description: string | null;
-      }
-    | null = null;
 
   constructor(
     private readonly configService: ConfigService,
@@ -78,13 +70,7 @@ export class PortalConfigService {
 
   async getResolvedHomeContent() {
     const config = await this.getRawConfig();
-    let heroBackgrounds = await this.resolveBackgrounds(config.hero.backgrounds);
-    if (heroBackgrounds.length === 0) {
-      const fallback = await this.loadFallbackHeroBackground();
-      if (fallback) {
-        heroBackgrounds = [fallback];
-      }
-    }
+    const heroBackgrounds = await this.resolveBackgrounds(config.hero.backgrounds);
     const navigation = config.navigation.map((item) =>
       this.normalizeNavigationItem(item),
     );
@@ -97,6 +83,11 @@ export class PortalConfigService {
       navigation,
       cardsConfig: config.cards,
     };
+  }
+
+  async overwriteConfig(config: PortalHomeConfig, options: SaveOptions = {}) {
+    const normalized = this.applyDefaults(config);
+    await this.saveConfig(normalized, options);
   }
 
   async getAdminConfig() {
@@ -344,62 +335,6 @@ export class PortalConfigService {
     return resolvedItems.filter((item): item is { imageUrl: string; description: string | null } =>
       Boolean(item),
     );
-  }
-
-  private async loadFallbackHeroBackground(): Promise<{
-    imageUrl: string;
-    description: string | null;
-  } | null> {
-    if (this.cachedFallbackBackground) {
-      return this.cachedFallbackBackground;
-    }
-
-    const assetPath = join(
-      process.cwd(),
-      '..',
-      'frontend',
-      'src',
-      'assets',
-      'images',
-      'image_home_background_240730.webp',
-    );
-
-    try {
-      await fs.access(assetPath);
-    } catch {
-      this.logger.warn(`Fallback hero asset missing at ${assetPath}`);
-      return null;
-    }
-
-    try {
-      const attachment = await this.attachmentsService.ensureSeededAttachment({
-        seedKey: 'hero.home.240730',
-        filePath: assetPath,
-        fileName: 'image_home_background_240730.webp',
-        folderPath: ['Public', 'Landing'],
-        tagKeys: ['hero.home'],
-        isPublic: true,
-        description: '欧文',
-      });
-      if (attachment) {
-        const publicPath =
-          attachment.publicUrl ?? `/attachments/public/${attachment.id}`;
-        const rawDescription =
-          (attachment.metadata as Record<string, unknown> | undefined)?.description;
-        const description =
-          typeof rawDescription === 'string' && rawDescription.trim().length > 0
-            ? rawDescription
-            : 'Hydroline 城景';
-        this.cachedFallbackBackground = {
-          imageUrl: this.toPublicUrl(publicPath),
-          description: description ?? null,
-        };
-        return this.cachedFallbackBackground;
-      }
-    } catch (error) {
-      this.logger.warn(`Failed to prepare fallback hero asset: ${String(error)}`);
-    }
-    return null;
   }
 
   private async resolveBackground(

@@ -68,10 +68,17 @@ const loading = ref(false)
 const isMutating = ref(false)
 
 const heroSubtitle = ref('')
+const heroSubtitleDraft = ref('')
+const isEditingHeroSubtitle = ref(false)
 const heroBackgrounds = reactive<EditableHeroBackground[]>([])
 const navigationItems = reactive<EditableNavigationItem[]>([])
 const cardsRegistry = ref<CardRegistryEntry[]>([])
 const cardsForm = reactive<Record<string, EditableCardForm>>({})
+
+const editingHeroBackgroundId = ref<string | null>(null)
+const editingNavigationId = ref<string | null>(null)
+const showNewBackgroundForm = ref(false)
+const showNewNavigationForm = ref(false)
 
 const cardEntries = computed(() =>
   cardsRegistry.value
@@ -145,7 +152,8 @@ async function fetchConfig() {
     const response = await apiFetch<PortalAdminConfigResponse>('/admin/portal/config', {
       token,
     })
-    heroSubtitle.value = response.hero.subtitle
+  heroSubtitle.value = response.hero.subtitle
+  heroSubtitleDraft.value = response.hero.subtitle
     assignHeroBackgrounds(
       response.hero.backgrounds.map((item) => ({
         ...item,
@@ -191,8 +199,18 @@ async function fetchConfig() {
   }
 }
 
+function startEditHeroSubtitle() {
+  heroSubtitleDraft.value = heroSubtitle.value
+  isEditingHeroSubtitle.value = true
+}
+
+function cancelHeroSubtitleEdit() {
+  heroSubtitleDraft.value = heroSubtitle.value
+  isEditingHeroSubtitle.value = false
+}
+
 async function updateHeroSubtitle() {
-  if (!heroSubtitle.value.trim()) {
+  if (!heroSubtitleDraft.value.trim()) {
     window.alert('请填写副标题')
     return
   }
@@ -203,9 +221,11 @@ async function updateHeroSubtitle() {
       method: 'PATCH',
       token,
       body: {
-        subtitle: heroSubtitle.value.trim(),
+        subtitle: heroSubtitleDraft.value.trim(),
       },
     })
+    isEditingHeroSubtitle.value = false
+    heroSubtitle.value = heroSubtitleDraft.value.trim()
     await fetchConfig()
   } catch (error) {
     if (error instanceof Error && error.message.includes('登录')) {
@@ -220,6 +240,18 @@ async function updateHeroSubtitle() {
 function resetHeroBackgroundForm() {
   newBackground.attachmentId = ''
   newBackground.description = ''
+}
+
+function startEditHeroBackground(background: EditableHeroBackground) {
+  background.editAttachmentId = background.attachmentId ?? ''
+  background.editDescription = background.description ?? ''
+  editingHeroBackgroundId.value = background.id
+}
+
+function cancelHeroBackgroundEdit(background: EditableHeroBackground) {
+  background.editAttachmentId = background.attachmentId ?? ''
+  background.editDescription = background.description ?? ''
+  editingHeroBackgroundId.value = null
 }
 
 async function createHeroBackground() {
@@ -239,6 +271,7 @@ async function createHeroBackground() {
       },
     })
     resetHeroBackgroundForm()
+    showNewBackgroundForm.value = false
     await fetchConfig()
   } catch (error) {
     if (error instanceof Error && error.message.includes('登录')) {
@@ -262,6 +295,9 @@ async function saveHeroBackground(background: EditableHeroBackground) {
         description: background.editDescription.trim() || undefined,
       },
     })
+    editingHeroBackgroundId.value = null
+    background.attachmentId = background.editAttachmentId.trim()
+    background.description = background.editDescription.trim() || null
     await fetchConfig()
   } catch (error) {
     if (error instanceof Error && error.message.includes('登录')) {
@@ -284,6 +320,9 @@ async function removeHeroBackground(id: string) {
       method: 'DELETE',
       token,
     })
+    if (editingHeroBackgroundId.value === id) {
+      editingHeroBackgroundId.value = null
+    }
     await fetchConfig()
   } catch (error) {
     if (error instanceof Error && error.message.includes('登录')) {
@@ -333,6 +372,24 @@ function resetNavigationForm() {
   newNavigation.available = true
 }
 
+function startEditNavigationItem(item: EditableNavigationItem) {
+  item.editLabel = item.label
+  item.editTooltip = item.tooltip ?? ''
+  item.editUrl = item.url ?? ''
+  item.editIcon = item.icon ?? ''
+  item.editAvailable = item.available
+  editingNavigationId.value = item.id
+}
+
+function cancelNavigationEdit(item: EditableNavigationItem) {
+  item.editLabel = item.label
+  item.editTooltip = item.tooltip ?? ''
+  item.editUrl = item.url ?? ''
+  item.editIcon = item.icon ?? ''
+  item.editAvailable = item.available
+  editingNavigationId.value = null
+}
+
 async function createNavigationItem() {
   if (!newNavigation.id.trim() || !newNavigation.label.trim()) {
     window.alert('请填写导航 ID 和名称')
@@ -354,6 +411,7 @@ async function createNavigationItem() {
       },
     })
     resetNavigationForm()
+    showNewNavigationForm.value = false
     await fetchConfig()
   } catch (error) {
     if (error instanceof Error && error.message.includes('登录')) {
@@ -380,6 +438,12 @@ async function saveNavigationItem(item: EditableNavigationItem) {
         available: item.editAvailable,
       },
     })
+    editingNavigationId.value = null
+    item.label = item.editLabel.trim()
+    item.tooltip = item.editTooltip.trim() || null
+    item.url = item.editUrl.trim() || null
+    item.icon = item.editIcon.trim() || null
+    item.available = item.editAvailable
     await fetchConfig()
   } catch (error) {
     if (error instanceof Error && error.message.includes('登录')) {
@@ -402,6 +466,9 @@ async function removeNavigationItem(id: string) {
       method: 'DELETE',
       token,
     })
+    if (editingNavigationId.value === id) {
+      editingNavigationId.value = null
+    }
     await fetchConfig()
   } catch (error) {
     if (error instanceof Error && error.message.includes('登录')) {
@@ -512,24 +579,49 @@ onMounted(() => {
       </template>
 
       <div class="space-y-6">
-        <div class="flex flex-col gap-3 md:flex-row md:items-end">
-          <div class="flex-1 space-y-2">
-            <label class="text-sm font-medium text-slate-600 dark:text-slate-200">
-              Hero 副标题
-            </label>
+        <section class="rounded-2xl border border-slate-200/70 bg-white/80 p-4 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70">
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Hero 副标题
+              </p>
+              <p v-if="heroSubtitle" class="text-base font-medium text-slate-900 dark:text-white">
+                {{ heroSubtitle }}
+              </p>
+              <p v-else class="text-base text-slate-400 dark:text-slate-500">尚未设置副标题</p>
+            </div>
+            <UButton
+              v-if="!isEditingHeroSubtitle"
+              size="xs"
+              variant="soft"
+              @click="startEditHeroSubtitle"
+            >
+              编辑
+            </UButton>
+          </div>
+          <form
+            v-if="isEditingHeroSubtitle"
+            class="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+            @submit.prevent="updateHeroSubtitle"
+          >
             <UInput
-              v-model="heroSubtitle"
+              v-model="heroSubtitleDraft"
               placeholder="例如：ALPHA 测试阶段"
             />
-          </div>
-          <UButton
-            color="primary"
-            :loading="isMutating"
-            @click="updateHeroSubtitle"
-          >
-            保存副标题
-          </UButton>
-        </div>
+            <div class="flex items-center justify-end gap-2 md:justify-start">
+              <UButton
+                type="submit"
+                color="primary"
+                :loading="isMutating"
+              >
+                保存副标题
+              </UButton>
+              <UButton type="button" variant="ghost" :disabled="isMutating" @click="cancelHeroSubtitleEdit">
+                取消
+              </UButton>
+            </div>
+          </form>
+        </section>
 
         <div
           v-if="heroBackgrounds.length === 0"
@@ -545,9 +637,9 @@ onMounted(() => {
             class="rounded-2xl border border-slate-200/70 bg-white/80 p-4 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
           >
             <div class="space-y-4">
-              <div class="flex flex-col gap-3 sm:flex-row">
+              <div class="flex flex-col gap-4 lg:flex-row">
                 <div
-                  class="flex h-28 w-full items-center justify-center overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800 sm:w-40"
+                  class="flex h-28 w-full items-center justify-center overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800 lg:w-44"
                 >
                   <img
                     v-if="background.imageUrl"
@@ -558,6 +650,94 @@ onMounted(() => {
                   <span v-else class="text-xs text-slate-400 dark:text-slate-500">暂无预览</span>
                 </div>
                 <div class="flex-1 space-y-3">
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="space-y-1">
+                      <p class="text-xs font-medium text-slate-500 dark:text-slate-300">附件 ID</p>
+                      <p class="text-sm text-slate-900 dark:text-white break-all">
+                        {{ background.attachmentId || '未配置' }}
+                      </p>
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-medium text-slate-500 dark:text-slate-300">描述</p>
+                      <p class="text-sm text-slate-600 dark:text-slate-300">
+                        {{ background.description || '未填写描述' }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                <div class="flex items-center gap-2">
+                  <UBadge
+                    :color="background.available ? 'primary' : 'neutral'"
+                    variant="soft"
+                  >
+                    {{ background.available ? '附件可访问' : '附件不可访问' }}
+                  </UBadge>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    :disabled="index === 0 || isMutating || editingHeroBackgroundId === background.id"
+                    @click="moveHeroBackground(index, -1)"
+                  >
+                    上移
+                  </UButton>
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    :disabled="index === heroBackgrounds.length - 1 || isMutating || editingHeroBackgroundId === background.id"
+                    @click="moveHeroBackground(index, 1)"
+                  >
+                    下移
+                  </UButton>
+                  <template v-if="editingHeroBackgroundId === background.id">
+                    <UButton
+                      size="xs"
+                      color="primary"
+                      :loading="isMutating"
+                      @click="saveHeroBackground(background)"
+                    >
+                      保存
+                    </UButton>
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      :disabled="isMutating"
+                      @click="cancelHeroBackgroundEdit(background)"
+                    >
+                      取消
+                    </UButton>
+                  </template>
+                  <template v-else>
+                    <UButton
+                      size="xs"
+                      variant="soft"
+                      :disabled="isMutating"
+                      @click="startEditHeroBackground(background)"
+                    >
+                      编辑
+                    </UButton>
+                  </template>
+                  <UButton
+                    size="xs"
+                    color="neutral"
+                    variant="ghost"
+                    :loading="isMutating"
+                    @click="removeHeroBackground(background.id)"
+                  >
+                    删除
+                  </UButton>
+                </div>
+              </div>
+
+              <div
+                v-if="editingHeroBackgroundId === background.id"
+                class="border-t border-slate-200 pt-4 dark:border-slate-800"
+              >
+                <div class="grid gap-3 md:grid-cols-2">
                   <div class="space-y-2">
                     <label class="text-xs font-medium text-slate-500 dark:text-slate-300">附件 ID</label>
                     <UInput
@@ -574,52 +754,6 @@ onMounted(() => {
                   </div>
                 </div>
               </div>
-
-          <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-                <div class="flex items-center gap-2">
-                  <UBadge
-                    :color="background.available ? 'primary' : 'neutral'"
-                    variant="soft"
-                  >
-                    {{ background.available ? '附件可访问' : '附件不可访问' }}
-                  </UBadge>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <UButton
-                    size="xs"
-                    variant="soft"
-                    :disabled="index === 0 || isMutating"
-                    @click="moveHeroBackground(index, -1)"
-                  >
-                    上移
-                  </UButton>
-                  <UButton
-                    size="xs"
-                    variant="soft"
-                    :disabled="index === heroBackgrounds.length - 1 || isMutating"
-                    @click="moveHeroBackground(index, 1)"
-                  >
-                    下移
-                  </UButton>
-                  <UButton
-                    size="xs"
-                    color="primary"
-                    :loading="isMutating"
-                    @click="saveHeroBackground(background)"
-                  >
-                    保存
-                  </UButton>
-                  <UButton
-                    size="xs"
-                    color="neutral"
-                    variant="ghost"
-                    :loading="isMutating"
-                    @click="removeHeroBackground(background.id)"
-                  >
-                    删除
-                  </UButton>
-                </div>
-              </div>
             </div>
           </UCard>
         </div>
@@ -627,36 +761,47 @@ onMounted(() => {
         <div
           class="rounded-2xl border border-dashed border-slate-300/80 bg-slate-50/70 p-4 backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/60"
         >
-          <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-            新增背景图
-          </h4>
-          <div class="mt-3 grid gap-3 md:grid-cols-2">
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">附件 ID</label>
-              <UInput
-                v-model="newBackground.attachmentId"
-                placeholder="来自附件系统的 ID"
-              />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">描述（可选）</label>
-              <UInput
-                v-model="newBackground.description"
-                placeholder="用于顶部标题显示"
-              />
-            </div>
-          </div>
-          <div class="mt-4 flex gap-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              新增背景图
+            </h4>
             <UButton
-              color="primary"
-              :loading="isMutating"
-              @click="createHeroBackground"
+              size="xs"
+              variant="soft"
+              @click="showNewBackgroundForm = !showNewBackgroundForm"
             >
-              添加背景图
+              {{ showNewBackgroundForm ? '收起表单' : '展开表单' }}
             </UButton>
-            <UButton variant="ghost" @click="resetHeroBackgroundForm">
-              重置
-            </UButton>
+          </div>
+          <div v-if="showNewBackgroundForm" class="mt-3 space-y-4">
+            <div class="grid gap-3 md:grid-cols-2">
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">附件 ID</label>
+                <UInput
+                  v-model="newBackground.attachmentId"
+                  placeholder="来自附件系统的 ID"
+                />
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">描述（可选）</label>
+                <UInput
+                  v-model="newBackground.description"
+                  placeholder="用于顶部标题显示"
+                />
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <UButton
+                color="primary"
+                :loading="isMutating"
+                @click="createHeroBackground"
+              >
+                添加背景图
+              </UButton>
+              <UButton type="button" variant="ghost" :disabled="isMutating" @click="resetHeroBackgroundForm">
+                重置
+              </UButton>
+            </div>
           </div>
         </div>
       </div>
@@ -687,77 +832,114 @@ onMounted(() => {
             :key="item.id"
             class="rounded-2xl border border-slate-200/70 bg-white/80 p-4 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
           >
-            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h4 class="text-base font-semibold text-slate-900 dark:text-white">
-                  {{ item.label }}
-                  <span class="text-xs font-normal text-slate-400 dark:text-slate-500">（{{ item.id }}）</span>
-                </h4>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  图标：{{ item.icon || '未设置' }} · 链接：{{ item.url || '未配置' }}
-                </p>
+            <div class="space-y-4">
+              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div class="space-y-2">
+                  <h4 class="text-base font-semibold text-slate-900 dark:text-white">
+                    {{ item.label || '未命名导航' }}
+                    <span class="text-xs font-normal text-slate-400 dark:text-slate-500">（{{ item.id }}）</span>
+                  </h4>
+                  <div class="grid gap-1 text-xs text-slate-500 dark:text-slate-400 sm:grid-cols-2">
+                    <span>图标：{{ item.icon || '未设置' }}</span>
+                    <span>链接：{{ item.url || '未配置' }}</span>
+                  </div>
+                  <p v-if="item.tooltip" class="text-xs text-slate-400 dark:text-slate-500">
+                    提示：{{ item.tooltip }}
+                  </p>
+                </div>
+                <div class="flex flex-wrap gap-2 text-xs">
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    :disabled="index === 0 || isMutating || editingNavigationId === item.id"
+                    @click="moveNavigationItem(index, -1)"
+                  >
+                    上移
+                  </UButton>
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    :disabled="index === navigationItems.length - 1 || isMutating || editingNavigationId === item.id"
+                    @click="moveNavigationItem(index, 1)"
+                  >
+                    下移
+                  </UButton>
+                  <UButton
+                    v-if="editingNavigationId !== item.id"
+                    size="xs"
+                    variant="soft"
+                    :disabled="isMutating"
+                    @click="startEditNavigationItem(item)"
+                  >
+                    编辑
+                  </UButton>
+                  <UButton
+                    size="xs"
+                    color="neutral"
+                    variant="ghost"
+                    :loading="isMutating"
+                    @click="removeNavigationItem(item.id)"
+                  >
+                    删除
+                  </UButton>
+                </div>
               </div>
-              <div class="flex flex-wrap gap-2 text-xs">
-                <UButton
-                  size="xs"
-                  variant="soft"
-                  :disabled="index === 0 || isMutating"
-                  @click="moveNavigationItem(index, -1)"
-                >
-                  上移
-                </UButton>
-                <UButton
-                  size="xs"
-                  variant="soft"
-                  :disabled="index === navigationItems.length - 1 || isMutating"
-                  @click="moveNavigationItem(index, 1)"
-                >
-                  下移
-                </UButton>
-                <UButton
-                  size="xs"
-                  color="neutral"
-                  variant="ghost"
-                  :loading="isMutating"
-                  @click="removeNavigationItem(item.id)"
-                >
-                  删除
-                </UButton>
-              </div>
-            </div>
 
-            <div class="mt-4 grid gap-3 md:grid-cols-2">
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">显示标题</label>
-                <UInput v-model="item.editLabel" placeholder="按钮标题" />
+              <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <UBadge :color="item.available ? 'primary' : 'neutral'" variant="soft">
+                  {{ item.available ? '已启用' : '已禁用' }}
+                </UBadge>
+                <span>当前排序：第 {{ index + 1 }} 位</span>
               </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">图标名称</label>
-                <UInput v-model="item.editIcon" placeholder="如 i-heroicons-map" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">链接地址</label>
-                <UInput v-model="item.editUrl" placeholder="https://example.com" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">提示文案</label>
-                <UInput v-model="item.editTooltip" placeholder="鼠标 hover 提示" />
-              </div>
-            </div>
 
-            <div class="mt-3 flex items-center justify-between">
-              <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                <UCheckbox v-model="item.editAvailable" />
-                启用按钮（未启用时前台将禁用点击）
-              </label>
-              <UButton
-                size="xs"
-                color="primary"
-                :loading="isMutating"
-                @click="saveNavigationItem(item)"
+              <div
+                v-if="editingNavigationId === item.id"
+                class="border-t border-slate-200 pt-4 dark:border-slate-800"
               >
-                保存配置
-              </UButton>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <div class="space-y-2">
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">显示标题</label>
+                    <UInput v-model="item.editLabel" placeholder="按钮标题" />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">图标名称</label>
+                    <UInput v-model="item.editIcon" placeholder="如 i-heroicons-map" />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">链接地址</label>
+                    <UInput v-model="item.editUrl" placeholder="https://example.com" />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">提示文案</label>
+                    <UInput v-model="item.editTooltip" placeholder="鼠标 hover 提示" />
+                  </div>
+                </div>
+
+                <div class="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                    <UCheckbox v-model="item.editAvailable" />
+                    启用按钮（未启用时前台将禁用点击）
+                  </label>
+                  <div class="flex gap-2">
+                    <UButton
+                      size="xs"
+                      color="primary"
+                      :loading="isMutating"
+                      @click="saveNavigationItem(item)"
+                    >
+                      保存配置
+                    </UButton>
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      :disabled="isMutating"
+                      @click="cancelNavigationEdit(item)"
+                    >
+                      取消
+                    </UButton>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -765,46 +947,57 @@ onMounted(() => {
         <div
           class="rounded-2xl border border-dashed border-slate-300/70 bg-slate-50/70 p-4 backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/60"
         >
-          <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-            新增导航链接
-          </h4>
-          <div class="mt-3 grid gap-3 md:grid-cols-2">
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">导航 ID</label>
-              <UInput v-model="newNavigation.id" placeholder="唯一 ID，用于权限控制" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">显示标题</label>
-              <UInput v-model="newNavigation.label" placeholder="按钮名称" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">链接地址</label>
-              <UInput v-model="newNavigation.url" placeholder="https://example.com" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">提示文案</label>
-              <UInput v-model="newNavigation.tooltip" placeholder="悬停提示" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">图标</label>
-              <UInput v-model="newNavigation.icon" placeholder="如 i-heroicons-map" />
-            </div>
-            <div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-              <UCheckbox v-model="newNavigation.available" />
-              默认启用
-            </div>
-          </div>
-          <div class="mt-4 flex gap-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              新增导航链接
+            </h4>
             <UButton
-              color="primary"
-              :loading="isMutating"
-              @click="createNavigationItem"
+              size="xs"
+              variant="soft"
+              @click="showNewNavigationForm = !showNewNavigationForm"
             >
-              添加导航
+              {{ showNewNavigationForm ? '收起表单' : '展开表单' }}
             </UButton>
-            <UButton variant="ghost" @click="resetNavigationForm">
-              重置
-            </UButton>
+          </div>
+          <div v-if="showNewNavigationForm" class="mt-3 space-y-4">
+            <div class="grid gap-3 md:grid-cols-2">
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">导航 ID</label>
+                <UInput v-model="newNavigation.id" placeholder="唯一 ID，用于权限控制" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">显示标题</label>
+                <UInput v-model="newNavigation.label" placeholder="按钮名称" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">链接地址</label>
+                <UInput v-model="newNavigation.url" placeholder="https://example.com" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">提示文案</label>
+                <UInput v-model="newNavigation.tooltip" placeholder="悬停提示" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">图标</label>
+                <UInput v-model="newNavigation.icon" placeholder="如 i-heroicons-map" />
+              </div>
+              <div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <UCheckbox v-model="newNavigation.available" />
+                默认启用
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <UButton
+                color="primary"
+                :loading="isMutating"
+                @click="createNavigationItem"
+              >
+                添加导航
+              </UButton>
+              <UButton type="button" variant="ghost" :disabled="isMutating" @click="resetNavigationForm">
+                重置
+              </UButton>
+            </div>
           </div>
         </div>
       </div>
