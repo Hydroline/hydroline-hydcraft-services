@@ -200,51 +200,68 @@ export class RolesService {
         where: { key: { in: Object.values(DEFAULT_ROLES) } },
       });
 
-      if (!roleEntries.find((role) => role.key === DEFAULT_ROLES.ADMIN)) {
-        const permissions = await tx.permission.findMany({
-          where: { key: { in: Object.values(DEFAULT_PERMISSIONS) } },
-        });
-        const adminRole = await tx.role.create({
-          data: {
-            key: DEFAULT_ROLES.ADMIN,
-            name: 'Administrator',
-            isSystem: true,
-          },
-        });
-        await tx.rolePermission.createMany({
-          data: permissions.map((permission) => ({ roleId: adminRole.id, permissionId: permission.id })),
-        });
-      }
+      const permissions = await tx.permission.findMany({
+        where: { key: { in: Object.values(DEFAULT_PERMISSIONS) } },
+      });
+      const permissionMap = new Map(permissions.map((permission) => [permission.key, permission]));
+      type PermissionEntity = (typeof permissions)[number];
 
-      if (!roleEntries.find((role) => role.key === DEFAULT_ROLES.MODERATOR)) {
-        const moderatorRole = await tx.role.create({
-          data: {
-            key: DEFAULT_ROLES.MODERATOR,
-            name: 'Moderator',
-            isSystem: true,
-          },
-        });
-        const permissions = await tx.permission.findMany({
-          where: {
-            key: {
-              in: [DEFAULT_PERMISSIONS.MANAGE_USERS, DEFAULT_PERMISSIONS.MANAGE_CONTACT_CHANNELS],
+      const ensureRole = async (
+        roleKey: string,
+        roleData: { name: string; isSystem: boolean },
+        requiredPermissionKeys: string[],
+      ) => {
+        let role = roleEntries.find((entry) => entry.key === roleKey);
+        if (!role) {
+          role = await tx.role.create({
+            data: {
+              key: roleKey,
+              ...roleData,
             },
-          },
-        });
-        await tx.rolePermission.createMany({
-          data: permissions.map((permission) => ({ roleId: moderatorRole.id, permissionId: permission.id })),
-        });
-      }
+          });
+          roleEntries.push(role);
+        }
 
-      if (!roleEntries.find((role) => role.key === DEFAULT_ROLES.PLAYER)) {
-        await tx.role.create({
-          data: {
-            key: DEFAULT_ROLES.PLAYER,
-            name: 'Player',
-            isSystem: true,
-          },
+        if (requiredPermissionKeys.length === 0) {
+          return;
+        }
+
+        const existingPermissions = await tx.rolePermission.findMany({
+          where: { roleId: role.id },
+          select: { permissionId: true },
         });
-      }
+        const existingPermissionIds = new Set(existingPermissions.map((entry) => entry.permissionId));
+
+        const toAssign = requiredPermissionKeys
+          .map((key) => permissionMap.get(key))
+          .filter((permission): permission is PermissionEntity => {
+            if (!permission) {
+              return false;
+            }
+            return !existingPermissionIds.has(permission.id);
+          })
+          .map((permission) => ({
+            roleId: role!.id,
+            permissionId: permission.id,
+          }));
+
+        if (toAssign.length > 0) {
+          await tx.rolePermission.createMany({
+            data: toAssign,
+            skipDuplicates: true,
+          });
+        }
+      };
+
+      await ensureRole(DEFAULT_ROLES.ADMIN, { name: 'Administrator', isSystem: true }, Object.values(DEFAULT_PERMISSIONS));
+
+      await ensureRole(
+        DEFAULT_ROLES.MODERATOR,
+        { name: 'Moderator', isSystem: true },
+        [DEFAULT_PERMISSIONS.MANAGE_USERS, DEFAULT_PERMISSIONS.MANAGE_CONTACT_CHANNELS],
+      );
+
+      await ensureRole(DEFAULT_ROLES.PLAYER, { name: 'Player', isSystem: true }, []);
     });
   }
 

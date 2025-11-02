@@ -17,9 +17,9 @@ const pinia = createPinia()
 const head = createHead()
 
 app.use(pinia)
+app.use(head)
 app.use(router)
 app.use(ui)
-app.use(head)
 
 const uiStore = useUiStore(pinia)
 uiStore.hydrateTheme()

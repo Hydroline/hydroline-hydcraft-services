@@ -30,8 +30,15 @@ export class PermissionsGuard implements CanActivate {
 
     const granted = new Set<string>();
     for (const role of user.roles ?? []) {
-      for (const link of role.rolePermissions ?? []) {
-        granted.add(link.permission?.key);
+      const permissionLinks = [
+        ...(role.rolePermissions ?? []),
+        ...(role.role?.rolePermissions ?? []),
+      ];
+      for (const link of permissionLinks) {
+        const key = link.permission?.key;
+        if (key) {
+          granted.add(key);
+        }
       }
     }
 

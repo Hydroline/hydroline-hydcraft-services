@@ -33,3 +33,32 @@
 ## 后续建议
 - 由于历史测试账号可能同样缺少凭证，可按需运行一个脚本批量校验 `users` 与 `accounts` 的映射完整性。
 - 若计划修改默认管理员密码，请同时更新 `DEFAULT_ADMIN_PASSWORD` 环境变量并重启后端，以便重新写入哈希。
+
+---
+
+# 管理员后台权限缺失排查记录（2025-11-02）
+
+## 症状
+- 管理后台页面发起 `GET /portal/admin/overview` 请求返回 403，后端异常信息为 `Missing permissions: auth.manage.users`。
+- 前端控制台报错并中断页面渲染，同时日志提示 `App already provides property with key "usehead"`。
+
+## 根因
+- 历史运行中默认角色已存在，但 `ensureDefaultRolesAndPermissions` 不会为已存在的角色补齐新增的默认权限，导致 `admin` 角色缺少 `assets.manage.attachments`、`config.manage` 等权限。
+- `PermissionsGuard` 仅检查 `userRole.rolePermissions`，遗漏了 `userRole.role.rolePermissions` 的嵌套结构，导致即便角色持有权限也无法识别。
+- 前端在 `app.use(ui)` 之后再 `app.use(createHead())`，Nuxt UI 会先自注入 `head`，随后再次注入触发重复提供警告。
+
+## 修复
+- 扩展 `ensureDefaultRolesAndPermissions`（[`backend/src/auth/roles.service.ts`](../../../../backend/src/auth/roles.service.ts:184)）：
+  - 在补齐默认权限后，全量维护默认角色与权限的映射，已存在的系统角色也会增量补齐缺失权限。
+  - 复用一次 `findMany` 结果，避免重复查询并保持数据一致性。
+- 修正权限守卫（[`backend/src/auth/permissions.guard.ts`](../../../../backend/src/auth/permissions.guard.ts:30)）：
+  - 同时遍历 `userRole.rolePermissions` 与嵌套的 `userRole.role.rolePermissions`。
+  - 排除空值，保证收集到完整的权限键集合。
+- 前端启动顺序调整（[`frontend/src/main.ts`](../../../../frontend/src/main.ts:17)）：
+  - 将 `app.use(head)` 置于 `app.use(ui)` 之前，复用单一的 `@unhead/vue` 实例，消除重复提供警告。
+
+## 验证
+- 重新启动后端/前端服务并使用 Playwright 执行登录 → 进入后台 → 读取概览数据，全流程无 403。
+- 截图：`/tmp/playwright-mcp-output/1762068061092/playwright-admin-overview.png`。
+- `curl` 调用 `GET /portal/admin/overview` 携带管理员 token 返回 200，列表包含管理员和测试用户。
+- 前端控制台无 `Missing permissions` 或 `usehead` 警告。
