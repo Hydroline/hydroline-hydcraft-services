@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import AppLoadingBar from '@/components/common/AppLoadingBar.vue'
@@ -17,24 +17,26 @@ const sidebarOpen = ref(false)
 
 const menu = computed(() => [
   { label: '总览', to: '/admin', icon: 'i-heroicons-presentation-chart-bar-20-solid' },
-  { label: '用户与玩家', to: '/admin', anchor: '#users', icon: 'i-heroicons-users-20-solid' },
-  { label: '附件系统', to: '/admin', anchor: '#attachments', icon: 'i-heroicons-archive-box-20-solid' },
+  { label: '用户与玩家', to: '/admin/users', icon: 'i-heroicons-users-20-solid' },
+  { label: '附件系统', to: '/admin/attachments', icon: 'i-heroicons-archive-box-20-solid' },
+  { label: 'RBAC 管理', to: '/admin/rbac', icon: 'i-heroicons-shield-check-20-solid' },
   { label: '配置管理', to: '/admin/config', icon: 'i-heroicons-wrench-screwdriver-20-solid' },
 ])
 
-function linkTarget(item: { to: string; anchor?: string }) {
-  return item.anchor ? `${item.to}${item.anchor}` : item.to
-}
-
-function isActive(item: { to: string; anchor?: string }) {
-  if (item.anchor) {
-    return route.path === item.to && route.hash === item.anchor
-  }
+function isActive(item: { to: string }) {
   if (item.to === '/admin') {
-    return route.path === item.to && !route.hash
+    return route.path === item.to
   }
   return route.path === item.to || route.path.startsWith(`${item.to}/`)
 }
+
+onMounted(() => {
+  if (!admin.value && authStore.token) {
+    void portalStore.fetchAdminOverview().catch(() => {
+      /* 概览加载失败时保持侧边统计留空 */
+    })
+  }
+})
 </script>
 
 <template>
@@ -76,7 +78,7 @@ function isActive(item: { to: string; anchor?: string }) {
             <RouterLink
               v-for="item in menu"
               :key="item.label"
-              :to="linkTarget(item)"
+              :to="item.to"
               class="flex items-center gap-3 rounded-xl px-3 py-2 transition"
               :class="[
                 isActive(item)
@@ -96,7 +98,7 @@ function isActive(item: { to: string; anchor?: string }) {
           <RouterLink
             v-for="item in menu"
             :key="item.label"
-            :to="linkTarget(item)"
+            :to="item.to"
             class="flex items-center gap-3 rounded-xl px-3 py-2 transition"
             :class="[
               isActive(item)

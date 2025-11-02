@@ -32,7 +32,7 @@ export function getApiBaseUrl() {
   return API_BASE_URL;
 }
 
-export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}) {
+export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
   const method = options.method ?? 'GET';
   const init: RequestInit = {
@@ -69,8 +69,7 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   }
 
   if (!isJson) {
-    // @ts-expect-error 返回类型对调用者不透明
-    return response;
+    return response as unknown as T;
   }
 
   const result = (await response.json()) as ApiResponseEnvelope<T> | T;

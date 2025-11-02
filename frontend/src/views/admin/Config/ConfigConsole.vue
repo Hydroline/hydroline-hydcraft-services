@@ -297,7 +297,7 @@ onMounted(() => {
             </label>
             <label class="flex flex-col gap-1">
               <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
-              <UTextarea v-model="namespaceForm.description" placeholder="补充说明（可选）" rows="2" />
+              <UTextarea v-model="namespaceForm.description" placeholder="补充说明（可选）" :rows="2" />
             </label>
             <UButton type="submit" color="primary" :loading="submitting" class="w-full">创建命名空间</UButton>
           </form>
@@ -370,7 +370,7 @@ onMounted(() => {
             </div>
             <label class="flex flex-col gap-1">
               <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
-              <UTextarea v-model="entryForm.value" rows="6" spellcheck="false" />
+              <UTextarea v-model="entryForm.value" :rows="6" spellcheck="false" />
             </label>
             <div class="flex justify-end">
               <UButton type="submit" color="primary" :loading="submitting">新增</UButton>
@@ -392,7 +392,7 @@ onMounted(() => {
         </label>
         <label class="flex flex-col gap-1">
           <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
-          <UTextarea v-model="editingValue" rows="10" spellcheck="false" />
+          <UTextarea v-model="editingValue" :rows="10" spellcheck="false" />
         </label>
         <div class="flex justify-end gap-2">
           <UButton color="neutral" variant="ghost" @click="editModalOpen = false">取消</UButton>

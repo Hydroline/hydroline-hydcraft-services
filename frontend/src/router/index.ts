@@ -50,6 +50,36 @@ export const adminRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'users',
+        name: 'admin.users',
+        component: () => import('@/views/admin/Users/UserDirectory.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresPermissions: ['auth.manage.users'],
+          layout: 'admin',
+        },
+      },
+      {
+        path: 'attachments',
+        name: 'admin.attachments',
+        component: () => import('@/views/admin/Attachments/AttachmentLibrary.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresPermissions: ['assets.manage.attachments'],
+          layout: 'admin',
+        },
+      },
+      {
+        path: 'rbac',
+        name: 'admin.rbac',
+        component: () => import('@/views/admin/Rbac/RbacConsole.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresPermissions: ['auth.manage.roles'],
+          layout: 'admin',
+        },
+      },
+      {
         path: 'config',
         name: 'admin.config',
         component: () => import('@/views/admin/Config/ConfigConsole.vue'),

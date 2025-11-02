@@ -123,7 +123,7 @@ function routerPush(path: string) {
         <ThemeToggle />
         <div v-if="authStore.isAuthenticated">
           <UPopover :popper="{ placement: 'bottom-end' }">
-            <template #trigger>
+            <template #anchor>
               <button class="flex items-center gap-2 rounded-full bg-white/60 px-2 py-1 text-sm shadow-sm transition hover:bg-white dark:bg-slate-900/60 dark:hover:bg-slate-800">
                 <UserAvatar :src="home?.user?.avatarUrl ?? null" :name="home?.user?.displayName ?? authStore.displayName" size="sm" />
                 <span class="hidden text-slate-700 dark:text-slate-200 sm:block">
@@ -132,7 +132,7 @@ function routerPush(path: string) {
                 <UIcon name="i-heroicons-chevron-down-20-solid" class="hidden text-base text-slate-400 sm:block" />
               </button>
             </template>
-            <template #panel="{ close }">
+            <template #content="{ close }">
               <div class="w-48 space-y-2 p-2">
                 <div v-for="(group, index) in userDropdownItems" :key="index" class="space-y-1">
                   <button

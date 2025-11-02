@@ -29,7 +29,7 @@ function select(mode: 'light' | 'dark' | 'system') {
       <UIcon :name="modes.find((mode) => mode.value === current)?.icon ?? 'i-heroicons-sun-20-solid'" />
     </UButton>
 
-    <template #panel>
+    <template #content>
       <div class="w-40 space-y-1 p-2">
         <button
           v-for="mode in modes"
