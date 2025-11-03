@@ -20,6 +20,12 @@ export const userRoutes: RouteRecordRaw[] = [
         meta: { layout: 'user' },
       },
       {
+        path: 'profile/info',
+        name: 'profile.info',
+        component: () => import('@/views/user/Profile/ProfileInfoView.vue'),
+        meta: { layout: 'user' },
+      },
+      {
         path: 'profile/preferences',
         name: 'profile.preferences',
         component: () =>

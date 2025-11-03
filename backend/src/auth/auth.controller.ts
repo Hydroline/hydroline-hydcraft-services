@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Patch,
   Post,
   Req,
   Res,
@@ -10,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
+import { UsersService } from './users.service';
+import { UpdateCurrentUserDto } from './dto/update-current-user.dto';
 import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -17,7 +20,10 @@ import { AuthGuard } from './auth.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Post('signup')
   async signUp(@Body() dto: SignUpDto, @Res({ passthrough: true }) res: Response) {
@@ -77,6 +83,31 @@ export class AuthController {
     return {
       user: req.user,
     };
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard)
+  async getCurrentUser(@Req() req: Request) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    const user = await this.usersService.getSessionUser(userId);
+    return { user };
+  }
+
+  @Patch('me')
+  @UseGuards(AuthGuard)
+  async updateCurrentUser(
+    @Req() req: Request,
+    @Body() dto: UpdateCurrentUserDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    const user = await this.usersService.updateCurrentUser(userId, dto);
+    return { user };
   }
 
   private attachCookies(res: Response, cookies: string[]) {

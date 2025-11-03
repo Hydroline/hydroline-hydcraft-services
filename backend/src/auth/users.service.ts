@@ -18,6 +18,7 @@ import { RegeneratePiicDto } from './dto/regenerate-piic.dto';
 import { UpdateMinecraftProfileDto } from './dto/update-minecraft-profile.dto';
 import { UpdateUserContactDto } from './dto/update-user-contact.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { UpdateCurrentUserDto, UpdateCurrentUserProfileExtraDto } from './dto/update-current-user.dto';
 
 type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
 
@@ -179,6 +180,7 @@ export class UsersService {
             id: true,
             userId: true,
             displayName: true,
+            birthday: true,
             piic: true,
             piicAssignedAt: true,
             primaryMinecraftProfileId: true,
@@ -270,6 +272,62 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async updateCurrentUser(userId: string, dto: UpdateCurrentUserDto) {
+    await this.ensureUser(userId);
+    const userUpdate: Prisma.UserUpdateInput = {};
+
+    if (dto.name !== undefined) {
+      const normalizedName = this.normalizeEmptyToNull(dto.name);
+      userUpdate.name = normalizedName ?? null;
+    }
+
+    if (dto.image !== undefined) {
+      const normalizedImage = this.normalizeEmptyToNull(dto.image);
+      userUpdate.image = normalizedImage ?? null;
+    }
+
+    if (Object.keys(userUpdate).length > 0) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: userUpdate,
+      });
+    }
+
+    const profilePayload: UpdateUserProfileDto = {};
+    const normalizedDisplayName = this.normalizeOptionalString(dto.displayName);
+    if (normalizedDisplayName !== undefined) {
+      profilePayload.displayName = normalizedDisplayName;
+    }
+    if (dto.birthday !== undefined) {
+      profilePayload.birthday = dto.birthday;
+    }
+    if (dto.gender !== undefined) {
+      profilePayload.gender = dto.gender;
+    }
+    const normalizedMotto = this.normalizeOptionalString(dto.motto);
+    if (normalizedMotto !== undefined) {
+      profilePayload.motto = normalizedMotto;
+    }
+    const normalizedTimezone = this.normalizeOptionalString(dto.timezone);
+    if (normalizedTimezone !== undefined) {
+      profilePayload.timezone = normalizedTimezone;
+    }
+    const normalizedLocale = this.normalizeOptionalString(dto.locale);
+    if (normalizedLocale !== undefined) {
+      profilePayload.locale = normalizedLocale;
+    }
+    const extraPayload = this.normalizeProfileExtra(dto.extra);
+    if (extraPayload !== undefined) {
+      profilePayload.extra = extraPayload;
+    }
+
+    if (Object.keys(profilePayload).length > 0) {
+      await this.updateProfile(userId, profilePayload);
+    }
+
+    return this.getSessionUser(userId);
   }
 
   async getUserDetail(userId: string) {
@@ -695,6 +753,51 @@ export class UsersService {
       where: { userId, channelId, isPrimary: true },
       data: { isPrimary: false },
     });
+  }
+
+  private normalizeEmptyToNull(value?: string) {
+    if (value === undefined) {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private normalizeOptionalString(value?: string) {
+    if (value === undefined) {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private normalizeProfileExtra(extra?: UpdateCurrentUserProfileExtraDto) {
+    if (extra === undefined) {
+      return undefined;
+    }
+    const allowedKeys = [
+      'addressLine1',
+      'addressLine2',
+      'city',
+      'state',
+      'postalCode',
+      'country',
+      'phone',
+    ];
+    const normalized: Record<string, string> = {};
+    for (const key of allowedKeys) {
+      const value = (extra as Record<string, unknown>)[key];
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed.length > 0) {
+          normalized[key] = trimmed;
+        }
+      }
+    }
+    if (Object.keys(normalized).length === 0) {
+      return {};
+    }
+    return normalized;
   }
 
   private toJson(input?: Record<string, unknown>) {

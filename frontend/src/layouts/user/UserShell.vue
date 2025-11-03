@@ -80,9 +80,9 @@ function openLogin() {
 const userDropdownItems = computed(() => [
   [
     {
-      label: '玩家档案',
-      icon: 'i-lucide-user-round',
-      click: () => routerPush('/profile'),
+      label: '用户信息',
+      icon: 'i-lucide-id-card',
+      click: () => routerPush('/profile/info'),
     },
     {
       label: '用户偏好设置',

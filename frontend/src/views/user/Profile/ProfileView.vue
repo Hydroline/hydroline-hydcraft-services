@@ -17,13 +17,23 @@ function openLoginDialog() {
 
 <template>
   <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-16 pt-8">
-    <header class="flex flex-col gap-2">
-      <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-        玩家档案
-      </h1>
-      <p class="text-sm text-slate-600 dark:text-slate-300">
-        后续将在此页面提供更完整的资料编辑能力，目前仅展示账号信息。
-      </p>
+    <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
+          玩家档案
+        </h1>
+        <p class="text-sm text-slate-600 dark:text-slate-300">
+          在这里浏览 Minecraft 绑定、状态事件等档案数据。若需修改账户资料，请使用“用户信息”页面。
+        </p>
+      </div>
+      <RouterLink
+        v-if="isAuthenticated"
+        to="/profile/info"
+        class="inline-flex items-center gap-2 rounded-full border border-primary-200 px-4 py-1.5 text-sm font-medium text-primary-600 transition hover:border-primary-300 hover:text-primary-500 dark:border-primary-500/40 dark:text-primary-200"
+      >
+        <UIcon name="i-lucide-id-card" class="h-4 w-4" />
+        管理用户信息
+      </RouterLink>
     </header>
 
     <div v-if="isAuthenticated" class="grid gap-6 md:grid-cols-[1.2fr_1fr]">

@@ -8,6 +8,30 @@ const USER_CACHE_KEY = 'hydroline.cachedUser'
 
 type RawUser = Record<string, any>
 
+type GenderType = 'UNSPECIFIED' | 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER'
+
+type UpdateCurrentUserPayload = {
+  name?: string
+  image?: string
+  displayName?: string
+  birthday?: string
+  gender?: GenderType
+  motto?: string
+  timezone?: string
+  locale?: string
+  extra?: {
+    addressLine1?: string
+    addressLine2?: string
+    city?: string
+    state?: string
+    postalCode?: string
+    country?: string
+    phone?: string
+  }
+}
+
+export type { GenderType, UpdateCurrentUserPayload }
+
 function readStoredValue(key: string): string | null {
   if (typeof window === 'undefined') {
     return null
@@ -241,6 +265,28 @@ export const useAuthStore = defineStore('auth', {
       } finally {
         this.refreshing = false
       }
+    },
+    async fetchCurrentUser() {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const result = await apiFetch<{ user: RawUser }>('/auth/me', {
+        token: this.token,
+      })
+      this.setUser(result.user)
+      return result.user
+    },
+    async updateCurrentUser(payload: UpdateCurrentUserPayload) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const result = await apiFetch<{ user: RawUser }>('/auth/me', {
+        method: 'PATCH',
+        token: this.token,
+        body: payload,
+      })
+      this.setUser(result.user)
+      return result.user
     },
     clear() {
       this.setToken(null)
