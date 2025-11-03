@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { auth } from '../lib/auth';
 import { PrismaService } from '../prisma/prisma.service';
 import { RolesService, DEFAULT_ROLES } from './roles.service';
@@ -45,8 +49,10 @@ export class AuthService {
         headers,
         returnHeaders: true,
       })
-      .catch((error: any) => {
-        throw new BadRequestException(error?.message ?? 'Failed to sign up');
+      .catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : 'Failed to sign up';
+        throw new BadRequestException(message);
       });
 
     const payload = result.response as AuthResponse;
@@ -62,7 +68,7 @@ export class AuthService {
     await this.assignDefaultRole(payload.user.id);
 
     const tokens = this.extractTokens(result);
-    const fullUser = await this.usersService.getUserDetail(payload.user.id);
+    const fullUser = await this.usersService.getSessionUser(payload.user.id);
 
     return {
       tokens,
@@ -83,17 +89,18 @@ export class AuthService {
         headers,
         returnHeaders: true,
       })
-      .catch((error: any) => {
-        throw new UnauthorizedException(error?.message ?? 'Invalid credentials');
+      .catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : 'Invalid credentials';
+        throw new UnauthorizedException(message);
       });
 
     const payload = result.response as AuthResponse;
     if (!payload.user?.id || !payload.token) {
       throw new UnauthorizedException('Invalid credentials');
     }
-
     const tokens = this.extractTokens(result);
-    const user = await this.usersService.getUserDetail(payload.user.id);
+    const user = await this.usersService.getSessionUser(payload.user.id);
 
     return {
       tokens,
@@ -117,7 +124,7 @@ export class AuthService {
       data: { expiresAt: newExpires },
     });
 
-    const user = await this.usersService.getUserDetail(session.userId);
+    const user = await this.usersService.getSessionUser(session.userId);
     const tokens = {
       accessToken: dto.refreshToken,
       refreshToken: dto.refreshToken,
@@ -132,7 +139,9 @@ export class AuthService {
   }
 
   async signOut(token: string) {
-    await this.prisma.session.delete({ where: { token } }).catch(() => undefined);
+    await this.prisma.session
+      .delete({ where: { token } })
+      .catch(() => undefined);
     return { success: true };
   }
 
@@ -141,12 +150,14 @@ export class AuthService {
 
     if (!session || session.expiresAt.getTime() < Date.now()) {
       if (session) {
-        await this.prisma.session.delete({ where: { id: session.id } }).catch(() => undefined);
+        await this.prisma.session
+          .delete({ where: { id: session.id } })
+          .catch(() => undefined);
       }
       throw new UnauthorizedException('Invalid session');
     }
 
-    const user = await this.usersService.getUserDetail(session.userId);
+    const user = await this.usersService.getSessionUser(session.userId);
     return { user, sessionToken: token };
   }
 
@@ -166,7 +177,7 @@ export class AuthService {
       cookies,
     };
   }
-  
+
   private collectCookies(headers: Headers) {
     const setCookie = headers.get('set-cookie');
     if (!setCookie) {
@@ -283,7 +294,9 @@ export class AuthService {
     }
 
     const credentialAccount = admin.accounts.find(
-      (account) => account.provider === 'credential' || account.providerId === 'credential',
+      (account) =>
+        account.provider === 'credential' ||
+        account.providerId === 'credential',
     );
 
     if (!credentialAccount) {
@@ -314,7 +327,10 @@ export class AuthService {
     await this.assignDefaultRole(admin.id, DEFAULT_ROLES.ADMIN);
   }
 
-  private async assignDefaultRole(userId: string, roleKey: string = DEFAULT_ROLES.PLAYER) {
+  private async assignDefaultRole(
+    userId: string,
+    roleKey: string = DEFAULT_ROLES.PLAYER,
+  ) {
     const role = await this.prisma.role.findUnique({ where: { key: roleKey } });
     if (!role) {
       return;

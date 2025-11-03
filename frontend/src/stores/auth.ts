@@ -40,6 +40,8 @@ const initialAccessToken = readStoredValue(ACCESS_TOKEN_KEY)
 const initialRefreshToken = readStoredValue(REFRESH_TOKEN_KEY)
 const initialUser = readStoredUser()
 
+let initializePromise: Promise<void> | null = null
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: initialAccessToken as string | null,
@@ -117,20 +119,30 @@ export const useAuthStore = defineStore('auth', {
     },
     async initialize() {
       if (this.initialized) return
+      if (initializePromise) {
+        return initializePromise
+      }
       this.loading = true
+      initializePromise = (async () => {
+        try {
+          if (this.token) {
+            await this.fetchSession()
+          }
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 401) {
+            this.clear()
+          } else {
+            throw error
+          }
+        } finally {
+          this.loading = false
+          this.initialized = true
+        }
+      })()
       try {
-        if (this.token) {
-          await this.fetchSession()
-        }
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          this.clear()
-        } else {
-          throw error
-        }
+        await initializePromise
       } finally {
-        this.loading = false
-        this.initialized = true
+        initializePromise = null
       }
     },
     async signIn(payload: { email: string; password: string; rememberMe?: boolean }) {

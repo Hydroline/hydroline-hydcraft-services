@@ -173,9 +173,7 @@ const routerPush = (path: string) => {
           icon="i-lucide-menu"
           @click="menuOpen = !menuOpen"
         />
-        <div
-          class="hidden text-sm text-slate-600 dark:text-slate-300 sm:block"
-        >
+        <div class="hidden text-sm text-slate-600 dark:text-slate-300 sm:block">
           <p class="font-medium">Aurora_Lemon</p>
         </div>
       </div>
@@ -249,7 +247,8 @@ const routerPush = (path: string) => {
         </div>
         <UButton
           v-else
-          color="primary"
+          color="neutral"
+          variant="link"
           size="xs"
           class="rounded-full"
           @click="openLogin"

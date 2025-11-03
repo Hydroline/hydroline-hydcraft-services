@@ -1,5 +1,11 @@
+<script setup lang="ts">
+const appTooltipConfig = {
+  delayDuration: 150,
+}
+</script>
+
 <template>
-  <UApp>
+  <UApp :tooltip="appTooltipConfig">
     <RouterView />
   </UApp>
 </template>

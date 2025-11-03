@@ -23,9 +23,7 @@ const scrolled = ref(false)
 const navigationLinks = computed(() => home.value?.navigation ?? [])
 const cardIds = computed(() => home.value?.cards ?? [])
 
-const heroSubtitle = computed(
-  () => home.value?.hero.subtitle ?? 'ALPHA 测试阶段',
-)
+const heroSubtitle = computed(() => home.value?.hero.subtitle ?? null)
 const heroBackgrounds = computed(() => home.value?.hero.background ?? [])
 
 const carouselState = reactive({
@@ -261,7 +259,10 @@ onBeforeUnmount(() => {
                 class="h-28 text-slate-600 dark:text-slate-300"
               />
             </h1>
-            <p class="text-sm uppercase text-slate-500 dark:text-slate-300">
+            <p
+              class="text-sm uppercase text-slate-500 dark:text-slate-300"
+              v-if="heroSubtitle"
+            >
               {{ heroSubtitle }}
             </p>
           </div>
@@ -310,62 +311,8 @@ onBeforeUnmount(() => {
     <section class="relative z-10 -mt-12 px-4">
       <div class="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-5">
         <div class="md:col-span-3">
+          <!-- 等东西 -->
           <Transition name="fade-slide" mode="out-in">
-            <UCard
-              v-if="profileCardData"
-              key="profile-active"
-              class="rounded-3xl border border-slate-200/70 bg-white/85 p-6 shadow-lg backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
-            >
-              <div
-                class="flex flex-col gap-4 text-left sm:flex-row sm:items-center"
-              >
-                <UserAvatar
-                  :name="profileCardData.displayName"
-                  :src="profileCardData.avatarUrl"
-                  size="lg"
-                />
-                <div class="flex-1 space-y-2">
-                  <h2
-                    class="text-xl font-semibold text-slate-900 dark:text-white"
-                  >
-                    {{ profileCardData.displayName }}
-                  </h2>
-                  <p class="text-sm text-slate-600 dark:text-slate-300">
-                    邮箱：{{ profileCardData.email }}
-                  </p>
-                  <div class="flex flex-wrap gap-2">
-                    <UBadge
-                      v-for="role in profileCardData.roles"
-                      :key="role.id"
-                      color="primary"
-                      variant="subtle"
-                    >
-                      {{ role.name }}
-                    </UBadge>
-                  </div>
-                </div>
-              </div>
-            </UCard>
-
-            <UCard
-              v-else
-              key="profile-placeholder"
-              class="rounded-3xl border border-dashed border-slate-300/70 bg-white/70 p-6 text-center backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/60"
-            >
-              <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
-                个人资料
-              </h2>
-              <p class="mt-2 text-sm text-slate-500 dark:text-slate-300">
-                立即登录以解锁个性化信息和 Minecraft 关联数据。
-              </p>
-              <UButton
-                class="mt-4"
-                color="primary"
-                @click="uiStore.openLoginDialog()"
-              >
-                登录账户
-              </UButton>
-            </UCard>
           </Transition>
         </div>
 
@@ -392,22 +339,6 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </section>
-
-    <section class="mx-auto mt-16 w-full max-w-6xl px-4 pb-24">
-      <UCard
-        class="rounded-3xl border border-slate-200/70 bg-white/80 p-6 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
-      >
-        <header class="flex items-center justify-between">
-          <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
-            最新动态
-          </h2>
-          <UBadge color="primary" variant="soft">Beta</UBadge>
-        </header>
-        <p class="mt-4 text-sm text-slate-600 dark:text-slate-300">
-          后端将提供动态卡片内容、服务器状态与公告。当前阶段展示布局效果，等待后续数据接入。
-        </p>
-      </UCard>
-    </section>
   </div>
 </template>
 
@@ -425,12 +356,12 @@ onBeforeUnmount(() => {
 
 .bg-image {
   mask:
-    linear-gradient(to bottom, rgba(255, 255, 255, 1), transparent 80%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 1), transparent 85%),
     linear-gradient(
       to right,
-      transparent 3%,
-      rgba(255, 255, 255, 1) 15% 85%,
-      transparent 97%
+      transparent 2%,
+      rgba(255, 255, 255, 1) 10% 90%,
+      transparent 98%
     );
   mask-composite: intersect;
   -webkit-mask-composite: destination-in;

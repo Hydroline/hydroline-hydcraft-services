@@ -164,6 +164,114 @@ export class UsersService {
     };
   }
 
+  async getSessionUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+        createdAt: true,
+        updatedAt: true,
+        profile: {
+          select: {
+            id: true,
+            userId: true,
+            displayName: true,
+            piic: true,
+            piicAssignedAt: true,
+            primaryMinecraftProfileId: true,
+            timezone: true,
+            locale: true,
+            motto: true,
+            gender: true,
+            extra: true,
+          },
+        },
+        contacts: {
+          select: {
+            id: true,
+            userId: true,
+            channelId: true,
+            value: true,
+            isPrimary: true,
+            verification: true,
+            verifiedAt: true,
+            metadata: true,
+            channel: {
+              select: {
+                id: true,
+                key: true,
+                displayName: true,
+                description: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        roles: {
+          select: {
+            id: true,
+            userId: true,
+            roleId: true,
+            assignedAt: true,
+            metadata: true,
+            role: {
+              select: {
+                id: true,
+                key: true,
+                name: true,
+                description: true,
+                isSystem: true,
+                metadata: true,
+                rolePermissions: {
+                  select: {
+                    id: true,
+                    roleId: true,
+                    permissionId: true,
+                    permission: {
+                      select: {
+                        id: true,
+                        key: true,
+                        description: true,
+                        metadata: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        statusSnapshot: {
+          select: {
+            userId: true,
+            status: true,
+            updatedAt: true,
+            statusEventId: true,
+            event: {
+              select: {
+                id: true,
+                status: true,
+                reasonCode: true,
+                source: true,
+                createdAt: true,
+                metadata: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
   async getUserDetail(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
