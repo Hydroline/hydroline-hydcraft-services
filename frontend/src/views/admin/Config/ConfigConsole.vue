@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { apiFetch, ApiError } from '@/utils/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -25,6 +25,7 @@ type ConfigEntry = {
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()
+const toast = useToast()
 
 const namespaces = ref<Namespace[]>([])
 const selectedNamespaceId = ref<string | null>(null)
@@ -49,7 +50,11 @@ const editingEntry = ref<ConfigEntry | null>(null)
 const editingValue = ref('')
 const editingDescription = ref('')
 const editModalOpen = ref(false)
-const createModalOpen = ref(false)
+const createEntryModalOpen = ref(false)
+const namespaceModalOpen = ref(false)
+const deleteModalOpen = ref(false)
+const pendingDeleteEntry = ref<ConfigEntry | null>(null)
+const deletingEntry = ref(false)
 
 const selectedNamespace = computed(() =>
   namespaces.value.find((item) => item.id === selectedNamespaceId.value) ?? null,
@@ -99,27 +104,37 @@ function selectNamespace(namespaceId: string) {
 }
 
 async function createNamespace() {
+  const key = namespaceForm.key.trim()
+  const name = namespaceForm.name.trim()
+  if (!key || !name) {
+    toast.add({
+      title: '信息不完整',
+      description: '请填写命名空间 Key 和名称',
+      color: 'warning',
+    })
+    return
+  }
+
   submitting.value = true
   uiStore.startLoading()
   try {
-    const payload = {
-      key: namespaceForm.key.trim(),
-      name: namespaceForm.name.trim(),
-      description: namespaceForm.description.trim() || undefined,
-    }
-    if (!payload.key || !payload.name) {
-      throw new Error('请填写命名空间 Key 和名称')
-    }
     const created = await apiFetch<Namespace>('/config/namespaces', {
       method: 'POST',
       token: authStore.token ?? undefined,
-      body: payload,
+      body: {
+        key,
+        name,
+        description: namespaceForm.description.trim() || undefined,
+      },
     })
     namespaces.value.push({ ...created, _count: { entries: 0 } })
-    namespaceForm.key = ''
-    namespaceForm.name = ''
-    namespaceForm.description = ''
+    toast.add({
+      title: '已创建命名空间',
+      description: name,
+      color: 'success',
+    })
     selectNamespace(created.id)
+    namespaceModalOpen.value = false
   } catch (error) {
     handleError(error, '创建命名空间失败')
   } finally {
@@ -142,9 +157,14 @@ function parseJsonInput(text: string) {
 
 async function createEntry() {
   if (!selectedNamespaceId.value) {
-    window.alert('请先选择命名空间')
+    toast.add({
+      title: '未选择命名空间',
+      description: '请先选择命名空间后再新增配置项',
+      color: 'warning',
+    })
     return
   }
+  const key = entryForm.key.trim()
   submitting.value = true
   uiStore.startLoading()
   try {
@@ -155,7 +175,7 @@ async function createEntry() {
       method: 'POST',
       token: authStore.token ?? undefined,
       body: {
-        key: entryForm.key.trim(),
+        key,
         value,
         description: entryForm.description.trim() || undefined,
       },
@@ -164,7 +184,12 @@ async function createEntry() {
     entries.value.push(created)
     namespaceFormUpdateCount(selectedNamespaceId.value, 1)
     resetCreateForm()
-    createModalOpen.value = false
+    createEntryModalOpen.value = false
+    toast.add({
+      title: '已新增配置项',
+      description: key || created.key,
+      color: 'success',
+    })
   } catch (error) {
     handleError(error, '新增配置项失败')
   } finally {
@@ -181,12 +206,20 @@ function resetCreateForm() {
 
 function openCreateModal() {
   resetCreateForm()
-  createModalOpen.value = true
+  createEntryModalOpen.value = true
 }
 
 function closeCreateModal() {
-  createModalOpen.value = false
-  resetCreateForm()
+  createEntryModalOpen.value = false
+}
+
+function openNamespaceModal() {
+  resetNamespaceForm()
+  namespaceModalOpen.value = true
+}
+
+function closeNamespaceModal() {
+  namespaceModalOpen.value = false
 }
 
 function namespaceFormUpdateCount(namespaceId: string, delta: number) {
@@ -205,7 +238,6 @@ function openEdit(entry: ConfigEntry) {
 
 function closeEditModal() {
   editModalOpen.value = false
-  editingEntry.value = null
 }
 
 async function saveEdit() {
@@ -224,6 +256,11 @@ async function saveEdit() {
     })
     entries.value = entries.value.map((item) => (item.id === updated.id ? updated : item))
     closeEditModal()
+    toast.add({
+      title: '配置项已更新',
+      description: updated.key,
+      color: 'success',
+    })
   } catch (error) {
     handleError(error, '更新配置项失败')
   } finally {
@@ -232,34 +269,88 @@ async function saveEdit() {
   }
 }
 
-async function deleteEntry(entryId: string) {
-  if (!selectedNamespaceId.value) return
-  if (!window.confirm('确认删除该配置项？')) return
+function requestDeleteEntry(entry: ConfigEntry) {
+  pendingDeleteEntry.value = entry
+  deleteModalOpen.value = true
+}
+
+function closeDeleteModal() {
+  deleteModalOpen.value = false
+}
+
+async function confirmDeleteEntry() {
+  if (!selectedNamespaceId.value || !pendingDeleteEntry.value) return
+  deletingEntry.value = true
   uiStore.startLoading()
   try {
-    await apiFetch(`/config/entries/${entryId}`, {
+    await apiFetch(`/config/entries/${pendingDeleteEntry.value.id}`, {
       method: 'DELETE',
       token: authStore.token ?? undefined,
     })
-    entries.value = entries.value.filter((item) => item.id !== entryId)
+    entries.value = entries.value.filter((item) => item.id !== pendingDeleteEntry.value?.id)
+    toast.add({
+      title: '已删除配置项',
+      description: pendingDeleteEntry.value.key,
+      color: 'success',
+    })
     namespaceFormUpdateCount(selectedNamespaceId.value, -1)
+    closeDeleteModal()
   } catch (error) {
     handleError(error, '删除配置项失败')
   } finally {
+    deletingEntry.value = false
     uiStore.stopLoading()
   }
 }
 
 function handleError(error: unknown, fallbackMessage: string) {
-  if (error instanceof ApiError) {
-    window.alert(error.message ?? fallbackMessage)
-  } else if (error instanceof Error) {
-    window.alert(error.message ?? fallbackMessage)
-  } else {
-    window.alert(fallbackMessage)
-  }
+  const detail =
+    error instanceof ApiError
+      ? error.message ?? fallbackMessage
+      : error instanceof Error
+        ? error.message || fallbackMessage
+        : fallbackMessage
+
+  toast.add({
+    title: fallbackMessage,
+    description: detail,
+    color: 'error',
+  })
   console.error(fallbackMessage, error)
 }
+
+function resetNamespaceForm() {
+  namespaceForm.key = ''
+  namespaceForm.name = ''
+  namespaceForm.description = ''
+}
+
+watch(namespaceModalOpen, (open) => {
+  if (!open) {
+    resetNamespaceForm()
+  }
+})
+
+watch(createEntryModalOpen, (open) => {
+  if (!open) {
+    resetCreateForm()
+  }
+})
+
+watch(editModalOpen, (open) => {
+  if (!open) {
+    editingEntry.value = null
+    editingValue.value = ''
+    editingDescription.value = ''
+  }
+})
+
+watch(deleteModalOpen, (open) => {
+  if (!open) {
+    pendingDeleteEntry.value = null
+    deletingEntry.value = false
+  }
+})
 
 onMounted(() => {
   void fetchNamespaces()
@@ -267,7 +358,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="mx-auto flex w-full max-w-6xl flex-col gap-8">
+  <section class="flex w-full flex-col gap-8 px-4 pb-10 lg:px-10">
     <header class="flex flex-col gap-2">
       <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">配置中心</h1>
       <p class="text-sm text-slate-600 dark:text-slate-300">
@@ -275,11 +366,23 @@ onMounted(() => {
       </p>
     </header>
 
-    <div class="grid gap-6 lg:grid-cols-[260px_1fr]">
+    <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
       <aside class="space-y-4">
         <UCard class="bg-white/80 p-4 dark:bg-slate-900/70">
           <template #header>
-            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">命名空间</h2>
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-white">命名空间</h2>
+              <UButton
+                size="xs"
+                color="primary"
+                variant="soft"
+                icon="i-lucide-plus"
+                class="items-center"
+                @click="openNamespaceModal"
+              >
+                新增
+              </UButton>
+            </div>
           </template>
           <div class="space-y-2">
             <button
@@ -304,27 +407,6 @@ onMounted(() => {
               暂无命名空间，请先创建。
             </p>
           </div>
-        </UCard>
-
-        <UCard class="bg-white/80 p-4 dark:bg-slate-900/70">
-          <template #header>
-            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">新建命名空间</h2>
-          </template>
-          <form class="space-y-3 text-sm" @submit.prevent="createNamespace">
-            <label class="flex flex-col gap-1">
-              <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Key</span>
-              <UInput v-model="namespaceForm.key" placeholder="如 portal.navigation" required />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">名称</span>
-              <UInput v-model="namespaceForm.name" placeholder="展示名称" required />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
-              <UTextarea v-model="namespaceForm.description" placeholder="补充说明（可选）" :rows="2" />
-            </label>
-            <UButton type="submit" color="primary" :loading="submitting" class="w-full justify-center items-center">创建命名空间</UButton>
-          </form>
         </UCard>
       </aside>
 
@@ -371,7 +453,7 @@ onMounted(() => {
                 </div>
                 <div class="flex gap-2">
                   <UButton size="xs" color="neutral" variant="outline" @click="openEdit(entry)">编辑</UButton>
-                  <UButton size="xs" color="error" variant="soft" @click="deleteEntry(entry.id)">删除</UButton>
+                  <UButton size="xs" color="error" variant="soft" @click="requestDeleteEntry(entry)">删除</UButton>
                 </div>
               </header>
               <p v-if="entry.description" class="mb-2 text-xs text-slate-500 dark:text-slate-400">
@@ -387,86 +469,106 @@ onMounted(() => {
         </UCard>
       </main>
     </div>
-    <Teleport to="body">
-      <Transition name="fade">
-        <div
-          v-if="editModalOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center"
-        >
-          <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="closeEditModal" />
-          <div class="relative w-full max-w-2xl space-y-4 rounded-2xl border border-slate-200/60 bg-white/95 p-6 shadow-2xl dark:border-slate-700/60 dark:bg-slate-900/85">
-            <header>
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-white">编辑配置项 {{ editingEntry?.key }}</h3>
-              <p class="text-xs text-slate-500 dark:text-slate-400">修改值请保持合法 JSON。</p>
-            </header>
+    <UModal v-model:open="editModalOpen" :ui="{ content: 'w-full max-w-2xl' }">
+      <template #content>
+        <form class="space-y-4 p-6" @submit.prevent="saveEdit">
+          <header>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">编辑配置项 {{ editingEntry?.key }}</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">修改值请保持合法 JSON。</p>
+          </header>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
+            <UInput v-model="editingDescription" placeholder="描述（可选）" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
+            <UTextarea v-model="editingValue" :rows="10" spellcheck="false" />
+          </label>
+          <div class="flex justify-end gap-2">
+            <UButton type="button" color="neutral" variant="ghost" @click="closeEditModal">取消</UButton>
+            <UButton type="submit" color="primary" :loading="submitting">保存</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="createEntryModalOpen" :ui="{ content: 'w-full max-w-2xl' }">
+      <template #content>
+        <form class="space-y-4 p-6 text-sm" @submit.prevent="createEntry">
+          <header class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-900 dark:text-white">新增配置项</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                创建时请确保 Key 唯一且值为合法 JSON。
+              </p>
+            </div>
+          </header>
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="flex flex-col gap-1">
+              <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Key</span>
+              <UInput v-model="entryForm.key" placeholder="例如 wiki" required />
+            </label>
             <label class="flex flex-col gap-1">
               <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
-              <UInput v-model="editingDescription" placeholder="描述（可选）" />
+              <UInput v-model="entryForm.description" placeholder="补充说明（可选）" />
             </label>
-            <label class="flex flex-col gap-1">
-              <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
-              <UTextarea v-model="editingValue" :rows="10" spellcheck="false" />
-            </label>
-            <div class="flex justify-end gap-2">
-              <UButton color="neutral" variant="ghost" @click="closeEditModal">取消</UButton>
-              <UButton color="primary" :loading="submitting" @click="saveEdit">保存</UButton>
-            </div>
           </div>
-        </div>
-      </Transition>
-    </Teleport>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
+            <UTextarea v-model="entryForm.value" :rows="10" spellcheck="false" />
+          </label>
+          <div class="flex justify-end gap-2">
+            <UButton type="button" color="neutral" variant="ghost" @click="closeCreateModal">取消</UButton>
+            <UButton type="submit" color="primary" :loading="submitting">保存</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
 
-    <Teleport to="body">
-      <Transition name="fade">
-        <div
-          v-if="createModalOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center"
-        >
-          <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="closeCreateModal" />
-          <div class="relative w-full max-w-2xl space-y-4 rounded-2xl border border-slate-200/60 bg-white/95 p-6 shadow-2xl dark:border-slate-700/60 dark:bg-slate-900/85">
-            <header class="flex items-center justify-between">
-              <div>
-                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">新增配置项</h3>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  创建时请确保 Key 唯一且值为合法 JSON。
-                </p>
-              </div>
-            </header>
-            <form class="space-y-3 text-sm" @submit.prevent="createEntry">
-              <div class="grid gap-4 md:grid-cols-2">
-                <label class="flex flex-col gap-1">
-                  <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Key</span>
-                  <UInput v-model="entryForm.key" placeholder="例如 wiki" required />
-                </label>
-                <label class="flex flex-col gap-1">
-                  <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
-                  <UInput v-model="entryForm.description" placeholder="补充说明（可选）" />
-                </label>
-              </div>
-              <label class="flex flex-col gap-1">
-                <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">值（JSON）</span>
-                <UTextarea v-model="entryForm.value" :rows="10" spellcheck="false" />
-              </label>
-              <div class="flex justify-end gap-2">
-                <UButton type="button" color="neutral" variant="ghost" @click="closeCreateModal">取消</UButton>
-                <UButton type="submit" color="primary" :loading="submitting">保存</UButton>
-              </div>
-            </form>
+    <UModal v-model:open="namespaceModalOpen" :ui="{ content: 'w-full max-w-lg' }">
+      <template #content>
+        <form class="space-y-4 p-6 text-sm" @submit.prevent="createNamespace">
+          <header>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">新建命名空间</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">填写后将立即创建并选中该命名空间。</p>
+          </header>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Key</span>
+            <UInput v-model="namespaceForm.key" placeholder="如 portal.navigation" required />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">名称</span>
+            <UInput v-model="namespaceForm.name" placeholder="展示名称" required />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">描述</span>
+            <UTextarea v-model="namespaceForm.description" placeholder="补充说明（可选）" :rows="2" />
+          </label>
+          <div class="flex justify-end gap-2">
+            <UButton type="button" color="neutral" variant="ghost" @click="closeNamespaceModal">取消</UButton>
+            <UButton type="submit" color="primary" :loading="submitting">创建</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="deleteModalOpen" :ui="{ content: 'w-full max-w-md' }">
+      <template #content>
+        <div class="space-y-4 p-6 text-sm">
+          <header>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">确认删除</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              删除后该配置项将无法恢复，确定要删除
+              <span class="font-medium">{{ pendingDeleteEntry?.key }}</span>
+              吗？
+            </p>
+          </header>
+          <div class="flex justify-end gap-2">
+            <UButton color="neutral" variant="ghost" @click="closeDeleteModal">取消</UButton>
+            <UButton color="error" :loading="deletingEntry" @click="confirmDeleteEntry">删除</UButton>
           </div>
         </div>
-      </Transition>
-    </Teleport>
+      </template>
+    </UModal>
   </section>
 </template>
-
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>

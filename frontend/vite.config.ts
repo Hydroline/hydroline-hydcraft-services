@@ -22,6 +22,11 @@ export default defineConfig({
           warning: 'warning',
           error: 'danger',
         },
+        toaster: {
+          defaultVariants: {
+            position: 'top-right',
+          },
+        },
       },
     }),
     tailwindcss(),

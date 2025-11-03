@@ -314,7 +314,15 @@ const routerPush = (path: string) => {
             class="select-none font-bold mx-0.5 w-px h-5 bg-slate-200 dark:bg-slate-600"
           ></div>
           <HydrolineSvg class="h-6" />
-          <span class="font-semibold">Hydroline HydCraft</span>
+          <span
+            class="font-semibold inline-flex justify-center items-center gap-1"
+          >
+            Hydroline HydCraft
+            <span
+              class="rounded px-1 text-[0.625rem] bg-primary-100 text-primary-500"
+              >ALPHA</span
+            >
+          </span>
         </div>
         <div class="flex items-end gap-0.5">
           <div class="flex gap-3">
