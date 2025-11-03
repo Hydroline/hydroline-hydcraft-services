@@ -121,6 +121,16 @@ const router = createRouter({
       redirect: '/error/404',
     },
   ],
+  // 保持用户体验一致：导航到新页面时滚动到顶部；浏览器后退/前进时恢复之前的位置。
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    }
+    if (to.hash) {
+      return { el: to.hash }
+    }
+    return { left: 0, top: 0 }
+  },
 })
 
 registerAuthGuards(router)

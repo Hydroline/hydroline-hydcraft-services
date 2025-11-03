@@ -241,13 +241,13 @@ onBeforeUnmount(() => {
       class="relative flex min-h-[60vh] flex-col items-center justify-center px-4 py-24 text-center"
     >
       <div
-        class="fixed inset-0 -z-10 flex flex-col justify-center items-center px-20 transition duration-300"
+        class="fixed inset-0 bottom-24 -z-10 flex flex-col justify-center items-center transition duration-300"
         :style="heroBackdropStyle"
       >
         <img
           :src="activeHeroImage"
           :alt="activeHeroDescription"
-          class="bg-image block h-fit select-none transition duration-350"
+          class="bg-image block h-full w-full select-none transition duration-350 object-cover object-top"
         />
       </div>
 
@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
             <UTooltip
               v-for="(link, index) in navigationLinks"
               :key="link.id"
-              :text="link.tooltip"
+              :text="link.tooltip ?? link.label"
             >
               <UButton
                 :color="link.available ? 'primary' : 'neutral'"
@@ -312,8 +312,7 @@ onBeforeUnmount(() => {
       <div class="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-5">
         <div class="md:col-span-3">
           <!-- 等东西 -->
-          <Transition name="fade-slide" mode="out-in">
-          </Transition>
+          <Transition name="fade-slide" mode="out-in"> </Transition>
         </div>
 
         <div class="grid gap-4 md:col-span-2">
@@ -356,12 +355,12 @@ onBeforeUnmount(() => {
 
 .bg-image {
   mask:
-    linear-gradient(to bottom, rgba(255, 255, 255, 1), transparent 85%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 1) 40%, rgba(255, 255, 255, 0.25) 70%, transparent 95%),
     linear-gradient(
       to right,
-      transparent 2%,
+      transparent,
       rgba(255, 255, 255, 1) 10% 90%,
-      transparent 98%
+      transparent
     );
   mask-composite: intersect;
   -webkit-mask-composite: destination-in;

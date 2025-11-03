@@ -23,7 +23,7 @@ function select(mode: 'light' | 'dark' | 'system') {
       color="neutral"
       variant="ghost"
       size="xs"
-      class="h-9 w-9 rounded-full hover:bg-accented"
+      class="h-9 w-9 rounded-full hover:bg-accented/70 active:bg-accented/70"
       icon-only
     >
       <UIcon

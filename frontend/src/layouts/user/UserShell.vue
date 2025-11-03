@@ -4,7 +4,6 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
-import { usePortalStore } from '@/stores/portal'
 import { useUiStore } from '@/stores/ui'
 import AppLoadingBar from '@/components/common/AppLoadingBar.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
@@ -14,12 +13,11 @@ import HydrlabSvg from '@/assets/resources/hydrlab_logo.svg'
 import HydrolineSvg from '@/assets/resources/hydroline_logo.svg'
 
 const authStore = useAuthStore()
-const portalStore = usePortalStore()
 const uiStore = useUiStore()
 const route = useRoute()
 const router = useRouter()
 
-const { home } = storeToRefs(portalStore)
+// 当前布局无需直接使用 portalStore.home
 const { heroInView, heroActiveDescription } = storeToRefs(uiStore)
 
 const menuOpen = ref(false)
@@ -54,18 +52,14 @@ const headerTitle = computed(() => {
   return 'Hydroline'
 })
 
-const headerStateKey = computed(() => {
-  if (!isMainPage.value) {
-    return 'other-page'
-  }
-  if (heroInView.value) {
-    return `title:${headerTitle.value}`
-  }
-  return 'logo'
-})
+// 已改为使用静态 key（header-title / header-logo）进行过渡，这里的动态 key 不再需要
+type MaybeUser = {
+  profile?: { avatarUrl?: string; displayName?: string } | null
+  image?: string | null
+} | null
 
 const userAvatarUrl = computed(() => {
-  const user = authStore.user as any
+  const user = authStore.user as MaybeUser
   if (!user) return null
   return user.profile?.avatarUrl ?? user.image ?? null
 })
@@ -81,7 +75,7 @@ function openLogin() {
   uiStore.openLoginDialog()
 }
 
-const navigationLinks = computed(() => home.value?.navigation ?? [])
+// 页面头部导航由 HomeView 自行渲染，这里无需派生 navigationLinks
 
 const userDropdownItems = computed(() => [
   [
@@ -178,20 +172,28 @@ const routerPush = (path: string) => {
       </div>
 
       <div class="flex items-center justify-center text-center">
-        <Transition v-if="isMainPage" name="fade-slide" mode="out-in" appear>
-          <div :key="headerStateKey">
+        <div v-if="isMainPage" class="flex items-center justify-center">
+          <Transition
+            mode="out-in"
+            enter-active-class="transition-opacity duration-150 ease-out"
+            leave-active-class="transition-opacity duration-150 ease-in"
+            enter-from-class="opacity-0"
+            leave-to-class="opacity-0"
+          >
             <p
               v-if="heroInView"
+              key="header-title"
               class="text-lg text-slate-400 dark:text-white/50"
             >
               {{ headerTitle }}
             </p>
             <HydrolineSvg
               v-else
+              key="header-logo"
               class="h-6 text-slate-500 dark:text-white/75"
             />
-          </div>
-        </Transition>
+          </Transition>
+        </div>
       </div>
 
       <div class="flex items-center justify-end gap-2">
@@ -201,7 +203,7 @@ const routerPush = (path: string) => {
               color="neutral"
               variant="ghost"
               size="xs"
-              class="flex items-center gap-2 rounded-full px-2 py-1 text-sm hover:bg-accented"
+              class="flex items-center gap-2 rounded-full px-2 py-1 text-sm hover:bg-accented/70 active:bg-accented/70"
             >
               <span class="hidden text-slate-700 dark:text-slate-200 sm:block">
                 {{ authStore.displayName ?? authStore.user?.email ?? '用户' }}
@@ -257,7 +259,7 @@ const routerPush = (path: string) => {
             color="neutral"
             variant="ghost"
             size="xs"
-            class="h-9 w-9 rounded-full hover:bg-accented"
+            class="h-9 w-9 rounded-full hover:bg-accented/70 active:bg-accented/70"
             icon-only
           >
             <UIcon name="i-lucide-mail" class="h-6 w-6" />
@@ -304,28 +306,32 @@ const routerPush = (path: string) => {
       <RouterView />
     </main>
 
-    <footer class="mt-auto px-4 py-8">
+    <footer class="mt-auto py-4 px-6 lg:py-8">
       <div
-        class="mx-auto flex w-full max-w-5xl flex-col gap-3 text-sm text-slate-500 dark:text-slate-400 md:flex-row md:items-center md:justify-between"
+        class="mx-auto flex flex-col-reverse items-center w-full gap-3 text-sm text-slate-500 dark:text-slate-400 lg:flex-row lg:justify-between lg:max-w-5xl"
       >
-        <div class="flex items-center gap-2">
-          <HydrlabSvg class="h-6" />
-          <div
-            class="select-none font-bold mx-0.5 w-px h-5 bg-slate-200 dark:bg-slate-600"
-          ></div>
-          <HydrolineSvg class="h-6" />
+        <div class="flex items-center flex-col gap-2 mt-3 lg:flex-row lg:mt-0">
+          <span class="flex items-center gap-2">
+            <HydrlabSvg class="h-6" />
+            <div
+              class="select-none font-bold mx-0.5 w-px h-5 bg-slate-200 dark:bg-slate-600"
+            ></div>
+            <HydrolineSvg class="h-6" />
+          </span>
           <span
-            class="font-semibold inline-flex justify-center items-center gap-1"
+            class="font-semibold flex flex-col justify-center items-center gap-1 leading-none lg:flex-row"
           >
             Hydroline HydCraft
             <span
-              class="rounded px-1 text-[0.625rem] bg-primary-100 text-primary-500"
+              class="rounded px-1 py-0.5 text-[0.625rem] bg-primary-100 text-primary-500 leading-none"
               >ALPHA</span
             >
           </span>
         </div>
-        <div class="flex items-end gap-0.5">
-          <div class="flex gap-3">
+        <div
+          class="flex justify-center flex-wrap gap-y-0.5 gap-x-3 lg:items-end lg:gap-x-0.5"
+        >
+          <div class="flex gap-x-3 gap-y-0.5 flex-wrap justify-center">
             <span :key="item.label" v-for="item in siteItems">
               <a
                 :href="item.link"
@@ -337,11 +343,11 @@ const routerPush = (path: string) => {
             </span>
           </div>
           <div
-            class="select-none font-bold mx-2 text-slate-300 dark:text-slate-500"
+            class="hidden lg:block select-none font-bold mx-2 text-slate-300 dark:text-slate-500"
           >
             ·
           </div>
-          <div class="flex gap-3">
+          <div class="flex gap-x-3 gap-y-0.5 flex-wrap justify-center">
             <span :key="item.type" v-for="item in footerRegisterItems">
               <a
                 :href="item.link"
@@ -353,11 +359,11 @@ const routerPush = (path: string) => {
             </span>
           </div>
           <div
-            class="select-none font-bold mx-2 text-slate-300 dark:text-slate-200"
+            class="hidden lg:block select-none font-bold mx-2 text-slate-300 dark:text-slate-200"
           >
             ·
           </div>
-          <div>
+          <div class="flex gap-x-3 gap-y-0.5 flex-wrap justify-center">
             <span>© Team Hydrlab {{ dayjs().year() }}</span>
           </div>
         </div>
