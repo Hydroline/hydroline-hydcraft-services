@@ -84,6 +84,16 @@ export const adminRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'data-sync',
+        name: 'admin.dataSync',
+        component: () => import('@/views/admin/DataSync/DataSyncView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresPermissions: ['config.manage'],
+          layout: 'admin',
+        },
+      },
+      {
         path: 'rbac',
         name: 'admin.rbac',
         component: () => import('@/views/admin/Rbac/RbacConsole.vue'),

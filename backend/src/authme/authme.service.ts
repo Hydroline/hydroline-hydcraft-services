@@ -9,9 +9,11 @@ import { AuthmeError, businessError, externalError, unexpectedError } from './au
 import type { AuthmeHealth } from './authme.interfaces';
 
 interface ConfigEntry {
+  id?: string;
   key: string;
   value: unknown;
   version: number;
+  updatedAt?: string | Date;
 }
 
 @Injectable()
@@ -142,6 +144,38 @@ export class AuthmeService implements OnModuleInit, OnModuleDestroy {
       return { signature, config: null };
     }
     return { signature, config };
+  }
+
+  async getConfigSnapshot() {
+    const entry = await this.configService.getEntry(AUTHME_DB_NAMESPACE, 'config');
+    if (!entry) {
+      return { config: null, meta: null };
+    }
+    const payload = isRecord(entry.value) ? (entry.value as Record<string, unknown>) : {};
+    const normalized = this.normalizeConfig(payload);
+    return {
+      config: normalized,
+      meta: {
+        id: entry.id,
+        version: entry.version,
+        updatedAt:
+          entry.updatedAt instanceof Date ? entry.updatedAt.toISOString() : String(entry.updatedAt ?? ''),
+      },
+    };
+  }
+
+  async upsertConfig(config: AuthmeDbConfig, userId?: string) {
+    const namespace = await this.configService.ensureNamespaceByKey(AUTHME_DB_NAMESPACE, {
+      name: 'AuthMe Database',
+      description: 'AuthMe MySQL connection configuration',
+    });
+    const entry = await this.configService.getEntry(AUTHME_DB_NAMESPACE, 'config');
+    if (entry) {
+      await this.configService.updateEntry(entry.id, { value: config }, userId);
+    } else {
+      await this.configService.createEntry(namespace.id, { key: 'config', value: config }, userId);
+    }
+    await this.refreshConfig(true);
   }
 
 

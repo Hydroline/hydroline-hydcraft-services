@@ -9,6 +9,15 @@ export interface AuthFeatureFlags {
   authmeBindingEnabled: boolean;
 }
 
+export interface FeatureSnapshot {
+  flags: AuthFeatureFlags;
+  meta: {
+    id: string;
+    version: number;
+    updatedAt: string;
+  } | null;
+}
+
 const DEFAULT_FLAGS: AuthFeatureFlags = {
   emailVerificationEnabled: false,
   authmeRegisterEnabled: false,
@@ -52,6 +61,44 @@ export class AuthFeatureService {
       this.logger.warn(`Failed to load auth feature flags: ${String(error)}`);
       return DEFAULT_FLAGS;
     }
+  }
+
+  async getFeatureSnapshot(): Promise<FeatureSnapshot> {
+    const flags = await this.getFlags(true);
+    const entry = await this.configService.getEntry(AUTH_FEATURE_NAMESPACE, 'feature');
+    if (!entry) {
+      return { flags, meta: null };
+    }
+    return {
+      flags,
+      meta: {
+        id: entry.id,
+        version: entry.version,
+        updatedAt:
+          entry.updatedAt instanceof Date ? entry.updatedAt.toISOString() : String(entry.updatedAt ?? ''),
+      },
+    };
+  }
+
+  async setFlags(flags: AuthFeatureFlags, userId?: string) {
+    const namespace = await this.configService.ensureNamespaceByKey(AUTH_FEATURE_NAMESPACE, {
+      name: 'Auth Feature Flags',
+      description: 'Toggle auth subsystem behaviours',
+    });
+    const entry = await this.configService.getEntry(AUTH_FEATURE_NAMESPACE, 'feature');
+    if (entry) {
+      await this.configService.updateEntry(entry.id, { value: flags }, userId);
+    } else {
+      await this.configService.createEntry(
+        namespace.id,
+        {
+          key: 'feature',
+          value: flags,
+        },
+        userId,
+      );
+    }
+    this.cache = null;
   }
 }
 

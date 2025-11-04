@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import AppLoadingBar from '@/components/common/AppLoadingBar.vue'
@@ -7,6 +7,7 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePortalStore } from '@/stores/portal'
+import { apiFetch, ApiError } from '@/utils/api'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -15,14 +16,81 @@ const portalStore = usePortalStore()
 const { admin } = storeToRefs(portalStore)
 const sidebarOpen = ref(false)
 
-const menu = computed(() => [
-  { label: '总览', to: '/admin', icon: 'i-lucide-layout-dashboard' },
-  { label: '用户与玩家', to: '/admin/users', icon: 'i-lucide-users' },
-  { label: '附件系统', to: '/admin/attachments', icon: 'i-lucide-archive' },
-  { label: 'RBAC 管理', to: '/admin/rbac', icon: 'i-lucide-shield-check' },
-  { label: '配置管理', to: '/admin/config', icon: 'i-lucide-wrench' },
-  { label: '门户首页', to: '/admin/portal/home', icon: 'i-lucide-home' },
+type MenuItem = {
+  label: string
+  to: string
+  icon: string
+}
+
+type MenuGroup = {
+  key: string
+  label: string
+  items: MenuItem[]
+  collapsible?: boolean
+  defaultCollapsed?: boolean
+}
+
+const menuGroups = computed<MenuGroup[]>(() => [
+  {
+    key: 'overview',
+    label: '总览',
+    collapsible: true,
+    defaultCollapsed: false,
+    items: [{ label: '总览', to: '/admin', icon: 'i-lucide-layout-dashboard' }],
+  },
+  {
+    key: 'account',
+    label: '用户与权限',
+    collapsible: true,
+    defaultCollapsed: false,
+    items: [
+      { label: '用户与玩家', to: '/admin/users', icon: 'i-lucide-users' },
+      { label: 'RBAC 管理', to: '/admin/rbac', icon: 'i-lucide-shield-check' },
+    ],
+  },
+  {
+    key: 'portal',
+    label: '门户管理',
+    collapsible: true,
+    defaultCollapsed: false,
+    items: [{ label: '门户首页', to: '/admin/portal/home', icon: 'i-lucide-home' }],
+  },
+  {
+    key: 'advanced',
+    label: '高级设置',
+    collapsible: true,
+    defaultCollapsed: true,
+    items: [
+      { label: '附件系统', to: '/admin/attachments', icon: 'i-lucide-archive' },
+      { label: '配置管理', to: '/admin/config', icon: 'i-lucide-wrench' },
+    ],
+  },
+  {
+    key: 'sync',
+    label: '数据同步',
+    collapsible: true,
+    defaultCollapsed: false,
+    items: [{ label: '数据同步', to: '/admin/data-sync', icon: 'i-lucide-refresh-cw' }],
+  },
 ])
+
+const collapsedGroups = reactive<Record<string, boolean>>({})
+
+menuGroups.value.forEach((group) => {
+  if (!(group.key in collapsedGroups)) {
+    collapsedGroups[group.key] = Boolean(group.defaultCollapsed)
+  }
+})
+
+const systemStats = ref<{ uptimeSeconds: number; timestamp: string } | null>(null)
+
+function toggleGroup(key: string) {
+  collapsedGroups[key] = !collapsedGroups[key]
+}
+
+function isGroupCollapsed(key: string) {
+  return Boolean(collapsedGroups[key])
+}
 
 function isActive(item: { to: string }) {
   if (item.to === '/admin') {
@@ -31,12 +99,45 @@ function isActive(item: { to: string }) {
   return route.path === item.to || route.path.startsWith(`${item.to}/`)
 }
 
+const systemUptimeText = computed(() => {
+  if (!systemStats.value) return '未获取'
+  const total = systemStats.value.uptimeSeconds
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  if (days > 0) {
+    return `${days} 天 ${hours} 小时`
+  }
+  if (hours > 0) {
+    return `${hours} 小时 ${minutes} 分`
+  }
+  return `${minutes} 分钟`
+})
+
+async function fetchSystemStats() {
+  if (!authStore.token) return
+  try {
+    const result = await apiFetch<{
+      system: { uptimeSeconds: number; timestamp: string }
+    }>('/api/authme/admin/overview', {
+      token: authStore.token,
+    })
+    systemStats.value = result.system
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) {
+      return
+    }
+    console.warn('[admin] failed to fetch system stats', error)
+  }
+}
+
 onMounted(() => {
   if (!admin.value && authStore.token) {
     void portalStore.fetchAdminOverview().catch(() => {
       /* 概览加载失败时保持侧边统计留空 */
     })
   }
+  void fetchSystemStats()
 })
 </script>
 
@@ -95,21 +196,39 @@ onMounted(() => {
           v-if="sidebarOpen"
           class="fixed inset-y-0 left-0 z-30 w-72 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:bg-slate-950/95 lg:hidden"
         >
-          <nav class="space-y-2 text-sm">
-            <RouterLink
-              v-for="item in menu"
-              :key="item.label"
-              :to="item.to"
-              class="flex items-center gap-3 rounded-xl px-3 py-2 transition"
-              :class="[
-                isActive(item)
-                  ? 'bg-primary-100/80 text-primary-600 dark:bg-primary-500/20 dark:text-primary-100'
-                  : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white',
-              ]"
-            >
-              <UIcon :name="item.icon" class="text-base" />
-              {{ item.label }}
-            </RouterLink>
+          <nav class="space-y-4 text-sm">
+            <section v-for="group in menuGroups" :key="group.key" class="space-y-2">
+              <button
+                class="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                type="button"
+                @click="toggleGroup(group.key)"
+              >
+                <span>{{ group.label }}</span>
+                <UIcon
+                  :name="isGroupCollapsed(group.key) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-up'"
+                  class="h-4 w-4"
+                />
+              </button>
+              <transition name="slide-fade">
+                <div v-show="!isGroupCollapsed(group.key)" class="space-y-1">
+                  <RouterLink
+                    v-for="item in group.items"
+                    :key="item.label"
+                    :to="item.to"
+                    class="flex items-center gap-3 rounded-xl px-3 py-2 transition"
+                    :class="[
+                      isActive(item)
+                        ? 'bg-primary-100/80 text-primary-600 dark:bg-primary-500/20 dark:text-primary-100'
+                        : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white',
+                    ]"
+                    @click="sidebarOpen = false"
+                  >
+                    <UIcon :name="item.icon" class="text-base" />
+                    {{ item.label }}
+                  </RouterLink>
+                </div>
+              </transition>
+            </section>
           </nav>
         </aside>
       </transition>
@@ -117,36 +236,53 @@ onMounted(() => {
       <aside
         class="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r border-slate-200/60 bg-white/70 p-4 dark:border-slate-800/60 dark:bg-slate-950/70 lg:block"
       >
-        <nav class="space-y-2 text-sm">
-          <RouterLink
-            v-for="item in menu"
-            :key="item.label"
-            :to="item.to"
-            class="flex items-center gap-3 rounded-xl px-3 py-2 transition"
-            :class="[
-              isActive(item)
-                ? 'bg-primary-100/80 text-primary-600 dark:bg-primary-500/20 dark:text-primary-100'
-                : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white',
-            ]"
-          >
-            <UIcon :name="item.icon" class="text-base" />
-            {{ item.label }}
-          </RouterLink>
+        <nav class="space-y-4 text-sm">
+          <section v-for="group in menuGroups" :key="group.key" class="space-y-2">
+            <button
+              class="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+              type="button"
+              @click="toggleGroup(group.key)"
+            >
+              <span>{{ group.label }}</span>
+              <UIcon
+                :name="isGroupCollapsed(group.key) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-up'"
+                class="h-4 w-4"
+              />
+            </button>
+            <transition name="slide-fade">
+              <div v-show="!isGroupCollapsed(group.key)" class="space-y-1">
+                <RouterLink
+                  v-for="item in group.items"
+                  :key="item.label"
+                  :to="item.to"
+                  class="flex items-center gap-3 rounded-xl px-3 py-2 transition"
+                  :class="[
+                    isActive(item)
+                      ? 'bg-primary-100/80 text-primary-600 dark:bg-primary-500/20 dark:text-primary-100'
+                      : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white',
+                  ]"
+                >
+                  <UIcon :name="item.icon" class="text-base" />
+                  {{ item.label }}
+                </RouterLink>
+              </div>
+            </transition>
+          </section>
         </nav>
 
         <div
           class="mt-6 space-y-3 rounded-xl border border-slate-200/70 bg-white/70 p-4 text-xs text-slate-500 dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300"
         >
           <p class="font-medium text-slate-700 dark:text-slate-200">
-            附件系统总览
+            系统运行情况
           </p>
-          <p>已存储：{{ admin?.attachments.total ?? 0 }} 个附件</p>
+          <p>运行时长：{{ systemUptimeText }}</p>
           <p>
-            公共资源：{{
-              admin?.attachments.recent.filter((item) => item.isPublic)
-                .length ?? 0
+            上次刷新：{{
+              systemStats?.timestamp
+                ? new Date(systemStats.timestamp).toLocaleString()
+                : '未知'
             }}
-            个
           </p>
         </div>
       </aside>
