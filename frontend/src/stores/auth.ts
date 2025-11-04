@@ -323,6 +323,24 @@ export const useAuthStore = defineStore('auth', {
       this.setUser(result.user)
       return result.user
     },
+    async listSessions() {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      return apiFetch<{ sessions: Array<Record<string, unknown>> }>('/auth/sessions', {
+        token: this.token,
+      })
+    },
+    async revokeSession(sessionId: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const endpoint = `/auth/sessions/${encodeURIComponent(sessionId)}`
+      return apiFetch<{ success: boolean; current?: boolean }>(endpoint, {
+        method: 'DELETE',
+        token: this.token,
+      })
+    },
     async bindAuthme(payload: { authmeId: string; password: string }) {
       if (!this.token) {
         throw new ApiError(401, '未登录')

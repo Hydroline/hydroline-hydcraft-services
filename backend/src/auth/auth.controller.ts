@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Patch,
   Post,
   Req,
@@ -17,6 +19,7 @@ import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthGuard } from './auth.guard';
+import { buildRequestContext } from './helpers/request-context.helper';
 
 @Controller('auth')
 export class AuthController {
@@ -26,8 +29,12 @@ export class AuthController {
   ) {}
 
   @Post('signup')
-  async signUp(@Body() dto: SignUpDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.signUp(dto);
+  async signUp(
+    @Body() dto: SignUpDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.signUp(dto, buildRequestContext(req));
     this.attachCookies(res, result.cookies);
     return {
       tokens: {
@@ -39,8 +46,12 @@ export class AuthController {
   }
 
   @Post('signin')
-  async signIn(@Body() dto: SignInDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.signIn(dto);
+  async signIn(
+    @Body() dto: SignInDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.signIn(dto, buildRequestContext(req));
     this.attachCookies(res, result.cookies);
     return {
       tokens: {
@@ -79,7 +90,7 @@ export class AuthController {
 
   @Get('session')
   @UseGuards(AuthGuard)
-  async getSession(@Req() req: Request) {
+  getSession(@Req() req: Request) {
     return {
       user: req.user,
     };
@@ -94,6 +105,46 @@ export class AuthController {
     }
     const user = await this.usersService.getSessionUser(userId);
     return { user };
+  }
+
+  @Get('sessions')
+  @UseGuards(AuthGuard)
+  async listSessions(@Req() req: Request) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    const sessions = await this.authService.listUserSessions(userId);
+    const currentToken = req.sessionToken ?? null;
+    return {
+      sessions: sessions.map((session) => ({
+        id: session.id,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        expiresAt: session.expiresAt,
+        ipAddress: session.ipAddress,
+        userAgent: session.userAgent,
+        isCurrent: session.token === currentToken,
+      })),
+    };
+  }
+
+  @Delete('sessions/:sessionId')
+  @UseGuards(AuthGuard)
+  async revokeSession(
+    @Req() req: Request,
+    @Param('sessionId') sessionId: string,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    const removed = await this.authService.removeUserSession(userId, sessionId);
+    const current = removed.token === req.sessionToken;
+    return {
+      success: true,
+      current,
+    };
   }
 
   @Patch('me')

@@ -13,6 +13,7 @@ import { AuthService } from './auth.service';
 import { AuthmeBindDto } from './dto/authme-bind.dto';
 import { rethrowAuthmeError } from './helpers/authme-error.helper';
 import { AuthmeRateLimitGuard } from '../authme/authme-rate-limit.guard';
+import { buildRequestContext } from './helpers/request-context.helper';
 
 @Controller('api/authme')
 export class ApiAuthmeController {
@@ -25,7 +26,7 @@ export class ApiAuthmeController {
       const user = await this.authService.bindAuthme(
         req.user!.id,
         dto,
-        buildRequestContext(req),
+  buildRequestContext(req),
       );
       return user;
     } catch (error) {
@@ -47,13 +48,4 @@ export class ApiAuthmeController {
       rethrowAuthmeError(error);
     }
   }
-}
-
-function buildRequestContext(req: Request) {
-  return {
-    ip:
-      req.ip ??
-      req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim(),
-    userAgent: req.headers['user-agent'] ?? null,
-  };
 }

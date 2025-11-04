@@ -8,6 +8,7 @@ import ProfileSidebar from './components/ProfileSidebar.vue'
 import BasicSection from './components/sections/BasicSection.vue'
 import AddressSection from './components/sections/AddressSection.vue'
 import MinecraftSection from './components/sections/MinecraftSection.vue'
+import SessionsSection from './components/sections/SessionsSection.vue'
 import AuthmeBindDialog from './components/AuthmeBindDialog.vue'
 import { getTimezones } from '@/utils/timezones'
 import {
@@ -41,7 +42,7 @@ type FormState = {
   regionDistrict?: string
 }
 
-type SectionKey = 'basic' | 'address' | 'minecraft'
+type SectionKey = 'basic' | 'address' | 'minecraft' | 'sessions'
 
 type FieldDefinition = {
   key: keyof FormState
@@ -50,6 +51,16 @@ type FieldDefinition = {
   component?: 'textarea' | 'select'
   placeholder?: string
   readonly?: boolean
+}
+
+type SessionItem = {
+  id: string
+  createdAt: string
+  updatedAt: string
+  expiresAt: string
+  ipAddress: string | null
+  userAgent: string | null
+  isCurrent: boolean
 }
 
 const auth = useAuthStore()
@@ -66,6 +77,11 @@ const bindingLoading = ref(false)
 const bindingError = ref('')
 const activeSection = ref<SectionKey>('basic')
 const isEditing = ref(false)
+const sessions = ref<SessionItem[]>([])
+const sessionsLoading = ref(false)
+const sessionsLoaded = ref(false)
+const sessionsError = ref('')
+const revokingSessionId = ref<string | null>(null)
 
 const genderOptions: Array<{ label: string; value: GenderType }> = [
   { label: '未指定', value: 'UNSPECIFIED' },
@@ -98,6 +114,10 @@ const sections: Array<{
   {
     id: 'minecraft',
     label: '服务器账户',
+  },
+  {
+    id: 'sessions',
+    label: '会话管理',
   },
 ]
 
@@ -333,9 +353,15 @@ watch(
   () => auth.isAuthenticated,
   (value) => {
     if (value) {
+      sessionsLoaded.value = false
+      sessionsError.value = ''
       void loadUser()
     } else {
       resetForm()
+      sessions.value = []
+      sessionsLoaded.value = false
+      sessionsError.value = ''
+      revokingSessionId.value = null
     }
   },
 )
@@ -347,6 +373,21 @@ watch(isEditing, (value) => {
     authmeBindingForm.password = ''
   }
 })
+
+watch(showBindDialog, (open) => {
+  if (!open) {
+    bindingError.value = ''
+  }
+})
+
+watch(
+  () => activeSection.value,
+  (section) => {
+    if (section === 'sessions') {
+      void loadSessions()
+    }
+  },
+)
 
 onMounted(() => {
   if (auth.isAuthenticated) {
@@ -436,9 +477,6 @@ function formatFieldValue(field: FieldDefinition) {
 }
 
 async function submitAuthmeBinding() {
-  if (!isEditing.value) {
-    return
-  }
   if (!bindingEnabled.value) {
     bindingError.value = '当前未开放绑定功能'
     return
@@ -452,6 +490,7 @@ async function submitAuthmeBinding() {
     })
     authmeBindingForm.authmeId = ''
     authmeBindingForm.password = ''
+    showBindDialog.value = false
     toast.add({ title: '绑定成功', color: 'success' })
   } catch (error) {
     if (error instanceof ApiError) {
@@ -465,9 +504,6 @@ async function submitAuthmeBinding() {
 }
 
 async function handleUnbindAuthme(_username?: string) {
-  if (!isEditing.value) {
-    return
-  }
   bindingError.value = ''
   bindingLoading.value = true
   try {
@@ -481,6 +517,92 @@ async function handleUnbindAuthme(_username?: string) {
     }
   } finally {
     bindingLoading.value = false
+  }
+}
+
+async function loadSessions(force = false) {
+  if (!auth.token) {
+    sessions.value = []
+    sessionsLoaded.value = false
+    sessionsError.value = ''
+    return
+  }
+  if (sessionsLoading.value) {
+    return
+  }
+  if (!force && sessionsLoaded.value) {
+    return
+  }
+  sessionsError.value = ''
+  sessionsLoading.value = true
+  try {
+    const response = await auth.listSessions()
+    const list = Array.isArray(response?.sessions)
+      ? response.sessions
+      : []
+    sessions.value = list.map((entry: any) => ({
+      id: entry.id as string,
+      createdAt: entry.createdAt as string,
+      updatedAt: entry.updatedAt as string,
+      expiresAt: entry.expiresAt as string,
+      ipAddress: (entry.ipAddress as string | null | undefined) ?? null,
+      userAgent: (entry.userAgent as string | null | undefined) ?? null,
+      isCurrent: Boolean(entry.isCurrent),
+    }))
+    sessionsLoaded.value = true
+  } catch (error) {
+    if (error instanceof ApiError) {
+      sessionsError.value = error.message
+    } else {
+      sessionsError.value = '无法加载会话列表，请稍后再试'
+    }
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+function refreshSessions() {
+  void loadSessions(true)
+}
+
+async function handleRevokeSession(sessionId: string) {
+  if (!auth.token) {
+    openLoginDialog()
+    return
+  }
+  revokingSessionId.value = sessionId
+  try {
+    const result = await auth.revokeSession(sessionId)
+    if (result?.current) {
+      toast.add({
+        title: '当前会话已注销',
+        description: '您已在此设备退出，需要重新登录。',
+        color: 'warning',
+      })
+      auth.clear()
+      sessions.value = []
+      sessionsLoaded.value = false
+      ui.openLoginDialog()
+      return
+    }
+    toast.add({
+      title: '已终止会话',
+      description: '该设备已退出登录。',
+      color: 'success',
+    })
+    await loadSessions(true)
+  } catch (error) {
+    const description =
+      error instanceof ApiError
+        ? error.message
+        : '无法终止会话，请稍后再试'
+    toast.add({
+      title: '终止会话失败',
+      description,
+      color: 'error',
+    })
+  } finally {
+    revokingSessionId.value = null
   }
 }
 
@@ -606,6 +728,10 @@ async function loadUser() {
   ui.startLoading()
   try {
     await auth.fetchCurrentUser()
+    sessionsLoaded.value = false
+    if (activeSection.value === 'sessions') {
+      await loadSessions(true)
+    }
   } catch (error) {
     handleError(error, '无法加载用户信息')
   } finally {
@@ -729,6 +855,7 @@ function handleError(error: unknown, fallback: string) {
                 :gender-options="genderOptions"
                 :timezone-options="timezoneOptions"
                 :language-options="languageOptions"
+                :meta="{ lastSyncedText: lastSyncedText, registeredText: registeredText, joinedText: joinedText, lastLoginText: lastLoginText, lastLoginIp: lastLoginIp }"
                 @update:model-value="(v:any)=>{ form.name=v.name; form.displayName=v.displayName; form.gender=v.gender; form.birthday=v.birthday; form.motto=v.motto; form.timezone=v.timezone; form.locale=v.locale }"
               />
 
@@ -739,14 +866,29 @@ function handleError(error: unknown, fallback: string) {
                 @update:model-value="(v:any)=>{ form.addressLine1=v.addressLine1; form.addressLine2=v.addressLine2; form.city=v.city; form.state=v.state; form.postalCode=v.postalCode; form.country=v.country; form.phone=v.phone; form.regionCountry=v.region.country; form.regionProvince=v.region.province; form.regionCity=v.region.city; form.regionDistrict=v.region.district }"
               />
 
-              <div v-else>
-                <MinecraftSection :bindings="authmeBindings" :is-editing="isEditing" :loading="bindingLoading" @add="showBindDialog = true" @unbind="handleUnbindAuthme" />
-              </div>
+              <MinecraftSection
+                v-else-if="activeSection === 'minecraft'"
+                :bindings="authmeBindings"
+                :is-editing="isEditing"
+                :loading="bindingLoading"
+                @add="showBindDialog = true"
+                @unbind="handleUnbindAuthme"
+              />
+
+              <SessionsSection
+                v-else
+                :sessions="sessions"
+                :loading="sessionsLoading"
+                :error="sessionsError"
+                :revoking-id="revokingSessionId"
+                @refresh="refreshSessions"
+                @revoke="handleRevokeSession"
+              />
             </div>
           </div>
         </div>
 
-        <AuthmeBindDialog :open="showBindDialog" :loading="bindingLoading" @close="showBindDialog = false" @submit="(p)=>{ authmeBindingForm.authmeId = p.authmeId; authmeBindingForm.password = p.password; submitAuthmeBinding() }" />
+        <AuthmeBindDialog :open="showBindDialog" :loading="bindingLoading" :error="bindingError" @close="showBindDialog = false" @submit="(p)=>{ authmeBindingForm.authmeId = p.authmeId; authmeBindingForm.password = p.password; submitAuthmeBinding() }" />
       </form>
     </div>
 

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { auth } from '../lib/auth';
@@ -31,7 +32,7 @@ interface AuthResponse {
   refreshToken?: string | null;
 }
 
-interface RequestContext {
+export interface RequestContext {
   ip?: string | null;
   userAgent?: string | null;
 }
@@ -84,10 +85,10 @@ export class AuthService {
     if (!dto.email) {
       throw new BadRequestException('邮箱地址不能为空');
     }
-    return this.loginWithEmail(dto);
+    return this.loginWithEmail(dto, context);
   }
 
-  async signUp(dto: SignUpDto) {
+  async signUp(dto: SignUpDto, context: RequestContext = {}) {
     return this.register(
       {
         mode: 'EMAIL',
@@ -98,11 +99,11 @@ export class AuthService {
         minecraftNick: dto.minecraftNick,
         rememberMe: dto.rememberMe,
       },
-      {},
+      context,
     );
   }
 
-  async signIn(dto: SignInDto) {
+  async signIn(dto: SignInDto, context: RequestContext = {}) {
     return this.login(
       {
         mode: 'EMAIL',
@@ -110,7 +111,7 @@ export class AuthService {
         password: dto.password,
         rememberMe: dto.rememberMe,
       },
-      {},
+      context,
     );
   }
 
@@ -201,18 +202,27 @@ export class AuthService {
     return this.authFeatureService.getFlags();
   }
 
-  private async registerWithEmail(dto: AuthRegisterDto, _context: RequestContext) {
-    return this.signUpInternal({
-      email: dto.email!,
-      password: dto.password,
-      name: dto.name ?? dto.email!,
-      rememberMe: dto.rememberMe ?? false,
-      minecraftId: dto.minecraftId,
-      minecraftNick: dto.minecraftNick,
-    });
+  private async registerWithEmail(
+    dto: AuthRegisterDto,
+    context: RequestContext,
+  ) {
+    return this.signUpInternal(
+      {
+        email: dto.email!,
+        password: dto.password,
+        name: dto.name ?? dto.email!,
+        rememberMe: dto.rememberMe ?? false,
+        minecraftId: dto.minecraftId,
+        minecraftNick: dto.minecraftNick,
+      },
+      context,
+    );
   }
 
-  private async registerWithAuthme(dto: AuthRegisterDto, context: RequestContext) {
+  private async registerWithAuthme(
+    dto: AuthRegisterDto,
+    context: RequestContext,
+  ) {
     const flags = await this.authFeatureService.getFlags();
     if (!flags.authmeRegisterEnabled) {
       throw new BadRequestException('AuthMe 注册暂未开放');
@@ -220,10 +230,14 @@ export class AuthService {
     if (!dto.authmeId) {
       throw new BadRequestException('缺少 AuthMe 账号');
     }
-    const authmeAccount = await this.authmeService.verifyCredentials(dto.authmeId, dto.password);
+    const authmeAccount = await this.authmeService.verifyCredentials(
+      dto.authmeId,
+      dto.password,
+    );
     const email = this.resolveAuthmeEmail(authmeAccount.email);
     const usernameLower = authmeAccount.username.toLowerCase();
-    const existingBinding = await this.authmeBindingService.getBindingByUsernameLower(usernameLower);
+    const existingBinding =
+      await this.authmeBindingService.getBindingByUsernameLower(usernameLower);
     if (existingBinding) {
       throw businessError({
         type: 'BUSINESS_VALIDATION_FAILED',
@@ -232,12 +246,15 @@ export class AuthService {
       });
     }
 
-    const result = await this.signUpInternal({
-      email,
-      password: generateRandomString(48),
-      name: authmeAccount.realname || authmeAccount.username,
-      rememberMe: dto.rememberMe ?? false,
-    });
+    const result = await this.signUpInternal(
+      {
+        email,
+        password: generateRandomString(48),
+        name: authmeAccount.realname || authmeAccount.username,
+        rememberMe: dto.rememberMe ?? false,
+      },
+      context,
+    );
 
     await this.authmeBindingService.bindUser({
       userId: result.user.id,
@@ -261,12 +278,28 @@ export class AuthService {
     });
   }
 
-  private async loginWithEmail(dto: AuthLoginDto) {
-    return this.signInInternal({
+  private async loginWithEmail(dto: AuthLoginDto, context: RequestContext) {
+    const result = await this.signInInternal({
       email: dto.email!,
       password: dto.password,
       rememberMe: dto.rememberMe ?? false,
     });
+
+    const userId = result.user.id;
+    await this.updateSessionMetadata(result.tokens.accessToken, context);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        lastLoginAt: new Date(),
+        lastLoginIp: context.ip ?? null,
+      },
+    });
+
+    const user = await this.usersService.getSessionUser(userId);
+    return {
+      ...result,
+      user,
+    } satisfies AuthOperationResult;
   }
 
   private async loginWithAuthme(dto: AuthLoginDto, context: RequestContext) {
@@ -278,8 +311,13 @@ export class AuthService {
       throw new BadRequestException('缺少 AuthMe 账号');
     }
 
-    const authmeAccount = await this.authmeService.verifyCredentials(dto.authmeId, dto.password);
-    const binding = await this.authmeBindingService.getBindingByUsernameLower(authmeAccount.username.toLowerCase());
+    const authmeAccount = await this.authmeService.verifyCredentials(
+      dto.authmeId,
+      dto.password,
+    );
+    const binding = await this.authmeBindingService.getBindingByUsernameLower(
+      authmeAccount.username.toLowerCase(),
+    );
     if (!binding) {
       throw businessError({
         type: 'BUSINESS_VALIDATION_FAILED',
@@ -287,10 +325,17 @@ export class AuthService {
         safeMessage: '该 AuthMe 账号尚未绑定 Hydroline 用户，请先完成绑定',
       });
     }
-    return this.createSessionForUser(binding.userId, dto.rememberMe ?? false, context);
+    return this.createSessionForUser(
+      binding.userId,
+      dto.rememberMe ?? false,
+      context,
+    );
   }
 
-  private async signUpInternal(input: SignUpInternalInput): Promise<AuthOperationResult> {
+  private async signUpInternal(
+    input: SignUpInternalInput,
+    context: RequestContext,
+  ): Promise<AuthOperationResult> {
     const headers = new Headers();
     const result = await auth.api
       .signUpEmail({
@@ -322,6 +367,14 @@ export class AuthService {
     await this.assignDefaultRole(payload.user.id);
 
     const tokens = this.extractTokens(result);
+    await this.updateSessionMetadata(tokens.accessToken, context);
+    await this.prisma.user.update({
+      where: { id: payload.user.id },
+      data: {
+        lastLoginAt: new Date(),
+        lastLoginIp: context.ip ?? null,
+      },
+    });
     const fullUser = await this.usersService.getSessionUser(payload.user.id);
 
     return {
@@ -397,6 +450,22 @@ export class AuthService {
       user,
       cookies: [],
     };
+  }
+
+  private async updateSessionMetadata(
+    token: string | null | undefined,
+    context: RequestContext,
+  ): Promise<void> {
+    if (!token) {
+      return;
+    }
+    await this.prisma.session.updateMany({
+      where: { token },
+      data: {
+        ipAddress: context.ip ?? null,
+        userAgent: context.userAgent ?? null,
+      },
+    });
   }
 
   private extractTokens(result: { headers: Headers; response: AuthResponse }) {
@@ -493,6 +562,24 @@ export class AuthService {
   private get sessionTtlMs() {
     const expiresIn = auth.options.session?.expiresIn ?? 60 * 60 * 24 * 7;
     return expiresIn * 1000;
+  }
+
+  async listUserSessions(userId: string) {
+    return this.prisma.session.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async removeUserSession(userId: string, sessionId: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session || session.userId !== userId) {
+      throw new NotFoundException('Session not found');
+    }
+    await this.prisma.session.delete({ where: { id: sessionId } });
+    return session;
   }
 
   private async ensureDefaultAdmin() {

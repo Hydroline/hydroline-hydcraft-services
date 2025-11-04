@@ -21,10 +21,7 @@ const emit = defineEmits<{
 <template>
   <div class="space-y-4">
     <div v-if="props.bindings.length === 0" class="rounded-xl border border-dashed border-slate-200/70 px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-      尚未绑定 AuthMe 账号。
-      <template v-if="props.isEditing">
-        点击下方“添加绑定”以绑定账号。
-      </template>
+      尚未绑定 AuthMe 账号，点击下方“添加绑定”以绑定账号。
     </div>
 
     <div v-for="b in props.bindings" :key="b.username" class="rounded-xl border border-slate-200/60 p-4 dark:border-slate-800/60">
@@ -42,14 +39,14 @@ const emit = defineEmits<{
             <div v-if="b.regip">注册 IP：{{ b.regip }}</div>
           </div>
         </div>
-        <div v-if="props.isEditing" class="flex items-center gap-2">
+        <div class="flex items-center gap-2">
           <UButton type="button" color="primary" variant="outline" :loading="props.loading" @click="emit('unbind', b.username)">解除绑定</UButton>
         </div>
       </div>
     </div>
 
-    <div v-if="props.isEditing" class="pt-2">
-      <UButton type="button" color="primary" @click="emit('add')">添加绑定</UButton>
+    <div class="pt-2">
+      <UButton type="button" color="primary" :loading="props.loading" @click="emit('add')">添加绑定</UButton>
     </div>
   </div>
 </template>

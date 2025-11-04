@@ -17,6 +17,13 @@ const props = defineProps<{
   genderOptions: Array<{ label: string; value: GenderType }>
   timezoneOptions: string[]
   languageOptions: Array<{ label: string; value: string }>
+  meta?: {
+    lastSyncedText?: string
+    registeredText?: string
+    joinedText?: string
+    lastLoginText?: string
+    lastLoginIp?: string | null
+  }
 }>()
 
 const emit = defineEmits<{ (e: 'update:modelValue', v: typeof props.modelValue): void }>()
@@ -61,7 +68,8 @@ const genderLabel = computed(() =>
     <div class="flex flex-col gap-2 rounded-xl px-4 py-3 md:flex-row md:items-center md:gap-6">
       <div class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none">邮箱</div>
       <div class="flex-1">
-        <UInput :model-value="props.modelValue.email" type="email" disabled class="w-full" />
+        <UInput v-if="isEditing" :model-value="props.modelValue.email" type="email" disabled class="w-full" />
+        <p v-else class="text-sm text-slate-900 dark:text-slate-100">{{ props.modelValue.email || '未填写' }}</p>
       </div>
     </div>
 
@@ -123,6 +131,41 @@ const genderLabel = computed(() =>
       <div class="flex-1">
         <UTextarea v-if="isEditing" :model-value="props.modelValue.motto" :rows="3" placeholder="向社区介绍你自己，保持简洁有力。" class="w-full" @update:model-value="(v:any)=>update('motto', v)" />
         <p v-else class="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-line">{{ props.modelValue.motto || '未填写' }}</p>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2 rounded-xl px-4 py-3 md:flex-row md:items-center md:gap-6">
+      <div class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none">最后同步</div>
+      <div class="flex-1">
+        <p class="text-sm text-slate-900 dark:text-slate-100">{{ props.meta?.lastSyncedText || '尚未同步' }}</p>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2 rounded-xl px-4 py-3 md:flex-row md:items-center md:gap-6">
+      <div class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none">注册于</div>
+      <div class="flex-1">
+        <p class="text-sm text-slate-900 dark:text-slate-100">{{ props.meta?.registeredText || '未知' }}</p>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2 rounded-xl px-4 py-3 md:flex-row md:items-center md:gap-6">
+      <div class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none">加入于</div>
+      <div class="flex-1">
+        <p class="text-sm text-slate-900 dark:text-slate-100">{{ props.meta?.joinedText || '未知' }}</p>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2 rounded-xl px-4 py-3 md:flex-row md:items-center md:gap-6">
+      <div class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none">最近登录</div>
+      <div class="flex-1">
+        <p class="text-sm text-slate-900 dark:text-slate-100">{{ props.meta?.lastLoginText || '未知' }}</p>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2 rounded-xl px-4 py-3 md:flex-row md:items-center md:gap-6">
+      <div class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none">最近登录 IP</div>
+      <div class="flex-1">
+        <p class="text-sm text-slate-900 dark:text-slate-100">{{ props.meta?.lastLoginIp || '未知' }}</p>
       </div>
     </div>
   </div>

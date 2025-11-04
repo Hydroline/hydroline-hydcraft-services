@@ -5,6 +5,7 @@ import { AuthRegisterDto } from './dto/auth-register.dto';
 import { AuthLoginDto } from './dto/auth-login.dto';
 import { rethrowAuthmeError } from './helpers/authme-error.helper';
 import { AuthmeService } from '../authme/authme.service';
+import { buildRequestContext } from './helpers/request-context.helper';
 
 @Controller('api/auth')
 export class ApiAuthController {
@@ -20,7 +21,10 @@ export class ApiAuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     try {
-      const result = await this.authService.register(dto, buildRequestContext(req));
+      const result = await this.authService.register(
+        dto,
+        buildRequestContext(req),
+      );
       attachCookies(res, result.cookies);
       return {
         tokens: result.tokens,
@@ -38,7 +42,10 @@ export class ApiAuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     try {
-      const result = await this.authService.login(dto, buildRequestContext(req));
+      const result = await this.authService.login(
+        dto,
+        buildRequestContext(req),
+      );
       attachCookies(res, result.cookies);
       return {
         tokens: result.tokens,
@@ -58,13 +65,6 @@ export class ApiAuthController {
   async getAuthmeHealth() {
     return this.authmeService.health();
   }
-}
-
-function buildRequestContext(req: Request) {
-  return {
-    ip: req.ip ?? req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim(),
-    userAgent: req.headers['user-agent'] ?? null,
-  };
 }
 
 function attachCookies(res: Response, cookies: string[]) {
