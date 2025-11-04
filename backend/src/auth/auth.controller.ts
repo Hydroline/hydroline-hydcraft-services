@@ -20,12 +20,14 @@ import { SignInDto } from './dto/sign-in.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthGuard } from './auth.guard';
 import { buildRequestContext } from './helpers/request-context.helper';
+import { IpLocationService } from '../lib/ip2region/ip-location.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
+    private readonly ipLocationService: IpLocationService,
   ) {}
 
   @Post('signup')
@@ -104,6 +106,17 @@ export class AuthController {
       throw new UnauthorizedException('Invalid session');
     }
     const user = await this.usersService.getSessionUser(userId);
+    const enrichedBindings = await this.enrichAuthmeBindings(
+      (user as Record<string, unknown>)?.['authmeBindings'],
+    );
+    if (enrichedBindings) {
+      return {
+        user: {
+          ...user,
+          authmeBindings: enrichedBindings,
+        },
+      };
+    }
     return { user };
   }
 
@@ -116,13 +129,20 @@ export class AuthController {
     }
     const sessions = await this.authService.listUserSessions(userId);
     const currentToken = req.sessionToken ?? null;
+    const enriched = await Promise.all(
+      sessions.map(async (session) => ({
+        session,
+        location: await this.ipLocationService.lookup(session.ipAddress),
+      })),
+    );
     return {
-      sessions: sessions.map((session) => ({
+      sessions: enriched.map(({ session, location }) => ({
         id: session.id,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
         expiresAt: session.expiresAt,
         ipAddress: session.ipAddress,
+        ipLocation: location?.display ?? null,
         userAgent: session.userAgent,
         isCurrent: session.token === currentToken,
       })),
@@ -168,5 +188,41 @@ export class AuthController {
     cookies.forEach((cookie) => {
       res.append('Set-Cookie', cookie);
     });
+  }
+
+  private async enrichAuthmeBindings(bindings: unknown) {
+    if (!Array.isArray(bindings) || bindings.length === 0) {
+      return null;
+    }
+
+    const normalized = bindings
+      .map((entry) =>
+        entry && typeof entry === 'object'
+          ? (entry as Record<string, unknown>)
+          : null,
+      )
+      .filter((entry): entry is Record<string, unknown> => entry !== null);
+
+    if (normalized.length === 0) {
+      return null;
+    }
+
+    return Promise.all(
+      normalized.map(async (binding) => {
+        const [ipLocation, regipLocation] = await Promise.all([
+          this.ipLocationService.lookup(
+            (binding['ip'] as string | null | undefined) ?? null,
+          ),
+          this.ipLocationService.lookup(
+            (binding['regip'] as string | null | undefined) ?? null,
+          ),
+        ]);
+        return {
+          ...binding,
+          ip_location: ipLocation?.display ?? null,
+          regip_location: regipLocation?.display ?? null,
+        };
+      }),
+    );
   }
 }

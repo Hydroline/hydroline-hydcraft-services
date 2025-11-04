@@ -32,6 +32,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "dotenv": "^17.2.3",
+    "ip2region.js": "^3.1.6",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.15.3",
     "prisma": "^6.18.0",

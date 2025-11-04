@@ -8,6 +8,7 @@ const props = defineProps<{
     updatedAt: string | Date
     expiresAt: string | Date
     ipAddress?: string | null
+    ipLocation?: string | null
     userAgent?: string | null
     isCurrent?: boolean
   }>
@@ -66,6 +67,9 @@ function formatUserAgent(value: string | null | undefined) {
               <span>{{ session.ipAddress || '未知 IP' }}</span>
               <UBadge v-if="session.isCurrent" color="primary" variant="soft">当前设备</UBadge>
             </div>
+            <p v-if="session.ipLocation" class="text-xs text-slate-500 dark:text-slate-400">
+              {{ session.ipLocation }}
+            </p>
             <p class="text-xs text-slate-500 dark:text-slate-400">{{ formatUserAgent(session.userAgent) }}</p>
             <div class="grid gap-1 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-2">
               <span>创建于：{{ formatDate(session.createdAt) }}</span>

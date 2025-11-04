@@ -59,6 +59,7 @@ type SessionItem = {
   updatedAt: string
   expiresAt: string
   ipAddress: string | null
+  ipLocation: string | null
   userAgent: string | null
   isCurrent: boolean
 }
@@ -262,7 +263,9 @@ const authmeBindings = computed(() => {
       realname: b.authmeRealname ?? null,
       boundAt: b.boundAt ?? null,
       ip: b.ip ?? null,
+      ipLocation: b.ip_location ?? b.ipLocation ?? null,
       regip: b.regip ?? null,
+      regipLocation: b.regip_location ?? b.regipLocation ?? null,
       lastlogin: b.lastlogin ?? null,
       regdate: b.regdate ?? null,
     }))
@@ -274,7 +277,9 @@ const authmeBindings = computed(() => {
         realname: single.authmeRealname ?? null,
         boundAt: single.boundAt ?? null,
         ip: single.ip ?? null,
+        ipLocation: single.ip_location ?? single.ipLocation ?? null,
         regip: single.regip ?? null,
+        regipLocation: single.regip_location ?? single.regipLocation ?? null,
         lastlogin: single.lastlogin ?? null,
         regdate: single.regdate ?? null,
       },
@@ -546,6 +551,7 @@ async function loadSessions(force = false) {
       updatedAt: entry.updatedAt as string,
       expiresAt: entry.expiresAt as string,
       ipAddress: (entry.ipAddress as string | null | undefined) ?? null,
+      ipLocation: (entry.ipLocation as string | null | undefined) ?? null,
       userAgent: (entry.userAgent as string | null | undefined) ?? null,
       isCurrent: Boolean(entry.isCurrent),
     }))

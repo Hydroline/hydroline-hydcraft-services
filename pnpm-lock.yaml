@@ -37,6 +37,9 @@ importers:
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
+      ip2region.js:
+        specifier: ^3.1.6
+        version: 3.1.6
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.2
@@ -3490,6 +3493,9 @@ packages:
 
   inspect-with-kind@1.0.5:
     resolution: {integrity: sha512-MAQUJuIo7Xqk8EVNP+6d3CKq9c80hi4tjIbIAT6lmGW9W6WzlHiu9PS8uSuUYU+Do+j1baiFp3H25XEVxDIG2g==}
+
+  ip2region.js@3.1.6:
+    resolution: {integrity: sha512-fXIzLreccnOCtpsIxu9qowp09qb+an5BJ2tY8E+tXlFI3CFb+GuC8Yyw/P7ZV/4LukQwcHSPUDxHORmpYtY7OQ==}
 
   ipaddr.js@1.9.1:
     resolution: {integrity: sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==}
@@ -9197,6 +9203,8 @@ snapshots:
   inspect-with-kind@1.0.5:
     dependencies:
       kind-of: 6.0.3
+
+  ip2region.js@3.1.6: {}
 
   ipaddr.js@1.9.1: {}
 

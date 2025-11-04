@@ -5,7 +5,9 @@ const props = defineProps<{
     realname?: string | null
     boundAt?: string | Date | null
     ip?: string | null
+  ipLocation?: string | null
     regip?: string | null
+  regipLocation?: string | null
     lastlogin?: number | null
     regdate?: number | null
   }>
@@ -36,7 +38,9 @@ const emit = defineEmits<{
             <div v-if="b.lastlogin">上次登录：{{ new Date(b.lastlogin).toLocaleString() }}</div>
             <div v-if="b.regdate">注册时间：{{ new Date(b.regdate).toLocaleString() }}</div>
             <div v-if="b.ip">上次登录 IP：{{ b.ip }}</div>
+            <div v-if="b.ipLocation" class="text-slate-500 dark:text-slate-400">{{ b.ipLocation }}</div>
             <div v-if="b.regip">注册 IP：{{ b.regip }}</div>
+            <div v-if="b.regipLocation" class="text-slate-500 dark:text-slate-400">{{ b.regipLocation }}</div>
           </div>
         </div>
         <div class="flex items-center gap-2">

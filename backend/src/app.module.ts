@@ -8,9 +8,19 @@ import { ConfigModule } from './config/config.module';
 import { PortalConfigModule } from './portal-config/portal-config.module';
 import { PortalModule } from './portal/portal.module';
 import { AuthmeModule } from './authme/authme.module';
+import { Ip2RegionModule } from './lib/ip2region/ip2region.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, AttachmentsModule, ConfigModule, PortalConfigModule, PortalModule, AuthmeModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    AttachmentsModule,
+    ConfigModule,
+    PortalConfigModule,
+    PortalModule,
+    AuthmeModule,
+    Ip2RegionModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
