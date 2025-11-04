@@ -4,6 +4,12 @@ export interface ApiRequestOptions {
   token?: string | null;
   signal?: AbortSignal;
   headers?: Record<string, string>;
+  /**
+   * Disable in-flight request de-duplication for GET requests.
+   * By default, simultaneous identical GETs (same url, method and token)
+   * will share one network request.
+   */
+  noDedupe?: boolean;
 }
 
 export interface ApiResponseEnvelope<T> {
@@ -32,9 +38,21 @@ export function getApiBaseUrl() {
   return API_BASE_URL;
 }
 
+// In-flight requests map to dedupe identical concurrent GET requests
+const inflight = new Map<string, Promise<unknown>>();
+
 export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
   const method = options.method ?? 'GET';
+  const isDedupeCandidate = method === 'GET' && !options.body && !options.noDedupe;
+  const dedupeKey = isDedupeCandidate ? `${method}:${url}:${options.token ?? ''}` : null;
+
+  // Return the existing in-flight promise if present
+  if (dedupeKey && inflight.has(dedupeKey)) {
+    return inflight.get(dedupeKey)! as Promise<T>;
+  }
+
+  const doRequest = async (): Promise<T> => {
   const init: RequestInit = {
     method,
     credentials: 'include',
@@ -77,6 +95,13 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
     return result.data;
   }
   return result as T;
+  };
+
+  const promise = doRequest().finally(() => {
+    if (dedupeKey) inflight.delete(dedupeKey);
+  });
+  if (dedupeKey) inflight.set(dedupeKey, promise);
+  return promise;
 }
 
 function isEnvelope<T>(payload: ApiResponseEnvelope<T> | T): payload is ApiResponseEnvelope<T> {
