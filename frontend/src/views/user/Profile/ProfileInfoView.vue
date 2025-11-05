@@ -230,7 +230,9 @@ const authmeBindingForm = reactive({
   password: '',
 })
 
-const timezoneOptions = ref(getTimezones().map((tz) => ({ label: tz, value: tz })))
+const timezoneOptions = ref(
+  getTimezones().map((tz) => ({ label: tz, value: tz })),
+)
 const languageOptions = ref([{ label: '中文（简体）', value: 'zh-CN' }])
 const showBindDialog = ref(false)
 
@@ -699,10 +701,19 @@ function buildPayload(): UpdateCurrentUserPayload {
     }
   }
   // phone country and region fields (flat)
-  const flatKeys = ['phoneCountry','regionCountry','regionProvince','regionCity','regionDistrict'] as const
+  const flatKeys = [
+    'phoneCountry',
+    'regionCountry',
+    'regionProvince',
+    'regionCity',
+    'regionDistrict',
+  ] as const
   for (const k of flatKeys) {
     const newValue = String((form as any)[k] ?? '').trim()
-    const currentValue = typeof existingExtra[k] === 'string' ? String(existingExtra[k]).trim() : ''
+    const currentValue =
+      typeof existingExtra[k] === 'string'
+        ? String(existingExtra[k]).trim()
+        : ''
     if (newValue !== currentValue) {
       extraChanged = true
     }

@@ -19,6 +19,7 @@
     "@nuxt/ui": "^4.1.0",
     "@tailwindcss/vite": "^4.1.16",
     "@unhead/vue": "^2.0.19",
+    "china-division": "^2.7.0",
     "dayjs": "^1.11.19",
     "pinia": "^3.0.3",
     "reka-ui": "^2.6.0",

@@ -267,10 +267,10 @@ const countryName = computed(() => {
       </div>
     </div>
 
-    <!-- 联系方式与地址 -->
+    <!-- 地区 -->
     <div class="space-y-4">
       <h3 class="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-        联系方式与地址
+        地区
       </h3>
 
       <div

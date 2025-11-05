@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { CountryCode } from './region-data'
 import {
   countries,
@@ -8,6 +8,7 @@ import {
   citiesMap,
   districtsMap,
 } from './region-data'
+import { loadChinaDivision } from './region-loader'
 
 export type RegionValue = {
   country: CountryCode
@@ -28,20 +29,52 @@ function update(partial: Partial<RegionValue>) {
 
 const isChina = computed(() => props.modelValue.country === 'CN')
 
+// 动态数据（按需）
+const dynamicProvinces = ref<string[] | null>(null)
+const dynamicCitiesMap = ref<Record<string, string[]> | null>(null)
+const dynamicDistrictsMap = ref<Record<string, string[]> | null>(null)
+const dynamicMunicipalities = ref<string[] | null>(null)
+
+async function ensureChinaDataLoaded() {
+  if (!isChina.value) return
+  if (dynamicProvinces.value) return
+  const data = await loadChinaDivision()
+  dynamicProvinces.value = data.provinces
+  dynamicCitiesMap.value = data.citiesMap
+  dynamicDistrictsMap.value = data.districtsMap
+  dynamicMunicipalities.value = data.municipalities
+}
+
+onMounted(() => {
+  if (isChina.value) void ensureChinaDataLoaded()
+})
+watch(
+  () => props.modelValue.country,
+  (c) => {
+    if (c === 'CN') void ensureChinaDataLoaded()
+  },
+)
+
+const provinceOptions = computed(
+  () => dynamicProvinces.value ?? provinces,
+)
+const isMunicipality = computed(() => {
+  const list = dynamicMunicipalities.value ?? municipalities
+  return list.includes(props.modelValue.province || '')
+})
 const cityOptions = computed(() => {
   const p = props.modelValue.province || ''
-  return citiesMap[p] || []
+  const map = dynamicCitiesMap.value ?? citiesMap
+  return map[p] || []
 })
-const isMunicipality = computed(() =>
-  municipalities.includes(props.modelValue.province || ''),
-)
 const districtOptions = computed(() => {
+  const map = dynamicDistrictsMap.value ?? districtsMap
   if (isMunicipality.value) {
     const city = props.modelValue.province || ''
-    return districtsMap[city] || []
+    return map[city] || []
   }
   const city = props.modelValue.city || ''
-  return districtsMap[city] || []
+  return map[city] || []
 })
 </script>
 
@@ -78,7 +111,7 @@ const districtOptions = computed(() => {
           <USelectMenu
             class="w-full"
             :model-value="(props.modelValue.province ?? undefined) as string | undefined"
-            :items="provinces"
+            :items="provinceOptions"
             :disabled="props.disabled"
             @update:model-value="
               (v: any) => update({ province: v, city: null, district: null })
