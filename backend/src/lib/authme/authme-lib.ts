@@ -1,10 +1,19 @@
 import * as mysql from 'mysql2/promise';
-import type { Pool, PoolOptions, RowDataPacket } from 'mysql2/promise';
+import type {
+  Pool,
+  PoolConnection,
+  PoolOptions,
+  RowDataPacket,
+} from 'mysql2/promise';
 import { performance } from 'node:perf_hooks';
-import { AuthmeDbConfig } from '../authme.config';
-import { AuthmeLib, AuthmeUser, AuthmeHealth } from '../authme.interfaces';
-import { AuthmeMetricsRecorder } from '../authme.metrics';
-import { externalError } from '../authme.errors';
+import { AuthmeDbConfig } from '../../authme/authme.config';
+import {
+  AuthmeLib,
+  AuthmeUser,
+  AuthmeHealth,
+} from '../../authme/authme.interfaces';
+import { AuthmeMetricsRecorder } from '../../authme/authme.metrics';
+import { externalError } from '../../authme/authme.errors';
 import { normalizePasswordSegments, verifyShaPassword } from './password';
 
 export interface LoggerLike {
@@ -194,12 +203,15 @@ export class MysqlAuthmeLib implements AuthmeLib {
     label: string,
   ): Promise<T> {
     const start = performance.now();
-    let attempt = 0;
-    const maxAttempts = 2; // 首次失败后重试一次
+    const maxAttempts = 5;
     try {
-      while (true) {
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        let connection: PoolConnection | null = null;
         try {
-          const [rows] = await this.pool.query(sql, params);
+          connection = await this.pool.getConnection();
+          await this.ensureHealthyConnection(connection);
+          const [rows] = await connection.query(sql, params);
+          this.metrics?.setConnected(true);
           return rows as T;
         } catch (error) {
           const code = getErrorCode(error)?.toUpperCase();
@@ -207,35 +219,68 @@ export class MysqlAuthmeLib implements AuthmeLib {
           const retryable = stage === 'CONNECT' && isRetryableConnectCode(code);
 
           if (retryable && attempt + 1 < maxAttempts) {
-            attempt += 1;
             this.logger?.warn?.(
-              `AuthMe query failed (${label}) with ${code}, attempting reconnect and retry (${attempt}/${maxAttempts - 1})`,
-              { code, label },
+              `AuthMe query failed (${label}) with ${code ?? 'UNKNOWN'}, reconnecting and retry (${attempt + 1}/${maxAttempts})`,
+              { code, label, attempt: attempt + 1, maxAttempts },
             );
-            // 轻微退避，避免瞬时风暴
-            await delay(150);
-            // 触发池中新连接的创建，快速恢复
-            try {
-              const conn = await this.pool.getConnection();
-              conn.release();
-            } catch {
-              // ignore: 尝试创建连接失败，交由下一次 query 再抛出
-            }
-            continue; // 重试 query
+            this.metrics?.setConnected(false);
+            await delay(backoffMs(attempt));
+            continue;
           }
 
-          // 不可重试或已用尽重试次数
-          this.logger?.error?.(`AuthMe query failed (${label})`, { error });
+          this.metrics?.setConnected(false);
+          this.logger?.error?.(`AuthMe query failed (${label})`, {
+            error,
+            code,
+            label,
+          });
           throw externalError(
             stage,
             (error as Error).message,
             getErrorCode(error),
           );
+        } finally {
+          if (connection) {
+            try {
+              connection.release();
+            } catch {
+              // ignore release errors for defunct connections
+            }
+          }
         }
       }
+
+      // Exhausted retries
+      throw externalError(
+        'CONNECT',
+        'AuthMe query retry limit reached',
+        'RETRY_EXHAUSTED',
+      );
     } finally {
       const duration = performance.now() - start;
       this.metrics?.observeQuery(label, duration);
+    }
+  }
+
+  private async ensureHealthyConnection(connection: PoolConnection) {
+    const timeoutMs = 2000;
+    let timer: NodeJS.Timeout | null = null;
+    try {
+      const pingPromise = connection.ping();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(createPingTimeoutError(timeoutMs));
+        }, timeoutMs);
+        timer.unref?.();
+      });
+      await Promise.race([pingPromise, timeoutPromise]);
+    } catch (error) {
+      connection.destroy();
+      throw error;
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
     }
   }
 }
@@ -300,6 +345,7 @@ function resolveStage(error: unknown): 'DNS' | 'CONNECT' | 'AUTH' | 'QUERY' {
       'ETIMEDOUT',
       'PROTOCOL_CONNECTION_LOST',
       'EHOSTUNREACH',
+      'PING_TIMEOUT',
     ].includes(normalized)
   ) {
     return 'CONNECT';
@@ -334,9 +380,22 @@ function isRetryableConnectCode(code?: string): boolean {
     'ECONNREFUSED',
     'EHOSTUNREACH',
     'PROTOCOL_CONNECTION_LOST',
+    'PING_TIMEOUT',
   ].includes(c);
 }
 
 async function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function backoffMs(attempt: number): number {
+  return 150 * (attempt + 1);
+}
+
+function createPingTimeoutError(timeoutMs: number) {
+  const error = new Error(
+    `AuthMe connection ping timed out after ${timeoutMs}ms`,
+  ) as Error & { code?: string };
+  error.code = 'PING_TIMEOUT';
+  return error;
 }

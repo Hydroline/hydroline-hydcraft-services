@@ -1,8 +1,8 @@
-import type { Pool } from 'mysql2/promise';
+import type { Pool, PoolConnection } from 'mysql2/promise';
 import { MysqlAuthmeLib } from './authme-lib';
-import { AuthmeDbConfig } from '../authme.config';
-import type { AuthmeMetricsRecorder } from '../authme.metrics';
-import { AuthmeError } from '../authme.errors';
+import { AuthmeDbConfig } from '../../authme/authme.config';
+import type { AuthmeMetricsRecorder } from '../../authme/authme.metrics';
+import { AuthmeError } from '../../authme/authme.errors';
 
 const baseConfig: AuthmeDbConfig = {
   host: 'localhost',
@@ -38,22 +38,51 @@ describe('MysqlAuthmeLib', () => {
 
   function createPool(
     mockResponses: Array<{ sqlIncludes: string; rows: any[] }>,
-  ): Pool {
-    const query = jest.fn(async (sql: string) => {
+  ): Pool & { __mockConnection: jest.Mocked<PoolConnection> } {
+    const connectionQuery = jest.fn((sql: string) => {
       const matched = mockResponses.find((entry) =>
         sql.includes(entry.sqlIncludes),
       );
       if (!matched) {
         throw new Error(`Unexpected SQL: ${sql}`);
       }
-      return [matched.rows, []];
+      return Promise.resolve([matched.rows, []]);
     });
-    const getConnection = jest.fn(async () => ({
-      query: async () => [[], []],
-      release: () => undefined,
-    }));
-    const end = jest.fn(async () => undefined);
-    return { query, getConnection, end } as unknown as Pool;
+
+    const rawConnection = {
+      query: connectionQuery,
+      release: jest.fn(),
+      ping: jest.fn(() => Promise.resolve()),
+      destroy: jest.fn(),
+      execute: jest.fn(),
+      beginTransaction: jest.fn(),
+      commit: jest.fn(),
+      rollback: jest.fn(),
+      changeUser: jest.fn(),
+      close: jest.fn(),
+      end: jest.fn(),
+      pause: jest.fn(),
+      resume: jest.fn(),
+      escape: jest.fn(),
+      escapeId: jest.fn(),
+      format: jest.fn(),
+      isValid: jest.fn(),
+      get config() {
+        return {};
+      },
+    } as Record<string, unknown>;
+
+    const connection = rawConnection as unknown as jest.Mocked<PoolConnection>;
+
+    const getConnection = jest.fn(() => Promise.resolve(connection));
+    const end = jest.fn(() => Promise.resolve());
+
+    const pool = {
+      getConnection,
+      end,
+    } as unknown as Pool & { __mockConnection: jest.Mocked<PoolConnection> };
+    pool.__mockConnection = connection;
+    return pool;
   }
 
   it('verifies $SHA$ passwords using official sample', async () => {
@@ -107,7 +136,7 @@ describe('MysqlAuthmeLib', () => {
 
   it('wraps pool errors into AuthmeError instances', async () => {
     const pool = createPool([]);
-    (pool.query as jest.Mock).mockRejectedValueOnce(
+    pool.__mockConnection.query.mockRejectedValueOnce(
       Object.assign(new Error('connection lost'), { code: 'ECONNRESET' }),
     );
     const lib = new MysqlAuthmeLib({
