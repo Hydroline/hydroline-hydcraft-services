@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '../config/config.service';
 import {
   AUTH_FEATURE_CACHE_TTL_MS,
@@ -29,13 +29,18 @@ const DEFAULT_FLAGS: AuthFeatureFlags = {
 };
 
 @Injectable()
-export class AuthFeatureService {
+export class AuthFeatureService implements OnModuleInit {
   private readonly logger = new Logger(AuthFeatureService.name);
   private cache: { expiresAt: number; value: AuthFeatureFlags } | null = null;
+  private ensureStoragePromise: Promise<void> | null = null;
 
   constructor(
     @Inject(ConfigService) private readonly configService: ConfigService,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureFeatureStorage();
+  }
 
   async getFlags(forceRefresh = false): Promise<AuthFeatureFlags> {
     if (!forceRefresh && this.cache && this.cache.expiresAt > Date.now()) {
@@ -51,6 +56,7 @@ export class AuthFeatureService {
 
   private async loadFlags(): Promise<AuthFeatureFlags> {
     try {
+      await this.ensureFeatureStorage();
       const entries = await this.configService.getEntriesByNamespaceKey(
         AUTH_FEATURE_NAMESPACE,
       );
@@ -129,6 +135,35 @@ export class AuthFeatureService {
       );
     }
     this.cache = null;
+  }
+
+  private async ensureFeatureStorage() {
+    if (!this.ensureStoragePromise) {
+      this.ensureStoragePromise = (async () => {
+        const namespace = await this.configService.ensureNamespaceByKey(
+          AUTH_FEATURE_NAMESPACE,
+          {
+            name: 'Auth Feature Flags',
+            description: 'Toggle auth subsystem behaviours',
+          },
+        );
+        const entry = await this.configService.getEntry(
+          AUTH_FEATURE_NAMESPACE,
+          'feature',
+        );
+        if (!entry) {
+          await this.configService.createEntry(namespace.id, {
+            key: 'feature',
+            value: DEFAULT_FLAGS,
+            description: 'Auth subsystem feature toggles',
+          });
+        }
+      })().catch((error) => {
+        this.ensureStoragePromise = null;
+        throw error;
+      });
+    }
+    await this.ensureStoragePromise;
   }
 }
 

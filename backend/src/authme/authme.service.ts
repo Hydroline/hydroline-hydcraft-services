@@ -45,6 +45,7 @@ export class AuthmeService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
+    await this.ensureConfigStorage();
     await this.refreshConfig(true);
     this.poller = setInterval(() => {
       void this.refreshConfig().catch((error) =>
@@ -154,6 +155,7 @@ export class AuthmeService implements OnModuleInit, OnModuleDestroy {
     signature: string;
     config: AuthmeDbConfig | null;
   }> {
+    await this.ensureConfigStorage();
     const entries = (await this.configService.getEntriesByNamespaceKey(
       AUTHME_DB_NAMESPACE,
     )) as ConfigEntry[];
@@ -220,6 +222,27 @@ export class AuthmeService implements OnModuleInit, OnModuleDestroy {
       );
     }
     await this.refreshConfig(true);
+  }
+
+  private async ensureConfigStorage() {
+    const namespace = await this.configService.ensureNamespaceByKey(
+      AUTHME_DB_NAMESPACE,
+      {
+        name: 'AuthMe Database',
+        description: 'AuthMe MySQL connection configuration',
+      },
+    );
+    const entry = await this.configService.getEntry(
+      AUTHME_DB_NAMESPACE,
+      'config',
+    );
+    if (!entry) {
+      await this.configService.createEntry(namespace.id, {
+        key: 'config',
+        value: {},
+        description: 'AuthMe MySQL connection configuration',
+      });
+    }
   }
 
   private normalizeConfig(

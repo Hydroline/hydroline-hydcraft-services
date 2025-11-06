@@ -248,10 +248,24 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async bootstrapConfigStorage() {
-    await this.configService.ensureNamespaceByKey(LUCKPERMS_DB_NAMESPACE, {
-      name: 'LuckPerms Database',
-      description: 'LuckPerms MySQL connection configuration',
-    });
+    const dbNamespace = await this.configService.ensureNamespaceByKey(
+      LUCKPERMS_DB_NAMESPACE,
+      {
+        name: 'LuckPerms Database',
+        description: 'LuckPerms MySQL connection configuration',
+      },
+    );
+    const dbConfigEntry = await this.configService.getEntry(
+      LUCKPERMS_DB_NAMESPACE,
+      'config',
+    );
+    if (!dbConfigEntry) {
+      await this.configService.createEntry(dbNamespace.id, {
+        key: 'config',
+        value: {},
+        description: 'LuckPerms MySQL connection configuration',
+      });
+    }
     const displayNamespace = await this.configService.ensureNamespaceByKey(
       LUCKPERMS_DISPLAY_NAMESPACE,
       {
