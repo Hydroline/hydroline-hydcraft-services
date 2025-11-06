@@ -13,32 +13,87 @@ export interface NormalizedLuckpermsBinding {
   boundAt: string | Date | null;
   primaryGroup: string | null;
   groups: NormalizedLuckpermsGroup[];
+  luckpermsUsername: string | null;
+  luckpermsUuid: string | null;
+  synced: boolean;
 }
 
 export function normalizeLuckpermsBinding(
-  entry: Record<string, any>,
+  binding: Record<string, unknown>,
+  options: { luckperms?: Record<string, unknown> | null } = {},
 ): NormalizedLuckpermsBinding {
-  const realname =
-    typeof entry.authmeRealname === 'string' ? entry.authmeRealname : null;
+  const authmeUsername = binding['authmeUsername'];
+  const fallbackUsername = binding['username'];
+  const username = resolveUsername(authmeUsername ?? fallbackUsername);
+
+  const rawBindingRealname =
+    binding['authmeRealname'] ?? binding['realname'] ?? null;
+  const bindingRealname =
+    typeof rawBindingRealname === 'string'
+      ? rawBindingRealname.trim()
+      : null;
+
+  const luckpermsEntry = options.luckperms ?? null;
+  const rawLuckpermsUsername = luckpermsEntry
+    ? luckpermsEntry['username'] ?? null
+    : null;
+  const lpUsernameValue = resolveUsername(rawLuckpermsUsername);
+  const luckpermsUsername = lpUsernameValue.length > 0 ? lpUsernameValue : null;
+
+  const resolvedRealname =
+    bindingRealname && bindingRealname.length > 0
+      ? bindingRealname
+      : luckpermsUsername;
+
+  const primaryGroup =
+    typeof luckpermsEntry?.['primaryGroup'] === 'string'
+      ? (luckpermsEntry['primaryGroup'] as string)
+      : null;
+
+  const groups = normalizeLuckpermsGroups(luckpermsEntry?.['groups'] ?? []);
+
+  const uuid = resolveNullableUuid(luckpermsEntry?.['uuid'] ?? null);
+
+  const boundAtRaw = binding['boundAt'] ?? binding['bound_at'] ?? null;
+  const boundAt =
+    boundAtRaw instanceof Date || typeof boundAtRaw === 'string'
+      ? (boundAtRaw as Date | string)
+      : null;
+
   return {
-    username: String(entry.authmeUsername ?? ''),
-    realname,
-    boundAt: entry.boundAt ?? null,
-    primaryGroup:
-      typeof entry.luckperms?.primaryGroup === 'string'
-        ? entry.luckperms.primaryGroup
-        : null,
-    groups: normalizeLuckpermsGroups(entry.luckperms?.groups ?? []),
+    username,
+    realname: resolvedRealname ?? null,
+    boundAt,
+    primaryGroup,
+    groups,
+    luckpermsUsername,
+    luckpermsUuid: uuid,
+    synced: Boolean(luckpermsEntry?.['synced'] ?? luckpermsEntry),
   };
 }
 
 export function normalizeLuckpermsBindings(
   raw: unknown,
+  options: {
+    luckpermsMap?: Map<string, Record<string, unknown> | null | undefined>;
+  } = {},
 ): NormalizedLuckpermsBinding[] {
   if (!Array.isArray(raw)) return [];
+  const map =
+    options.luckpermsMap ??
+    new Map<string, Record<string, unknown> | null | undefined>();
   return raw
-    .filter((entry): entry is Record<string, any> => Boolean(entry))
-    .map((entry) => normalizeLuckpermsBinding(entry));
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .map((entry) => {
+      const key = usernameKey(
+        entry['authmeUsername'] ??
+          entry['username'] ??
+          entry['authme_username'] ??
+          null,
+      );
+      const luckperms = key ? map.get(key) ?? null : null;
+      return normalizeLuckpermsBinding(entry, { luckperms });
+    });
 }
 
 export function normalizeLuckpermsGroups(
@@ -48,21 +103,22 @@ export function normalizeLuckpermsGroups(
   const result: NormalizedLuckpermsGroup[] = [];
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue;
-    const name =
-      typeof (item as Record<string, any>).group === 'string'
-        ? (item as Record<string, any>).group.trim()
-        : String((item as Record<string, any>).group ?? '').trim();
+    const record = item as Record<string, unknown>;
+    const groupRaw = record['group'];
+    let name: string | null = null;
+    if (typeof groupRaw === 'string') {
+      const trimmed = groupRaw.trim();
+      if (trimmed) name = trimmed;
+    } else if (groupRaw !== null && groupRaw !== undefined) {
+      const converted = String(groupRaw).trim();
+      if (converted) name = converted;
+    }
     if (!name) continue;
-    const server = normalizeNullableString(
-      (item as Record<string, any>).server,
-    );
-    const world = normalizeNullableString(
-      (item as Record<string, any>).world,
-    );
-    const contexts = normalizeContexts(
-      (item as Record<string, any>).contexts ?? null,
-    );
-    const expiryValue = (item as Record<string, any>).expiry ?? null;
+
+    const server = normalizeNullableString(record['server']);
+    const world = normalizeNullableString(record['world']);
+    const contexts = normalizeContexts(record['contexts'] ?? null);
+    const expiryValue = record['expiry'] ?? null;
     const expiry = normalizeExpiry(expiryValue);
 
     result.push({
@@ -75,6 +131,30 @@ export function normalizeLuckpermsGroups(
     });
   }
   return result;
+}
+
+function resolveUsername(value: unknown): string {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : '';
+  }
+  if (typeof value === 'number') {
+    const converted = String(value).trim();
+    return converted.length > 0 ? converted : '';
+  }
+  return '';
+}
+
+function resolveNullableUuid(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+}
+
+function usernameKey(value: unknown): string {
+  return resolveUsername(value).toLowerCase();
 }
 
 function normalizeNullableString(value: unknown): string | null {

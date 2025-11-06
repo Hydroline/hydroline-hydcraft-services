@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import {
-  normalizeLuckpermsBinding,
+  normalizeLuckpermsBindings,
   type NormalizedLuckpermsBinding,
 } from '@/utils/luckperms'
 
@@ -13,12 +13,40 @@ const ui = useUiStore()
 const isAuthenticated = computed(() => auth.isAuthenticated)
 const profile = computed(() => auth.user?.profile ?? {})
 const contacts = computed(() => auth.user?.contacts ?? [])
+function toUsernameKey(value: unknown) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed ? trimmed.toLowerCase() : ''
+  }
+  if (typeof value === 'number') {
+    const normalized = String(value).trim()
+    return normalized ? normalized.toLowerCase() : ''
+  }
+  return ''
+}
+
+const luckpermsMap = computed(() => {
+  const raw = (auth.user as Record<string, unknown> | null)?.luckperms ?? []
+  const map = new Map<string, Record<string, unknown> | null>()
+  if (!Array.isArray(raw)) {
+    return map
+  }
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const record = entry as Record<string, unknown>
+    const key = toUsernameKey(record['authmeUsername'] ?? record['username'])
+    if (!key) continue
+    map.set(key, record)
+  }
+  return map
+})
+
 const authmeBindings = computed<NormalizedLuckpermsBinding[]>(() => {
-  const raw = (auth.user as Record<string, any> | null)?.authmeBindings ?? []
+  const raw = (auth.user as Record<string, unknown> | null)?.authmeBindings ?? []
   if (!Array.isArray(raw)) return []
-  return raw.map((entry: Record<string, any>) =>
-    normalizeLuckpermsBinding(entry),
-  )
+  return normalizeLuckpermsBindings(raw, {
+    luckpermsMap: luckpermsMap.value,
+  })
 })
 
 function openLoginDialog() {

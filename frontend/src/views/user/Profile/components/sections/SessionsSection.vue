@@ -26,7 +26,7 @@ function formatDate(value: string | Date | null | undefined) {
   if (!value) return '未知'
   const parsed = dayjs(value)
   if (!parsed.isValid()) return '未知'
-  return parsed.format('YYYY年MM月DD日 HH:mm')
+  return parsed.format('YYYY/MM/DD HH:mm:ss')
 }
 
 function formatUserAgent(value: string | null | undefined) {
@@ -36,53 +36,127 @@ function formatUserAgent(value: string | null | undefined) {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-3">
     <div class="flex items-center justify-between gap-3">
       <h3 class="px-1 text-lg text-slate-600 dark:text-slate-300">会话管理</h3>
-      <UButton size="sm" variant="soft" :loading="props.loading" @click="emit('refresh')">刷新</UButton>
+      <UButton
+        size="sm"
+        variant="ghost"
+        :loading="props.loading"
+        @click="emit('refresh')"
+        >刷新</UButton
+      >
     </div>
 
-    <div v-if="props.error" class="rounded-xl border border-rose-200/50 bg-rose-50/70 px-4 py-3 text-sm text-rose-600 dark:border-rose-500/40 dark:bg-rose-950/30 dark:text-rose-200">
+    <div
+      v-if="props.error"
+      class="rounded-xl border border-rose-200/50 bg-rose-50/70 px-4 py-3 text-sm text-rose-600 dark:border-rose-500/40 dark:bg-rose-950/30 dark:text-rose-200"
+    >
       {{ props.error }}
     </div>
 
-    <div v-if="props.loading && props.sessions.length === 0" class="rounded-xl border border-slate-200/70 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800/70 dark:text-slate-400">
+    <div
+      v-if="props.loading && props.sessions.length === 0"
+      class="rounded-xl border border-slate-200/70 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800/70 dark:text-slate-400"
+    >
       正在获取活跃会话...
     </div>
 
-    <div v-else-if="props.sessions.length === 0" class="rounded-xl border border-dashed border-slate-200/70 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800/70 dark:text-slate-400">
+    <div
+      v-else-if="props.sessions.length === 0"
+      class="rounded-xl border border-dashed border-slate-200/70 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800/70 dark:text-slate-400"
+    >
       暂无活跃会话。
     </div>
 
-    <div v-else class="space-y-4">
-      <article v-for="session in props.sessions" :key="session.id" class="rounded-xl p-4 bg-white dark:bg-slate-700/60 border border-slate-200/60 dark:border-slate-800/60">
-        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div v-else class="space-y-3">
+      <article
+        v-for="session in props.sessions"
+        :key="session.id"
+        class="rounded-xl p-4 bg-white dark:bg-slate-700/60 border border-slate-200/60 dark:border-slate-800/60"
+        :class="{ 'outline-2 outline-primary-300': session.isCurrent }"
+      >
+        <div class="flex flex-col">
           <div class="space-y-2">
-            <div class="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-              <span>{{ session.ipAddress || '未知 IP' }}</span>
-              <UBadge v-if="session.isCurrent" color="primary" variant="soft">当前设备</UBadge>
-            </div>
-            <p v-if="session.ipLocation" class="text-xs text-slate-500 dark:text-slate-400">
-              {{ session.ipLocation }}
-            </p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">{{ formatUserAgent(session.userAgent) }}</p>
-            <div class="grid gap-1 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-2">
-              <span>创建于：{{ formatDate(session.createdAt) }}</span>
-              <span>最近活动：{{ formatDate(session.updatedAt) }}</span>
-              <span>过期时间：{{ formatDate(session.expiresAt) }}</span>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 self-end md:self-start">
-            <UButton
-              size="sm"
-              color="error"
-              variant="outline"
-              :disabled="session.isCurrent"
-              :loading="props.revokingId === session.id"
-              @click="emit('revoke', session.id)"
+            <div
+              class="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-900 dark:text-slate-100 mb-0"
             >
-              终止会话
-            </UButton>
+              <div class="flex-1 flex items-center">
+                <div class="flex items-center">
+                  <span 
+                    class="text-lg"
+                    :class="session.ipAddress ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+                    >{{ session.ipAddress || '未知 IP' }}
+                  </span>
+                  <span
+                    v-if="session.ipLocation"
+                    class="text-xs text-slate-500 dark:text-slate-400"
+                  >
+                    （{{ session.ipLocation }}）
+                  </span>
+                </div>
+
+                <UBadge
+                  v-if="session.isCurrent"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  >当前设备</UBadge
+                >
+              </div>
+
+              <div v-if="!session.isCurrent">
+                <UTooltip text="终止会话">
+                  <UButton
+                    size="sm"
+                    color="error"
+                    variant="ghost"
+                    :disabled="session.isCurrent"
+                    :loading="props.revokingId === session.id"
+                    icon="i-lucide-log-out"
+                    aria-label="终止会话"
+                    @click="emit('revoke', session.id)"
+                  />
+                </UTooltip>
+              </div>
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">
+              {{ formatUserAgent(session.userAgent) }}
+            </div>
+            <div
+              class="grid gap-1 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-3"
+            >
+              <div>
+                <div class="text-xs text-slate-500 dark:text-slate-500">
+                  创建时间
+                </div>
+                <div
+                  class="text-base font-semibold text-slate-800 dark:text-slate-300"
+                >
+                  {{ formatDate(session.createdAt) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-500 dark:text-slate-500">
+                  最近活动
+                </div>
+                <div
+                  class="text-base font-semibold text-slate-800 dark:text-slate-300"
+                >
+                  {{ formatDate(session.updatedAt) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-500 dark:text-slate-500">
+                  过期时间
+                </div>
+                <div
+                  class="text-base font-semibold text-slate-800 dark:text-slate-300"
+                >
+                  {{ formatDate(session.expiresAt) }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </article>

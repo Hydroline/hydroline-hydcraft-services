@@ -15,7 +15,9 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: ['/attachments/public/:attachmentId', '/attachments/share/:token'],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

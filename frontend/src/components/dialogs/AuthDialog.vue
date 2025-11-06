@@ -279,7 +279,7 @@ function closeDialog() {
                     <span>AuthMe 账号</span>
                     <UInput
                       v-model="authmeLoginForm.authmeId"
-                      placeholder="用户名或 RealName"
+                      placeholder="请输入服务器内登录过的游戏 ID"
                       required
                     />
                   </label>
@@ -290,7 +290,7 @@ function closeDialog() {
                     <UInput
                       v-model="authmeLoginForm.password"
                       type="password"
-                      placeholder="请输入 AuthMe 密码"
+                      placeholder="请输入服务器内的登录密码"
                       required
                     />
                   </label>
@@ -408,7 +408,7 @@ function closeDialog() {
                     <span>AuthMe 账号</span>
                     <UInput
                       v-model="authmeRegisterForm.authmeId"
-                      placeholder="用户名或 RealName"
+                      placeholder="请输入服务器内登录过的游戏 ID"
                       required
                     />
                   </label>
@@ -419,7 +419,7 @@ function closeDialog() {
                     <UInput
                       v-model="authmeRegisterForm.password"
                       type="password"
-                      placeholder="请输入 AuthMe 密码"
+                      placeholder="请输入服务器内的登录密码"
                       required
                     />
                   </label>

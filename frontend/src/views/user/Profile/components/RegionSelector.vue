@@ -96,7 +96,7 @@ watch(
 <template>
   <div class="space-y-3">
     <div
-      class="flex flex-col gap-3 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-start md:gap-6"
+      class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
     >
       <div class="w-40 text-sm font-medium text-slate-600 dark:text-slate-300">
         常驻地区

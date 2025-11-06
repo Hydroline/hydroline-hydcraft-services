@@ -16,6 +16,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthmeService } from '../authme/authme.service';
 import { LuckpermsService } from '../luckperms/luckperms.service';
+import type { LuckpermsPlayer } from '../luckperms/luckperms.interfaces';
 import { CreateLifecycleEventDto } from './dto/create-lifecycle-event.dto';
 import { CreateMinecraftProfileDto } from './dto/create-minecraft-profile.dto';
 import { CreateStatusEventDto } from './dto/create-status-event.dto';
@@ -32,6 +33,25 @@ import { IpLocationService } from '../lib/ip2region/ip-location.service';
 import { normalizeIpAddress } from '../lib/ip2region/ip-normalizer';
 
 type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
+
+type AuthmeBindingSnapshot = {
+  authmeUsername: string;
+  authmeRealname: string | null;
+  boundAt: Date | string | null;
+  ip: string | null;
+  regip: string | null;
+  lastlogin: number | null;
+  regdate: number | null;
+};
+
+type LuckpermsSnapshot = {
+  authmeUsername: string;
+  username: string | null;
+  uuid: string | null;
+  primaryGroup: string | null;
+  groups: LuckpermsPlayer['groups'];
+  synced: boolean;
+};
 
 @Injectable()
 export class UsersService {
@@ -314,45 +334,13 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Enrich AuthMe bindings with latest data from AuthMe DB (ip/regip/lastlogin/regdate)
+    // Enrich AuthMe bindings with live metadata and expose LuckPerms snapshots alongside bindings
     const normalizedLastLoginIp = normalizeIpAddress(user.lastLoginIp);
-    const [lastLoginLocation, enrichedBindings] = await Promise.all([
+    const [lastLoginLocation, bindingData] = await Promise.all([
       normalizedLastLoginIp
         ? this.ipLocationService.lookup(normalizedLastLoginIp)
         : Promise.resolve(null),
-      Promise.all(
-        (user.authmeBindings ?? []).map(async (b) => {
-          try {
-            const [account, luckperms] = await Promise.all([
-              this.authmeService
-                .getAccount(b.authmeUsername)
-                .catch(() => null),
-              b.authmeRealname
-                ? this.luckpermsService
-                    .getPlayerByUsername(b.authmeRealname)
-                    .catch(() => null)
-                : Promise.resolve(null),
-            ]);
-            return {
-              authmeUsername: b.authmeUsername,
-              authmeRealname: b.authmeRealname,
-              boundAt: b.boundAt,
-              ip: account?.ip ?? null,
-              regip: account?.regip ?? null,
-              lastlogin: account?.lastlogin ?? null,
-              regdate: account?.regdate ?? null,
-              luckperms: luckperms
-                ? {
-                    primaryGroup: luckperms.primaryGroup,
-                    groups: luckperms.groups,
-                  }
-                : null,
-            } as const;
-          } catch {
-            return { ...b, luckperms: null } as const;
-          }
-        }),
-      ),
+      this.composeAuthmeBindingSnapshots(user.authmeBindings),
     ]);
 
     return {
@@ -360,9 +348,11 @@ export class UsersService {
       lastLoginIp: normalizedLastLoginIp,
       lastLoginIpLocation: lastLoginLocation?.display ?? null,
       lastLoginIpLocationRaw: lastLoginLocation?.raw ?? null,
-      authmeBindings: enrichedBindings,
+      authmeBindings: bindingData.bindings,
+      luckperms: bindingData.luckperms,
     } as typeof user & {
-      authmeBindings: typeof enrichedBindings;
+      authmeBindings: typeof bindingData.bindings;
+      luckperms: typeof bindingData.luckperms;
       lastLoginIp: typeof normalizedLastLoginIp;
       lastLoginIpLocation: string | null;
       lastLoginIpLocationRaw: string | null;
@@ -494,45 +484,19 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Enrich AuthMe bindings with live data similar to getSessionUser
-    const enrichedBindings = await Promise.all(
-      (user.authmeBindings ?? []).map(async (b) => {
-        try {
-          const [account, luckperms] = await Promise.all([
-            this.authmeService
-              .getAccount(b.authmeUsername)
-              .catch(() => null),
-            b.authmeRealname
-              ? this.luckpermsService
-                  .getPlayerByUsername(b.authmeRealname)
-                  .catch(() => null)
-              : Promise.resolve(null),
-          ]);
-          return {
-            authmeUsername: b.authmeUsername,
-            authmeRealname: b.authmeRealname,
-            boundAt: b.boundAt,
-            ip: account?.ip ?? null,
-            regip: account?.regip ?? null,
-            lastlogin: account?.lastlogin ?? null,
-            regdate: account?.regdate ?? null,
-            luckperms: luckperms
-              ? {
-                  primaryGroup: luckperms.primaryGroup,
-                  groups: luckperms.groups,
-                }
-              : null,
-          } as const;
-        } catch {
-          return { ...b, luckperms: null } as const;
-        }
-      }),
+    // Mirror compose logic from session user to expose LuckPerms snapshots for detail view
+    const bindingData = await this.composeAuthmeBindingSnapshots(
+      user.authmeBindings,
     );
 
     return {
       ...user,
-      authmeBindings: enrichedBindings,
-    } as typeof user & { authmeBindings: typeof enrichedBindings };
+      authmeBindings: bindingData.bindings,
+      luckperms: bindingData.luckperms,
+    } as typeof user & {
+      authmeBindings: typeof bindingData.bindings;
+      luckperms: typeof bindingData.luckperms;
+    };
   }
 
   async updateJoinDate(userId: string, joinDateIso: string) {
@@ -974,6 +938,136 @@ export class UsersService {
       where: { userId, channelId, isPrimary: true },
       data: { isPrimary: false },
     });
+  }
+
+  private async composeAuthmeBindingSnapshots(
+    entries:
+      | ReadonlyArray<{
+          authmeUsername: string;
+          authmeRealname: string | null;
+          boundAt: Date | string | null;
+        }>
+      | null
+      | undefined,
+  ) {
+    const rawList = Array.isArray(entries) ? entries : [];
+    const list = rawList
+      .map((entry) => {
+        const payload = entry as Record<string, unknown>;
+        const rawUsername = payload.authmeUsername;
+        let username = '';
+        if (typeof rawUsername === 'string') {
+          username = rawUsername.trim();
+        } else if (typeof rawUsername === 'number') {
+          username = String(rawUsername).trim();
+        }
+
+        const rawRealname = payload.authmeRealname;
+        const realnameRaw =
+          typeof rawRealname === 'string' ? rawRealname.trim() : null;
+
+        const boundAtValue = (payload.boundAt ?? null) as Date | string | null;
+        let boundAt: Date | string | null = null;
+        if (boundAtValue instanceof Date || typeof boundAtValue === 'string') {
+          boundAt = boundAtValue;
+        }
+        return {
+          authmeUsername: username,
+          authmeRealname:
+            realnameRaw && realnameRaw.length > 0 ? realnameRaw : null,
+          boundAt,
+        };
+      })
+      .filter((entry) => entry.authmeUsername.length > 0);
+
+    if (list.length === 0) {
+      return {
+        bindings: [] as AuthmeBindingSnapshot[],
+        luckperms: [] as LuckpermsSnapshot[],
+      };
+    }
+
+    const results = await Promise.all(
+      list.map(async (binding) => {
+        const fallback = {
+          binding: {
+            authmeUsername: binding.authmeUsername,
+            authmeRealname: binding.authmeRealname,
+            boundAt: binding.boundAt,
+            ip: null,
+            regip: null,
+            lastlogin: null,
+            regdate: null,
+          } as AuthmeBindingSnapshot,
+          luckperms: this.buildLuckpermsSnapshot(
+            binding.authmeUsername,
+            binding.authmeRealname,
+            null,
+          ),
+        };
+
+        try {
+          const [account, luckperms] = await Promise.all([
+            this.authmeService
+              .getAccount(binding.authmeUsername)
+              .catch(() => null),
+            binding.authmeRealname
+              ? this.luckpermsService
+                  .getPlayerByUsername(binding.authmeRealname)
+                  .catch(() => null)
+              : Promise.resolve(null),
+          ]);
+
+          return {
+            binding: {
+              authmeUsername: binding.authmeUsername,
+              authmeRealname: binding.authmeRealname,
+              boundAt: binding.boundAt,
+              ip: account?.ip ?? null,
+              regip: account?.regip ?? null,
+              lastlogin: account?.lastlogin ?? null,
+              regdate: account?.regdate ?? null,
+            } as AuthmeBindingSnapshot,
+            luckperms: this.buildLuckpermsSnapshot(
+              binding.authmeUsername,
+              binding.authmeRealname,
+              luckperms,
+            ),
+          };
+        } catch {
+          return fallback;
+        }
+      }),
+    );
+
+    return {
+      bindings: results.map((entry) => entry.binding),
+      luckperms: results.map((entry) => entry.luckperms),
+    };
+  }
+
+  private buildLuckpermsSnapshot(
+    authmeUsername: string,
+    authmeRealname: string | null,
+    player: LuckpermsPlayer | null,
+  ): LuckpermsSnapshot {
+    const trimmedRealname =
+      typeof authmeRealname === 'string' && authmeRealname.trim().length > 0
+        ? authmeRealname.trim()
+        : null;
+    const resolvedUsername =
+      typeof player?.username === 'string' && player.username.length > 0
+        ? player.username
+        : (trimmedRealname ?? authmeUsername);
+    const groups = player?.groups ?? [];
+    return {
+      authmeUsername,
+      username: resolvedUsername,
+      uuid: player?.uuid ?? null,
+      primaryGroup: player?.primaryGroup ?? null,
+      groups,
+      synced: Boolean(player),
+    };
   }
 
   private normalizeEmptyToNull(value?: string) {

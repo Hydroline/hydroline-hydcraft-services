@@ -22,20 +22,18 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   (e: 'add'): void
-  (e: 'unbind', username: string): void
+  (e: 'unbind', payload: { username: string; realname?: string | null }): void
 }>()
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-3">
     <div class="flex items-center justify-between">
-      <h3 class="px-1 text-lg text-slate-600 dark:text-slate-300">
-        账户绑定
-      </h3>
+      <h3 class="px-1 text-lg text-slate-600 dark:text-slate-300">账户绑定</h3>
       <div>
         <UButton
           size="sm"
-          color="primary"
+          variant="ghost"
           :loading="props.loading"
           @click="emit('add')"
           >添加绑定</UButton
@@ -43,108 +41,186 @@ const emit = defineEmits<{
       </div>
     </div>
 
-    <div
-      v-if="props.bindings.length === 0"
-      class="rounded-xl border border-dashed border-slate-200/70 px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
-    >
-      尚未绑定 AuthMe 账号，点击右上方“添加绑定”以绑定账号。
+    <div v-if="props.loading" class="space-y-3">
+      <div
+        v-for="n in 2"
+        :key="n"
+        class="rounded-xl border border-slate-200/60 bg-white p-4 dark:border-slate-800/60 dark:bg-slate-700/60"
+      >
+        <div class="flex items-center gap-3">
+          <USkeleton class="h-8 w-8 rounded" animated />
+          <div class="flex-1 space-y-2">
+            <USkeleton class="h-4 w-32" animated />
+            <USkeleton class="h-3 w-24" animated />
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+          <USkeleton v-for="m in 3" :key="m" class="h-3 w-full" animated />
+        </div>
+        <div class="mt-4 space-y-2">
+          <USkeleton class="h-3 w-16" animated />
+          <div class="flex flex-wrap gap-2">
+            <USkeleton v-for="k in 3" :key="k" class="h-6 w-16" animated />
+          </div>
+        </div>
+        <div class="mt-4 flex items-center gap-2">
+          <USkeleton class="h-9 flex-1 rounded" animated />
+        </div>
+      </div>
     </div>
+    <div v-else class="space-y-3">
+      <div
+        v-if="props.bindings.length === 0"
+        class="rounded-xl border border-dashed border-slate-200/70 px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
+      >
+        尚未绑定 AuthMe 账号，点击右上方“添加绑定”以绑定账号。
+      </div>
 
-    <div
-      v-for="b in props.bindings"
-      :key="b.username"
-      class="rounded-xl p-4 bg-white dark:bg-slate-700/60 border border-slate-200/60 dark:border-slate-800/60"
-    >
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <div class="text-2xl font-medium text-slate-700 dark:text-slate-200">
-            <div>
+      <div
+        v-for="b in props.bindings"
+        :key="b.username"
+        class="rounded-xl border border-slate-200/60 bg-white p-4 dark:border-slate-800/60 dark:bg-slate-700/60"
+      >
+        <div class="flex flex-col">
+          <div
+            class="flex gap-2 text-lg font-medium text-slate-700 dark:text-slate-200"
+          >
+            <div class="flex-1 flex items-center gap-2">
               <span>
                 <img
-                  :src="'https://mc-heads.net/avatar/' + b.realname + '/64'"
-                  class="inline-blockrounded"
+                  :src="'https://mc-heads.net/avatar/' + b.username"
+                  class="block h-6 w-6 rounded"
                 />
               </span>
-              <span>
-                {{ b.realname }}
+              <span class="leading-none">
+                {{ b.realname || b.username }}
               </span>
             </div>
-            <div v-if="b.boundAt" class="text-xs">
-              绑定时间：{{
-                typeof b.boundAt === 'string'
-                  ? new Date(b.boundAt).toLocaleString()
-                  : b.boundAt?.toLocaleString?.()
-              }}
+
+            <div>
+              <UTooltip text="解除绑定">
+                <UButton
+                  type="button"
+                  color="error"
+                  variant="ghost"
+                  :loading="props.loading"
+                  icon="i-lucide-link-2-off"
+                  aria-label="解除绑定"
+                  @click="
+                    emit('unbind', {
+                      username: b.username,
+                      realname: b.realname,
+                    })
+                  "
+                />
+              </UTooltip>
             </div>
           </div>
           <div
-            class="mt-2 grid grid-cols-1 gap-1 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-2 md:grid-cols-3"
+            class="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2 md:grid-cols-3"
           >
+            <div v-if="b.boundAt" class="text-xs">
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                绑定时间
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{
+                  typeof b.boundAt === 'string'
+                    ? new Date(b.boundAt).toLocaleString()
+                    : b.boundAt?.toLocaleString?.()
+                }}
+              </div>
+            </div>
+
             <div v-if="b.lastlogin">
-              上次登录：{{ new Date(b.lastlogin).toLocaleString() }}
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                上次登录
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{ new Date(b.lastlogin).toLocaleString() }}
+              </div>
             </div>
+
             <div v-if="b.regdate">
-              注册时间：{{ new Date(b.regdate).toLocaleString() }}
+              <div class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500">
+                注册时间
+                <UTooltip text="服务器登录数据库在2023年7月重置过一次，此前已经登录服务器注册过的玩家的信息已丢失">
+                  <button
+                    type="button"
+                    class="text-slate-400 transition hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:text-slate-300"
+                  >
+                    <UIcon name="i-lucide-info" class="h-3 w-3" />
+                  </button>
+                </UTooltip>
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{ new Date(b.regdate).toLocaleString() }}
+              </div>
             </div>
+
             <div v-if="b.ip">
-              上次登录 IP：{{ b.ip }}
-              <span
-                v-if="b.ipLocation"
-                class="text-slate-500 dark:text-slate-400"
-                >（{{ b.ipLocation }}）</span
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                上次登录 IP
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
               >
+                {{ b.ip }}
+                <span class="block text-[10px] leading-none">
+                  {{ b.ipLocation }}
+                </span>
+              </div>
             </div>
+
             <div v-if="b.regip">
-              注册 IP：{{ b.regip }}
-              <span
-                v-if="b.regipLocation"
-                class="text-slate-500 dark:text-slate-400"
-                >（{{ b.regipLocation }}）</span
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                注册 IP
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
               >
+                {{ b.regip }}
+                <span class="block text-[10px] leading-none">
+                  {{ b.regipLocation }}
+                </span>
+              </div>
             </div>
-          </div>
-          <div class="mt-3">
-            <p class="text-xs uppercase tracking-wide text-slate-500">
-              权限组
-            </p>
+
             <div
-              v-if="b.permissions?.primaryGroup || b.permissions?.groups?.length"
-              class="mt-2 flex flex-wrap gap-2"
+              v-if="
+                b.permissions?.primaryGroup || b.permissions?.groups?.length
+              "
             >
-              <UBadge
-                v-if="b.permissions?.primaryGroup"
-                color="primary"
-                variant="solid"
-                >主组 · {{ b.permissions.primaryGroup }}</UBadge
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                权限组
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
               >
-              <UBadge
-                v-for="(group, index) in b.permissions?.groups ?? []"
-                :key="group.name + index"
-                color="neutral"
-                variant="soft"
-                :title="group.detail ?? undefined"
-              >
-                {{ group.name }}
-              </UBadge>
+                <UBadge
+                  v-if="b.permissions?.primaryGroup"
+                  color="primary"
+                  variant="solid"
+                  >主组 · {{ b.permissions.primaryGroup }}</UBadge
+                >
+                <UBadge
+                  v-for="(group, index) in b.permissions?.groups ?? []"
+                  :key="group.name + index"
+                  color="neutral"
+                  variant="soft"
+                  :title="group.detail ?? undefined"
+                >
+                  {{ group.name }}
+                </UBadge>
+              </div>
             </div>
-            <p
-              v-else
-              class="mt-2 text-xs text-slate-500 dark:text-slate-400"
-            >
-              尚未同步 LuckPerms 权限数据。
-            </p>
           </div>
-        </div>
-        <div class="flex-1 flex items-center gap-2">
-          <UButton
-            class="w-full whitespace-nowrap"
-            type="button"
-            color="primary"
-            variant="outline"
-            :loading="props.loading"
-            @click="emit('unbind', b.username)"
-            >解除绑定</UButton
-          >
         </div>
       </div>
     </div>

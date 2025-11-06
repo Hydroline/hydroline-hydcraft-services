@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 // UserAvatar 不再在本视图中直接使用
@@ -19,7 +20,7 @@ import { useFeatureStore } from '@/stores/feature'
 import { useUiStore } from '@/stores/ui'
 import { ApiError } from '@/utils/api'
 import {
-  normalizeLuckpermsBinding,
+  normalizeLuckpermsBindings,
   type NormalizedLuckpermsBinding,
 } from '@/utils/luckperms'
 
@@ -185,69 +186,146 @@ const hasChanges = computed(() => serializeForm() !== initialSnapshot.value)
 // 顶部标题已移除，无需 currentSection
 
 const bindingEnabled = computed(() => featureStore.flags.authmeBindingEnabled)
-const authmeBindings = computed(() => {
-  const user = auth.user as Record<string, any> | null
-  const single = (user as any)?.authmeBinding ?? null
-  const many = (user as any)?.authmeBindings ?? null
-  if (Array.isArray(many)) {
-    return many.map((b: any) => ({
-      username: b.authmeUsername,
-      realname: b.authmeRealname ?? null,
-      boundAt: b.boundAt ?? null,
-      ip: b.ip ?? null,
-      ipLocation: normalizeLocationText(
-        (b.ip_location ?? b.ipLocation ?? null) as string | null,
-      ),
-      regip: b.regip ?? null,
-      regipLocation: normalizeLocationText(
-        (b.regip_location ?? b.regipLocation ?? null) as string | null,
-      ),
-      lastlogin: b.lastlogin ?? null,
-      regdate: b.regdate ?? null,
-      permissions: extractLuckperms(b),
-    }))
+
+function getObjectValue(source: unknown, key: string): unknown {
+  if (!source || typeof source !== 'object') {
+    return null
   }
-  if (single) {
-    return [
-      {
-        username: single.authmeUsername,
-        realname: single.authmeRealname ?? null,
-        boundAt: single.boundAt ?? null,
-        ip: single.ip ?? null,
-        ipLocation: normalizeLocationText(
-          (single.ip_location ?? single.ipLocation ?? null) as string | null,
-        ),
-        regip: single.regip ?? null,
-        regipLocation: normalizeLocationText(
-          (single.regip_location ?? single.regipLocation ?? null) as string | null,
-        ),
-        lastlogin: single.lastlogin ?? null,
-        regdate: single.regdate ?? null,
-        permissions: extractLuckperms(single),
-      },
-    ]
+  return (source as Record<string, unknown>)[key] ?? null
+}
+
+function normalizeUsername(value: unknown): string {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : ''
+  }
+  if (typeof value === 'number') {
+    const converted = String(value).trim()
+    return converted.length > 0 ? converted : ''
+  }
+  return ''
+}
+
+function usernameKey(value: unknown): string {
+  const username = normalizeUsername(value)
+  return username ? username.toLowerCase() : ''
+}
+
+type BindingViewModel = {
+  username: string
+  realname: string | null
+  boundAt: string | Date | null
+  ip: string | null
+  ipLocation: string | null
+  regip: string | null
+  regipLocation: string | null
+  lastlogin: number | null
+  regdate: number | null
+  permissions: {
+    primaryGroup: string | null
+    groups: NormalizedLuckpermsBinding['groups']
+  } | null
+}
+const rawAuthmeBindings = computed<Record<string, unknown>[]>(() => {
+  const user = auth.user as unknown
+  const many = getObjectValue(user, 'authmeBindings')
+  if (Array.isArray(many) && many.length > 0) {
+    return many.filter((entry): entry is Record<string, unknown> => {
+      return Boolean(entry) && typeof entry === 'object'
+    })
+  }
+  const single = getObjectValue(user, 'authmeBinding')
+  if (single && typeof single === 'object') {
+    return [single as Record<string, unknown>]
   }
   return []
 })
 
-function extractLuckperms(entry: Record<string, any> | null): {
-  primaryGroup: string | null
-  groups: NormalizedLuckpermsBinding['groups']
-} | null {
-  if (!entry) return null
-  try {
-    const normalized = normalizeLuckpermsBinding(entry)
-    if (!normalized.primaryGroup && normalized.groups.length === 0) {
-      return null
-    }
-    return {
-      primaryGroup: normalized.primaryGroup,
-      groups: normalized.groups,
-    }
-  } catch {
-    return null
+const luckpermsSnapshotMap = computed(() => {
+  const user = auth.user as unknown
+  const map = new Map<string, Record<string, unknown> | null>()
+  const raw = getObjectValue(user, 'luckperms')
+  if (!Array.isArray(raw)) {
+    return map
   }
-}
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const record = entry as Record<string, unknown>
+    const key = usernameKey(
+      record.authmeUsername ?? record.username ?? record['authme_username'] ?? null,
+    )
+    if (!key) continue
+    map.set(key, record)
+  }
+  return map
+})
+
+const normalizedBindings = computed(() => {
+  if (rawAuthmeBindings.value.length === 0) {
+    return [] as NormalizedLuckpermsBinding[]
+  }
+  return normalizeLuckpermsBindings(rawAuthmeBindings.value, {
+    luckpermsMap: luckpermsSnapshotMap.value,
+  })
+})
+
+const normalizedBindingMap = computed(() => {
+  const map = new Map<string, NormalizedLuckpermsBinding>()
+  for (const binding of normalizedBindings.value) {
+    const key = usernameKey(binding.username)
+    if (key) {
+      map.set(key, binding)
+    }
+  }
+  return map
+})
+
+const authmeBindings = computed<BindingViewModel[]>(() => {
+  if (rawAuthmeBindings.value.length === 0) {
+    return []
+  }
+  const normalizedMap = normalizedBindingMap.value
+  const result: BindingViewModel[] = []
+  for (const entry of rawAuthmeBindings.value) {
+    const username = normalizeUsername(entry.authmeUsername ?? entry.username ?? null)
+    if (!username) {
+      continue
+    }
+    const key = username.toLowerCase()
+    const normalized = normalizedMap.get(key)
+    const rawRealname = entry.authmeRealname ?? entry.realname ?? null
+    const realname =
+      typeof rawRealname === 'string' && rawRealname.trim().length > 0
+        ? rawRealname.trim()
+        : normalized?.realname ?? null
+
+    const permissions =
+      normalized && (normalized.primaryGroup || normalized.groups.length)
+        ? {
+            primaryGroup: normalized.primaryGroup,
+            groups: normalized.groups,
+          }
+        : null
+
+    result.push({
+      username,
+      realname,
+      boundAt: (entry.boundAt ?? entry.bound_at ?? null) as string | Date | null,
+      ip: typeof entry.ip === 'string' ? entry.ip : null,
+      ipLocation: normalizeLocationText(
+        (entry.ip_location ?? entry.ipLocation ?? null) as string | null,
+      ),
+      regip: typeof entry.regip === 'string' ? entry.regip : null,
+      regipLocation: normalizeLocationText(
+        (entry.regip_location ?? entry.regipLocation ?? null) as string | null,
+      ),
+      lastlogin: typeof entry.lastlogin === 'number' ? entry.lastlogin : null,
+      regdate: typeof entry.regdate === 'number' ? entry.regdate : null,
+      permissions,
+    })
+  }
+  return result
+})
 
 const avatarUrl = computed(() => {
   const user = auth.user as Record<string, any> | null
@@ -452,8 +530,8 @@ async function submitAuthmeBinding() {
   }
 }
 
-function requestUnbindAuthme(username: string) {
-  authmeUnbindForm.username = username
+function requestUnbindAuthme(payload: { username: string; realname?: string | null }) {
+  authmeUnbindForm.username = payload.username
   authmeUnbindForm.password = ''
   unbindError.value = ''
   showUnbindDialog.value = true
@@ -850,7 +928,7 @@ function confirmLeave() {
         :class="{ 'pointer-events-none opacity-60': loading && !saving }"
         @submit.prevent="handleSave"
       >
-        <div class="flex flex-col gap-2 relative xl:gap-6">
+        <div class="flex flex-col gap-2 relative xl:flex-row xl:gap-6">
           <ProfileSidebar
             :items="sections"
             :active-id="activeSection"

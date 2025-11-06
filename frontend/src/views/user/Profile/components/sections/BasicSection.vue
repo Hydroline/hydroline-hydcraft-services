@@ -269,12 +269,12 @@ defineExpose({ forceEdit })
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
         >
-          显示名称
+          名称
         </div>
         <div class="flex-1">
           <UInput
@@ -284,14 +284,55 @@ defineExpose({ forceEdit })
             class="w-full"
             @update:model-value="(v: any) => update('displayName', v)"
           />
-          <p v-else class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            v-else 
+            class="text-sm"
+            :class="props.modelValue.displayName ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.modelValue.displayName || '未填写' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-start md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+      >
+        <div
+          class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
+        >
+          <span class="inline-flex items-center gap-1">
+            用户名
+            <UTooltip text="用户名每30天仅可修改一次">
+              <button
+                type="button"
+                class="text-slate-400 transition hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:text-slate-300"
+              >
+                <UIcon name="i-lucide-info" class="h-4 w-4" />
+                <span class="sr-only">用户名修改限制说明</span>
+              </button>
+            </UTooltip>
+          </span>
+        </div>
+        <div class="flex-1">
+          <UInput
+            v-if="editingBasic"
+            :model-value="props.modelValue.name"
+            placeholder="例如：aurora"
+            class="w-full"
+            @update:model-value="(v: any) => update('name', v)"
+          />
+          <p 
+            v-else 
+            class="text-sm"
+            :class="props.modelValue.name ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
+            {{ props.modelValue.name || '未填写' }}
+          </p>
+        </div>
+      </div>
+
+      <div
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -319,29 +360,7 @@ defineExpose({ forceEdit })
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
-      >
-        <div
-          class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
-        >
-          用户名
-        </div>
-        <div class="flex-1">
-          <UInput
-            v-if="editingBasic"
-            :model-value="props.modelValue.name"
-            placeholder="例如：aurora"
-            class="w-full"
-            @update:model-value="(v: any) => update('name', v)"
-          />
-          <p v-else class="text-sm text-slate-900 dark:text-slate-100">
-            {{ props.modelValue.name || '未填写' }}
-          </p>
-        </div>
-      </div>
-
-      <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -356,14 +375,18 @@ defineExpose({ forceEdit })
             class="w-full"
             @update:model-value="(v: any) => update('email', v)"
           />
-          <p v-else class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            v-else 
+            class="text-sm"
+            :class="props.modelValue.email ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.modelValue.email || '未填写' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -380,14 +403,18 @@ defineExpose({ forceEdit })
             class="w-full"
             @update:model-value="(v: any) => update('gender', v)"
           />
-          <p v-else class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            v-else 
+            class="text-sm"
+            :class="props.modelValue.gender !== 'UNSPECIFIED' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ genderLabel }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -434,14 +461,18 @@ defineExpose({ forceEdit })
               </div>
             </template>
           </UPopover>
-          <p v-else class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            v-else 
+            class="text-sm"
+            :class="props.modelValue.birthday ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.modelValue.birthday || '未填写' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -459,14 +490,18 @@ defineExpose({ forceEdit })
             :filter-fields="['label', 'value']"
             @update:model-value="(v: any) => update('timezone', v)"
           />
-          <p v-else class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            v-else 
+            class="text-sm"
+            :class="props.modelValue.timezone ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.modelValue.timezone || '未填写' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -485,7 +520,8 @@ defineExpose({ forceEdit })
           />
           <p
             v-else
-            class="flex items-center text-sm text-slate-900 dark:text-slate-100"
+            class="flex items-center text-sm"
+            :class="props.modelValue.locale ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
           >
             {{ languageLabel }}
             <UBadge
@@ -500,7 +536,7 @@ defineExpose({ forceEdit })
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -518,7 +554,8 @@ defineExpose({ forceEdit })
           />
           <p
             v-else
-            class="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-line"
+            class="text-sm whitespace-pre-line"
+            :class="props.modelValue.motto ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
           >
             {{ props.modelValue.motto || '未填写' }}
           </p>
@@ -560,7 +597,7 @@ defineExpose({ forceEdit })
       </div>
 
       <div
-        class="flex flex-col gap-3 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -595,7 +632,11 @@ defineExpose({ forceEdit })
               class="w-full"
               @update:model-value="(v: any) => update('phone', v)"
             />
-            <p v-else class="text-sm text-slate-900 dark:text-slate-100">
+            <p 
+              v-else 
+              class="text-sm"
+              :class="props.modelValue.phone ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            >
               {{ props.modelValue.phone || '未填写' }}
             </p>
           </div>
@@ -612,7 +653,7 @@ defineExpose({ forceEdit })
       </template>
       <template v-else>
         <div
-          class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+          class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
         >
           <div
             class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -620,15 +661,26 @@ defineExpose({ forceEdit })
             常驻地区
           </div>
           <div class="flex-1">
-            <div class="text-sm text-slate-900 dark:text-slate-100 space-x-2">
-              <span>{{ countryName }}</span>
-              <span v-if="props.modelValue.region?.province">{{
+            <div class="text-sm space-x-2">
+              <span 
+                :class="countryName !== '未填写' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+              >{{ countryName }}</span>
+              <span 
+                v-if="props.modelValue.region?.province"
+                :class="props.modelValue.region?.province !== '未填写' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+              >{{
                 props.modelValue.region?.province || '未填写'
               }}</span>
-              <span v-if="props.modelValue.region?.city">{{
+              <span 
+                v-if="props.modelValue.region?.city"
+                :class="props.modelValue.region?.city !== '未填写' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+              >{{
                 props.modelValue.region?.city || '未填写'
               }}</span>
-              <span v-if="props.modelValue.region?.district">{{
+              <span 
+                v-if="props.modelValue.region?.district"
+                :class="props.modelValue.region?.district !== '未填写' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+              >{{
                 props.modelValue.region?.district || '未填写'
               }}</span>
             </div>
@@ -637,7 +689,7 @@ defineExpose({ forceEdit })
       </template>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -657,14 +709,18 @@ defineExpose({ forceEdit })
               @update:model-value="(v: any) => update('addressLine1', v)"
             />
           </div>
-          <p v-else class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            v-else 
+            class="text-sm"
+            :class="props.modelValue.addressLine1 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.modelValue.addressLine1 || '未填写' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -684,7 +740,11 @@ defineExpose({ forceEdit })
               @update:model-value="(v: any) => update('postalCode', v)"
             />
           </div>
-          <p v-else class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            v-else 
+            class="text-sm"
+            :class="props.modelValue.postalCode ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.modelValue.postalCode || '未填写' }}
           </p>
         </div>
@@ -695,52 +755,79 @@ defineExpose({ forceEdit })
     <div class="space-y-3">
       <h3 class="px-1 text-lg text-slate-600 dark:text-slate-300">账号活动</h3>
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
-          class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
+          class="w-full flex items-center gap-1 text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
         >
-          最后同步
+          最近同步时间
+
+          <UTooltip text="用户资料最近一次的更新时间">
+            <button
+              type="button"
+              class="text-slate-400 transition hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:text-slate-300"
+            >
+              <UIcon name="i-lucide-info" class="h-4 w-4" />
+            </button>
+          </UTooltip>
         </div>
         <div class="flex-1">
-          <p class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            class="text-sm"
+            :class="props.meta?.lastSyncedText && props.meta.lastSyncedText !== '尚未同步' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.meta?.lastSyncedText || '尚未同步' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
         >
-          注册于
+          注册时间
         </div>
         <div class="flex-1">
-          <p class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            class="text-sm"
+            :class="props.meta?.registeredText && props.meta.registeredText !== '未知' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.meta?.registeredText || '未知' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
-          class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
+          class="w-full flex items-center gap-1 text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
         >
-          加入于
+          入服时间
+
+          <UTooltip text="新用户默认为注册时间，老用户由管理员根据入群时间设置">
+            <button
+              type="button"
+              class="text-slate-400 transition hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:text-slate-300"
+            >
+              <UIcon name="i-lucide-info" class="h-4 w-4" />
+            </button>
+          </UTooltip>
         </div>
         <div class="flex-1">
-          <p class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            class="text-sm"
+            :class="props.meta?.joinedText && props.meta.joinedText !== '未知' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.meta?.joinedText || '未知' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -748,14 +835,17 @@ defineExpose({ forceEdit })
           最近登录
         </div>
         <div class="flex-1">
-          <p class="text-sm text-slate-900 dark:text-slate-100">
+          <p 
+            class="text-sm"
+            :class="props.meta?.lastLoginText && props.meta.lastLoginText !== '未知' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
             {{ props.meta?.lastLoginText || '未知' }}
           </p>
         </div>
       </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -763,8 +853,15 @@ defineExpose({ forceEdit })
           最近登录 IP
         </div>
         <div class="flex-1">
-          <p class="text-sm text-slate-900 dark:text-slate-100">
-            {{ props.meta?.lastLoginIpDisplay || props.meta?.lastLoginIp || '未知' }}
+          <p 
+            class="text-sm"
+            :class="(props.meta?.lastLoginIpDisplay || props.meta?.lastLoginIp) && (props.meta?.lastLoginIpDisplay || props.meta?.lastLoginIp) !== '未知' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+          >
+            {{
+              props.meta?.lastLoginIpDisplay ||
+              props.meta?.lastLoginIp ||
+              '未知'
+            }}
           </p>
         </div>
       </div>

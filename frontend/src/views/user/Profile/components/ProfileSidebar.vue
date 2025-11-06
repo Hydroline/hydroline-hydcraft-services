@@ -24,8 +24,8 @@ function handleClick(id: string) {
 </script>
 
 <template>
-  <aside class="shrink-0 rounded-2xl p-4 xl:w-55 xl:absolute xl:right-full">
-    <nav class="flex flex-row gap-2 overflow-x-auto xl:flex-col">
+  <aside class="shrink-0 rounded-2xl p-4 xl:w-55">
+    <nav class="flex flex-row gap-2 overflow-x-auto xl:flex-col xl:sticky xl:top-24">
       <button
         v-for="item in props.items"
         :key="item.id"
