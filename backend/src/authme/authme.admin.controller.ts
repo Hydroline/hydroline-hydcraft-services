@@ -9,7 +9,7 @@ import { AuthFeatureService } from './auth-feature.service';
 import { UpdateAuthmeConfigDto } from './dto/update-authme-config.dto';
 import { UpdateAuthmeFeatureDto } from './dto/update-authme-feature.dto';
 
-@Controller('api/authme/admin')
+@Controller('authme/admin')
 @UseGuards(AuthGuard, PermissionsGuard)
 @RequirePermissions(DEFAULT_PERMISSIONS.MANAGE_CONFIG)
 export class AuthmeAdminController {

@@ -197,7 +197,7 @@ export const useAuthStore = defineStore('auth', {
         const result = await apiFetch<{
           tokens: { accessToken: string | null; refreshToken: string | null }
           user: RawUser
-        }>('/api/auth/register', {
+        }>('/auth/register', {
           method: 'POST',
           body: payload,
         })
@@ -215,7 +215,7 @@ export const useAuthStore = defineStore('auth', {
         const result = await apiFetch<{
           tokens: { accessToken: string | null; refreshToken: string | null }
           user: RawUser
-        }>('/api/auth/login', {
+        }>('/auth/login', {
           method: 'POST',
           body: payload,
         })
@@ -351,7 +351,7 @@ export const useAuthStore = defineStore('auth', {
       if (!this.token) {
         throw new ApiError(401, '未登录')
       }
-      const result = await apiFetch<{ user: RawUser }>('/api/authme/bind', {
+      const result = await apiFetch<{ user: RawUser }>('/authme/bind', {
         method: 'POST',
         token: this.token,
         body: payload,
@@ -363,7 +363,7 @@ export const useAuthStore = defineStore('auth', {
       if (!this.token) {
         throw new ApiError(401, '未登录')
       }
-      const result = await apiFetch<{ user: RawUser }>('/api/authme/bind', {
+      const result = await apiFetch<{ user: RawUser }>('/authme/bind', {
         method: 'DELETE',
         token: this.token,
         body: payload,

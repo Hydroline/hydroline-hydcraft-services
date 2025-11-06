@@ -8,7 +8,7 @@ import { rethrowAuthmeError } from './helpers/authme-error.helper';
 import { AuthmeRateLimitGuard } from '../authme/authme-rate-limit.guard';
 import { buildRequestContext } from './helpers/request-context.helper';
 
-@Controller('api/authme')
+@Controller('authme')
 export class ApiAuthmeController {
   constructor(private readonly authService: AuthService) {}
 

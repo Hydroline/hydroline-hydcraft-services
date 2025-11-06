@@ -134,7 +134,7 @@ async function fetchSystemStats() {
   try {
     const result = await apiFetch<{
       system: { uptimeSeconds: number; timestamp: string }
-    }>('/api/authme/admin/overview', {
+    }>('/authme/admin/overview', {
       token: authStore.token,
     })
     systemStats.value = result.system

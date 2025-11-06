@@ -7,7 +7,7 @@ import { rethrowAuthmeError } from './helpers/authme-error.helper';
 import { AuthmeService } from '../authme/authme.service';
 import { buildRequestContext } from './helpers/request-context.helper';
 
-@Controller('api/auth')
+@Controller('auth')
 export class ApiAuthController {
   constructor(
     private readonly authService: AuthService,

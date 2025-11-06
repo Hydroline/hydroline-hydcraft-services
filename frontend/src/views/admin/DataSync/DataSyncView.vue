@@ -111,7 +111,7 @@ async function loadOverview() {
     featureFlags: AuthmeFeatureForm
     featureMeta: { version: number; updatedAt: string } | null
     system: { uptimeSeconds: number; timestamp: string }
-  }>('/api/authme/admin/overview', {
+  }>('/authme/admin/overview', {
     token: authStore.token,
   })
   health.value = result.health
@@ -142,7 +142,7 @@ async function saveConfig() {
   savingConfig.value = true
   uiStore.startLoading()
   try {
-    await apiFetch('/api/authme/admin/config', {
+    await apiFetch('/authme/admin/config', {
       method: 'PATCH',
       token: authStore.token,
       body: configForm,
@@ -162,7 +162,7 @@ async function saveFeatures() {
   savingFeature.value = true
   uiStore.startLoading()
   try {
-    await apiFetch('/api/authme/admin/feature', {
+    await apiFetch('/authme/admin/feature', {
       method: 'PATCH',
       token: authStore.token,
       body: featureForm,

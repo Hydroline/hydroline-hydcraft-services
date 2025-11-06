@@ -7,7 +7,7 @@ import { DEFAULT_PERMISSIONS } from '../auth/roles.service';
 import { LuckpermsService } from './luckperms.service';
 import { UpdateLuckpermsConfigDto } from './dto/update-luckperms-config.dto';
 
-@Controller('api/luckperms/admin')
+@Controller('luckperms/admin')
 @UseGuards(AuthGuard, PermissionsGuard)
 @RequirePermissions(DEFAULT_PERMISSIONS.MANAGE_CONFIG)
 export class LuckpermsAdminController {

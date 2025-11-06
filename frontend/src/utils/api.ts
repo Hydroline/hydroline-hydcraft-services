@@ -32,7 +32,8 @@ export class ApiError<T = unknown> extends Error {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
+const API_PREFIX = '/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
 export function getApiBaseUrl() {
   return API_BASE_URL;
@@ -42,7 +43,19 @@ export function getApiBaseUrl() {
 const inflight = new Map<string, Promise<unknown>>();
 
 export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+  if (path.startsWith('http')) {
+    return performRequest<T>(path, options);
+  }
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const requestPath = normalizedPath.startsWith(`${API_PREFIX}/`) || normalizedPath === API_PREFIX
+    ? normalizedPath
+    : `${API_PREFIX}${normalizedPath}`;
+  const url = `${API_BASE_URL}${requestPath}`;
+  return performRequest<T>(url, options);
+}
+
+function performRequest<T>(url: string, options: ApiRequestOptions): Promise<T> {
   const method = options.method ?? 'GET';
   const isDedupeCandidate = method === 'GET' && !options.body && !options.noDedupe;
   const dedupeKey = isDedupeCandidate ? `${method}:${url}:${options.token ?? ''}` : null;
@@ -53,48 +66,48 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   }
 
   const doRequest = async (): Promise<T> => {
-  const init: RequestInit = {
-    method,
-    credentials: 'include',
-    signal: options.signal,
-    headers: {
-      Accept: 'application/json',
-      ...(options.headers ?? {}),
-    },
-  };
+    const init: RequestInit = {
+      method,
+      credentials: 'include',
+      signal: options.signal,
+      headers: {
+        Accept: 'application/json',
+        ...(options.headers ?? {}),
+      },
+    };
 
-  if (options.token) {
-    (init.headers as Record<string, string>)['Authorization'] = `Bearer ${options.token}`;
-  }
-
-  if (options.body instanceof FormData) {
-    init.body = options.body;
-  } else if (options.body) {
-    (init.headers as Record<string, string>)['Content-Type'] = 'application/json';
-    init.body = JSON.stringify(options.body);
-  }
-
-  const response = await fetch(url, init);
-  const contentType = response.headers.get('content-type');
-  const isJson = contentType?.includes('application/json');
-
-  if (!response.ok) {
-    if (isJson) {
-      const payload = (await response.json()) as Partial<ApiResponseEnvelope<T>>;
-      throw new ApiError(response.status, payload.message ?? '请求失败', payload.code, payload.data);
+    if (options.token) {
+      (init.headers as Record<string, string>)['Authorization'] = `Bearer ${options.token}`;
     }
-    throw new ApiError(response.status, response.statusText);
-  }
 
-  if (!isJson) {
-    return response as unknown as T;
-  }
+    if (options.body instanceof FormData) {
+      init.body = options.body;
+    } else if (options.body) {
+      (init.headers as Record<string, string>)['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(options.body);
+    }
 
-  const result = (await response.json()) as ApiResponseEnvelope<T> | T;
-  if (isEnvelope(result)) {
-    return result.data;
-  }
-  return result as T;
+    const response = await fetch(url, init);
+    const contentType = response.headers.get('content-type');
+    const isJson = contentType?.includes('application/json');
+
+    if (!response.ok) {
+      if (isJson) {
+        const payload = (await response.json()) as Partial<ApiResponseEnvelope<T>>;
+        throw new ApiError(response.status, payload.message ?? '请求失败', payload.code, payload.data);
+      }
+      throw new ApiError(response.status, response.statusText);
+    }
+
+    if (!isJson) {
+      return response as unknown as T;
+    }
+
+    const result = (await response.json()) as ApiResponseEnvelope<T> | T;
+    if (isEnvelope(result)) {
+      return result.data;
+    }
+    return result as T;
   };
 
   const promise = doRequest().finally(() => {

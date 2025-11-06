@@ -26,7 +26,7 @@ export const useFeatureStore = defineStore('features', {
       if (this.loaded && !force) return
       this.loading = true
       try {
-        const result = await apiFetch<AuthFeatureFlags>('/api/auth/features')
+        const result = await apiFetch<AuthFeatureFlags>('/auth/features')
         this.flags = result
         this.loaded = true
       } catch (error) {

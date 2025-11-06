@@ -93,7 +93,7 @@ async function loadOverview() {
     config: LuckpermsConfigForm | null
     configMeta: { version: number; updatedAt: string } | null
     system: { uptimeSeconds: number; timestamp: string }
-  }>('/api/luckperms/admin/overview', {
+  }>('/luckperms/admin/overview', {
     token: authStore.token,
   })
   health.value = result.health
@@ -122,7 +122,7 @@ async function saveConfig() {
   savingConfig.value = true
   uiStore.startLoading()
   try {
-    await apiFetch('/api/luckperms/admin/config', {
+    await apiFetch('/luckperms/admin/config', {
       method: 'PATCH',
       token: authStore.token,
       body: configForm,
