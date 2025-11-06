@@ -44,12 +44,17 @@ type AuthmeBindingSnapshot = {
   regdate: number | null;
 };
 
+type LuckpermsSnapshotGroup = LuckpermsPlayer['groups'][number] & {
+  displayName: string | null;
+};
+
 type LuckpermsSnapshot = {
   authmeUsername: string;
   username: string | null;
   uuid: string | null;
   primaryGroup: string | null;
-  groups: LuckpermsPlayer['groups'];
+  primaryGroupDisplayName: string | null;
+  groups: LuckpermsSnapshotGroup[];
   synced: boolean;
 };
 
@@ -1059,12 +1064,19 @@ export class UsersService {
       typeof player?.username === 'string' && player.username.length > 0
         ? player.username
         : (trimmedRealname ?? authmeUsername);
-    const groups = player?.groups ?? [];
+    const memberships = player?.groups ?? [];
+    const groups: LuckpermsSnapshotGroup[] = memberships.map((membership) => ({
+      ...membership,
+      displayName: this.luckpermsService.getGroupDisplayName(membership.group),
+    }));
+    const primaryGroup = player?.primaryGroup ?? null;
     return {
       authmeUsername,
       username: resolvedUsername,
       uuid: player?.uuid ?? null,
-      primaryGroup: player?.primaryGroup ?? null,
+      primaryGroup,
+      primaryGroupDisplayName:
+        this.luckpermsService.getGroupDisplayName(primaryGroup),
       groups,
       synced: Boolean(player),
     };

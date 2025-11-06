@@ -35,6 +35,17 @@ interface LuckpermsConfigForm {
   enabled: boolean
 }
 
+type GroupLabelPair = {
+  group: string
+  label: string
+}
+
+type EditableGroupLabelEntry = {
+  id: number
+  group: string
+  label: string
+}
+
 const loading = ref(true)
 const savingConfig = ref(false)
 const reloadingHealth = ref(false)
@@ -60,6 +71,99 @@ const configForm = reactive<LuckpermsConfigForm>({
   readonly: false,
   enabled: true,
 })
+
+let groupLabelSeed = 0
+function createGroupLabelEntry(
+  group = '',
+  label = '',
+): EditableGroupLabelEntry {
+  groupLabelSeed += 1
+  return {
+    id: groupLabelSeed,
+    group,
+    label,
+  }
+}
+
+const groupLabelEntries = ref<EditableGroupLabelEntry[]>([
+  createGroupLabelEntry(),
+])
+const groupLabelMeta = ref<{ version: number; updatedAt: string } | null>(null)
+const groupLabelBaseline = ref<GroupLabelPair[]>([])
+const groupLabelSignature = ref('[]')
+const savingGroupLabels = ref(false)
+
+const groupLabelDirty = computed(() => {
+  return (
+    serializeGroupLabelEntries(groupLabelEntries.value) !==
+    groupLabelSignature.value
+  )
+})
+
+function normalizeGroupLabelPayload(
+  entries: Array<{ group: string; label: string }>,
+): GroupLabelPair[] {
+  const map = new Map<string, string>()
+  for (const entry of entries) {
+    const group = typeof entry.group === 'string' ? entry.group.trim() : ''
+    const label = typeof entry.label === 'string' ? entry.label.trim() : ''
+    if (!group || !label) {
+      continue
+    }
+    map.set(group, label)
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([group, label]) => ({ group, label }))
+}
+
+function serializeGroupLabelEntries(entries: EditableGroupLabelEntry[]) {
+  const payload = entries.map((entry) => ({
+    group: entry.group,
+    label: entry.label,
+  }))
+  return JSON.stringify(normalizeGroupLabelPayload(payload))
+}
+
+function setGroupLabelEntriesFromServer(entries: GroupLabelPair[]) {
+  const normalized = normalizeGroupLabelPayload(entries)
+  groupLabelBaseline.value = normalized
+  groupLabelEntries.value =
+    normalized.length > 0
+      ? normalized.map((entry) => createGroupLabelEntry(entry.group, entry.label))
+      : [createGroupLabelEntry()]
+  groupLabelSignature.value = JSON.stringify(normalized)
+}
+
+function resetGroupLabels() {
+  setGroupLabelEntriesFromServer(groupLabelBaseline.value)
+}
+
+function addGroupLabelEntry() {
+  groupLabelEntries.value.push(createGroupLabelEntry())
+}
+
+function removeGroupLabelEntry(id: number) {
+  if (groupLabelEntries.value.length <= 1) {
+    groupLabelEntries.value = [createGroupLabelEntry()]
+    return
+  }
+  groupLabelEntries.value = groupLabelEntries.value.filter(
+    (entry) => entry.id !== id,
+  )
+  if (!groupLabelEntries.value.length) {
+    groupLabelEntries.value.push(createGroupLabelEntry())
+  }
+}
+
+function buildGroupLabelPayload() {
+  return normalizeGroupLabelPayload(
+    groupLabelEntries.value.map((entry) => ({
+      group: entry.group,
+      label: entry.label,
+    })),
+  )
+}
 
 const healthStatusText = computed(() => {
   if (!health.value) return '未知'
@@ -93,6 +197,7 @@ async function loadOverview() {
     config: LuckpermsConfigForm | null
     configMeta: { version: number; updatedAt: string } | null
     system: { uptimeSeconds: number; timestamp: string }
+    groupLabels: { entries: GroupLabelPair[]; meta: { version: number; updatedAt: string } | null } | null
   }>('/luckperms/admin/overview', {
     token: authStore.token,
   })
@@ -102,6 +207,13 @@ async function loadOverview() {
     applyConfig(result.config)
   }
   configMeta.value = result.configMeta
+  if (result.groupLabels) {
+    setGroupLabelEntriesFromServer(result.groupLabels.entries ?? [])
+    groupLabelMeta.value = result.groupLabels.meta ?? null
+  } else {
+    setGroupLabelEntriesFromServer([])
+    groupLabelMeta.value = null
+  }
 }
 
 async function initialize() {
@@ -133,6 +245,28 @@ async function saveConfig() {
     handleError(error, '更新 LuckPerms 配置失败')
   } finally {
     savingConfig.value = false
+    uiStore.stopLoading()
+  }
+}
+
+async function saveGroupLabels() {
+  if (!authStore.token || !groupLabelDirty.value) return
+  savingGroupLabels.value = true
+  uiStore.startLoading()
+  try {
+    await apiFetch('/luckperms/admin/group-labels', {
+      method: 'PATCH',
+      token: authStore.token,
+      body: {
+        entries: buildGroupLabelPayload(),
+      },
+    })
+    await loadOverview()
+    toastSuccess('权限组显示文本已更新')
+  } catch (error) {
+    handleError(error, '更新权限组显示文本失败')
+  } finally {
+    savingGroupLabels.value = false
     uiStore.stopLoading()
   }
 }
@@ -457,5 +591,113 @@ onMounted(() => {
         </form>
       </UCard>
     </div>
+
+    <UCard class="bg-white/80 dark:bg-slate-900/70">
+      <template #header>
+        <div
+          class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+        >
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+              权限组显示文本
+            </h2>
+            <p class="text-xs text-slate-600 dark:text-slate-300">
+              为 LuckPerms 权限组配置展示别名，前端将优先显示此映射。
+            </p>
+          </div>
+          <div class="flex flex-col items-end gap-2 md:flex-row md:items-center">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              <span v-if="groupLabelMeta"
+                >版本 {{ groupLabelMeta.version }} ·
+                {{ new Date(groupLabelMeta.updatedAt).toLocaleString() }}</span
+              >
+              <span v-else>尚未保存映射</span>
+            </p>
+            <div class="flex items-center gap-2">
+              <UButton
+                size="xs"
+                variant="ghost"
+                :disabled="!groupLabelDirty || savingGroupLabels"
+                @click="resetGroupLabels"
+              >
+                重置
+              </UButton>
+              <UButton
+                size="xs"
+                color="primary"
+                :loading="savingGroupLabels"
+                :disabled="!groupLabelDirty"
+                @click="saveGroupLabels"
+              >
+                保存映射
+              </UButton>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="space-y-4">
+        <div
+          v-for="(entry, index) in groupLabelEntries"
+          :key="entry.id"
+          class="rounded-xl border border-slate-200/70 p-4 dark:border-slate-700/70"
+        >
+          <div
+            class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400"
+          >
+            <span>映射 #{{ index + 1 }}</span>
+            <UButton
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              icon="i-lucide-trash-2"
+              :disabled="groupLabelEntries.length <= 1 || savingGroupLabels"
+              @click="removeGroupLabelEntry(entry.id)"
+            />
+          </div>
+          <div class="mt-3 grid gap-3 md:grid-cols-2">
+            <label
+              class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+            >
+              <span class="font-medium text-slate-700 dark:text-slate-200"
+                >权限组标识</span
+              >
+              <UInput
+                v-model="entry.group"
+                :disabled="savingGroupLabels"
+                placeholder="hydca1"
+              />
+            </label>
+            <label
+              class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+            >
+              <span class="font-medium text-slate-700 dark:text-slate-200"
+                >显示文本</span
+              >
+              <UInput
+                v-model="entry.label"
+                :disabled="savingGroupLabels"
+                placeholder="A1"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 pt-3 text-xs text-slate-500 dark:border-slate-700/70 dark:text-slate-400"
+        >
+          <span>留空显示文本时将使用原始权限组名称。</span>
+          <UButton
+            size="xs"
+            variant="ghost"
+            icon="i-lucide-plus"
+            :disabled="savingGroupLabels"
+            @click="addGroupLabelEntry"
+          >
+            添加映射
+          </UButton>
+        </div>
+      </div>
+    </UCard>
   </section>
 </template>

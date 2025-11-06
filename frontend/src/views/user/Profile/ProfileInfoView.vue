@@ -223,6 +223,7 @@ type BindingViewModel = {
   regdate: number | null
   permissions: {
     primaryGroup: string | null
+    primaryGroupDisplayName: string | null
     groups: NormalizedLuckpermsBinding['groups']
   } | null
 }
@@ -303,6 +304,7 @@ const authmeBindings = computed<BindingViewModel[]>(() => {
       normalized && (normalized.primaryGroup || normalized.groups.length)
         ? {
             primaryGroup: normalized.primaryGroup,
+            primaryGroupDisplayName: normalized.primaryGroupDisplayName,
             groups: normalized.groups,
           }
         : null

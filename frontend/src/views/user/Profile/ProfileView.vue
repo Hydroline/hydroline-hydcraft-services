@@ -53,6 +53,16 @@ function openLoginDialog() {
   ui.openLoginDialog()
 }
 
+function resolveGroupLabel(
+  name: string | null | undefined,
+  displayName: string | null | undefined,
+) {
+  if (displayName && name && displayName !== name) {
+    return `${displayName}（${name}）`
+  }
+  return displayName || name || ''
+}
+
 </script>
 
 <template>
@@ -199,11 +209,18 @@ function openLoginDialog() {
               class="mt-2 flex flex-wrap gap-2"
             >
               <UBadge
-                v-if="binding.primaryGroup"
+                v-if="binding.primaryGroup || binding.primaryGroupDisplayName"
                 color="primary"
                 variant="solid"
-                >主组 · {{ binding.primaryGroup }}</UBadge
               >
+                主组 ·
+                {{
+                  resolveGroupLabel(
+                    binding.primaryGroup,
+                    binding.primaryGroupDisplayName,
+                  )
+                }}
+              </UBadge>
               <UBadge
                 v-for="(group, index) in binding.groups"
                 :key="group.name + index"
@@ -211,7 +228,7 @@ function openLoginDialog() {
                 variant="soft"
                 :title="group.detail ?? undefined"
               >
-                {{ group.name }}
+                {{ resolveGroupLabel(group.name, group.displayName) }}
               </UBadge>
             </div>
             <p

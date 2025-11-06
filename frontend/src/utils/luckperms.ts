@@ -1,5 +1,6 @@
 export interface NormalizedLuckpermsGroup {
   name: string;
+  displayName: string | null;
   server: string | null;
   world: string | null;
   expiry: number | null;
@@ -12,6 +13,7 @@ export interface NormalizedLuckpermsBinding {
   realname: string | null;
   boundAt: string | Date | null;
   primaryGroup: string | null;
+  primaryGroupDisplayName: string | null;
   groups: NormalizedLuckpermsGroup[];
   luckpermsUsername: string | null;
   luckpermsUuid: string | null;
@@ -49,6 +51,10 @@ export function normalizeLuckpermsBinding(
     typeof luckpermsEntry?.['primaryGroup'] === 'string'
       ? (luckpermsEntry['primaryGroup'] as string)
       : null;
+  const primaryGroupDisplayName =
+    typeof luckpermsEntry?.['primaryGroupDisplayName'] === 'string'
+      ? normalizeNullableString(luckpermsEntry['primaryGroupDisplayName'])
+      : null;
 
   const groups = normalizeLuckpermsGroups(luckpermsEntry?.['groups'] ?? []);
 
@@ -65,6 +71,7 @@ export function normalizeLuckpermsBinding(
     realname: resolvedRealname ?? null,
     boundAt,
     primaryGroup,
+    primaryGroupDisplayName,
     groups,
     luckpermsUsername,
     luckpermsUuid: uuid,
@@ -120,9 +127,13 @@ export function normalizeLuckpermsGroups(
     const contexts = normalizeContexts(record['contexts'] ?? null);
     const expiryValue = record['expiry'] ?? null;
     const expiry = normalizeExpiry(expiryValue);
+    const displayName = normalizeNullableString(
+      record['displayName'] ?? record['label'],
+    );
 
     result.push({
       name,
+      displayName,
       server,
       world,
       contexts,

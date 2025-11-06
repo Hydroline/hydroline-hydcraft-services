@@ -14,6 +14,7 @@ const props = defineProps<{
     regdate?: number | null
     permissions?: {
       primaryGroup: string | null
+      primaryGroupDisplayName: string | null
       groups: NormalizedLuckpermsGroup[]
     } | null
   }>
@@ -24,6 +25,16 @@ const emit = defineEmits<{
   (e: 'add'): void
   (e: 'unbind', payload: { username: string; realname?: string | null }): void
 }>()
+
+function resolveGroupLabel(
+  name: string | null | undefined,
+  displayName: string | null | undefined,
+) {
+  if (displayName && name && displayName !== name) {
+    return `${displayName}（${name}）`
+  }
+  return displayName || name || ''
+}
 </script>
 
 <template>
@@ -204,11 +215,21 @@ const emit = defineEmits<{
                 class="text-base font-semibold text-slate-800 dark:text-slate-300"
               >
                 <UBadge
-                  v-if="b.permissions?.primaryGroup"
+                  v-if="
+                    b.permissions?.primaryGroup ||
+                    b.permissions?.primaryGroupDisplayName
+                  "
                   color="primary"
                   variant="solid"
-                  >主组 · {{ b.permissions.primaryGroup }}</UBadge
                 >
+                  主组 ·
+                  {{
+                    resolveGroupLabel(
+                      b.permissions?.primaryGroup ?? null,
+                      b.permissions?.primaryGroupDisplayName ?? null,
+                    )
+                  }}
+                </UBadge>
                 <UBadge
                   v-for="(group, index) in b.permissions?.groups ?? []"
                   :key="group.name + index"
@@ -216,7 +237,7 @@ const emit = defineEmits<{
                   variant="soft"
                   :title="group.detail ?? undefined"
                 >
-                  {{ group.name }}
+                  {{ resolveGroupLabel(group.name, group.displayName) }}
                 </UBadge>
               </div>
             </div>
