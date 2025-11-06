@@ -59,7 +59,7 @@ const menuGroups = computed<MenuGroup[]>(() => [
   },
   {
     key: 'sync',
-    label: '信息同步',
+    label: '信息状态',
     collapsible: true,
     defaultCollapsed: false,
     items: [
@@ -69,7 +69,7 @@ const menuGroups = computed<MenuGroup[]>(() => [
         icon: 'i-lucide-refresh-cw',
       },
       {
-        label: 'LuckPerms 管理',
+        label: 'LuckPerms 状态',
         to: '/admin/luckperms',
         icon: 'i-lucide-database',
       },
