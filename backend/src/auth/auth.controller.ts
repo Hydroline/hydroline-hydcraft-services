@@ -120,6 +120,102 @@ export class AuthController {
     return { user };
   }
 
+  // split: basic profile only
+  @Get('me/basic')
+  @UseGuards(AuthGuard)
+  async getCurrentUserBasic(@Req() req: Request) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    const user = await this.usersService.getSessionUser(userId);
+    // pick basic fields only
+    const picked = {
+      id: (user as any)?.id ?? null,
+      name: (user as any)?.name ?? null,
+      email: (user as any)?.email ?? null,
+      profile: (user as any)?.profile ?? null,
+      createdAt: (user as any)?.createdAt ?? null,
+      updatedAt: (user as any)?.updatedAt ?? null,
+      lastLoginAt: (user as any)?.lastLoginAt ?? null,
+      lastLoginIp: (user as any)?.lastLoginIp ?? null,
+      lastLoginIpLocation: (user as any)?.lastLoginIpLocation ?? (user as any)?.lastLoginIpLocationRaw ?? null,
+    };
+    return { user: picked };
+  }
+
+  @Patch('me/basic')
+  @UseGuards(AuthGuard)
+  async updateCurrentUserBasic(
+    @Req() req: Request,
+    @Body() dto: UpdateCurrentUserDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    const user = await this.usersService.updateCurrentUser(userId, dto);
+    return { user };
+  }
+
+  // split: minecraft bindings + luckperms
+  @Get('me/minecraft')
+  @UseGuards(AuthGuard)
+  async getCurrentUserMinecraft(@Req() req: Request) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    const user = await this.usersService.getSessionUser(userId);
+    const enrichedBindings = await this.enrichAuthmeBindings(
+      (user as Record<string, unknown>)?.['authmeBindings'],
+    );
+    return {
+      user: {
+        id: (user as any)?.id ?? null,
+        updatedAt: (user as any)?.updatedAt ?? null,
+        authmeBindings: enrichedBindings ?? null,
+        luckperms: (user as any)?.luckperms ?? undefined,
+      },
+    };
+  }
+
+  // split: sessions only (same shape as GET /auth/sessions)
+  @Get('me/sessions')
+  @UseGuards(AuthGuard)
+  async getCurrentUserSessions(@Req() req: Request) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    try {
+      await this.authService.touchSession(
+        req.sessionToken as string,
+        buildRequestContext(req),
+      );
+    } catch {}
+    const sessions = await this.authService.listUserSessions(userId);
+    const currentToken = req.sessionToken ?? null;
+    const enriched = await Promise.all(
+      sessions.map(async (session) => ({
+        session,
+        location: await this.ipLocationService.lookup(session.ipAddress),
+      })),
+    );
+    return {
+      sessions: enriched.map(({ session, location }) => ({
+        id: session.id,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        expiresAt: session.expiresAt,
+        ipAddress: session.ipAddress,
+        ipLocation: location?.display ?? null,
+        userAgent: session.userAgent,
+        isCurrent: session.token === currentToken,
+      })),
+    };
+  }
+
   @Get('sessions')
   @UseGuards(AuthGuard)
   async listSessions(@Req() req: Request) {

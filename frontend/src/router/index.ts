@@ -22,7 +22,25 @@ export const userRoutes: RouteRecordRaw[] = [
       {
         path: 'profile/info',
         name: 'profile.info',
-        component: () => import('@/views/user/Profile/ProfileInfoView.vue'),
+        redirect: { name: 'profile.info.basic' },
+        meta: { layout: 'user' },
+      },
+      {
+        path: 'profile/info/basic',
+        name: 'profile.info.basic',
+        component: () => import('@/views/user/Profile/ProfileInfoBasicView.vue'),
+        meta: { layout: 'user' },
+      },
+      {
+        path: 'profile/info/minecraft',
+        name: 'profile.info.minecraft',
+        component: () => import('@/views/user/Profile/ProfileInfoMinecraftView.vue'),
+        meta: { layout: 'user' },
+      },
+      {
+        path: 'profile/info/sessions',
+        name: 'profile.info.sessions',
+        component: () => import('@/views/user/Profile/ProfileInfoSessionsView.vue'),
         meta: { layout: 'user' },
       },
       {

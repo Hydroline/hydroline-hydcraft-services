@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
+import UAParser from 'ua-parser-js'
 
 const props = defineProps<{
   sessions: Array<{
@@ -29,9 +30,48 @@ function formatDate(value: string | Date | null | undefined) {
   return parsed.format('YYYY/MM/DD HH:mm:ss')
 }
 
-function formatUserAgent(value: string | null | undefined) {
-  if (!value) return '未知设备'
-  return value.length > 160 ? `${value.slice(0, 157)}...` : value
+function parseUserAgent(value: string | null | undefined) {
+  if (!value) {
+    return {
+      type: 'unknown' as const,
+      typeLabel: '未知',
+      os: '未知',
+      display: '未知设备',
+      icon: 'i-lucide-help-circle',
+    }
+  }
+  const parser = new UAParser(value)
+  const result = parser.getResult()
+  const rawType = result.device.type || undefined
+  let type: 'mobile' | 'tablet' | 'desktop' | 'unknown'
+  if (rawType === 'mobile') type = 'mobile'
+  else if (rawType === 'tablet') type = 'tablet'
+  else type = 'desktop'
+  const typeLabelMap: Record<string, string> = {
+    mobile: '手机',
+    tablet: '平板',
+    desktop: '桌面',
+    unknown: '未知',
+  }
+  const iconMap: Record<string, string> = {
+    mobile: 'i-lucide-smartphone',
+    tablet: 'i-lucide-tablet',
+    desktop: 'i-lucide-monitor',
+    unknown: 'i-lucide-help-circle',
+  }
+  const osName = result.os.name || '未知'
+  const display = `${typeLabelMap[type]}/${osName}`
+  return {
+    type,
+    typeLabel: typeLabelMap[type],
+    os: osName,
+    display,
+    icon: iconMap[type],
+  }
+}
+
+function deviceIcon(value: string | null | undefined) {
+  return parseUserAgent(value).icon
 }
 </script>
 
@@ -82,10 +122,14 @@ function formatUserAgent(value: string | null | undefined) {
               class="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-900 dark:text-slate-100 mb-0"
             >
               <div class="flex-1 flex items-center">
-                <div class="flex items-center">
-                  <span 
+                <div class="flex items-center gap-1">
+                  <span
                     class="text-lg"
-                    :class="session.ipAddress ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+                    :class="
+                      session.ipAddress
+                        ? 'text-slate-900 dark:text-slate-100'
+                        : 'text-slate-400 dark:text-slate-500'
+                    "
                     >{{ session.ipAddress || '未知 IP' }}
                   </span>
                   <span
@@ -120,8 +164,11 @@ function formatUserAgent(value: string | null | undefined) {
                 </UTooltip>
               </div>
             </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400">
-              {{ formatUserAgent(session.userAgent) }}
+            <div
+              class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"
+            >
+              <UIcon :name="deviceIcon(session.userAgent)" class="h-3" />
+              <span class="leading-none">{{ parseUserAgent(session.userAgent).display }}</span>
             </div>
             <div
               class="grid gap-1 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-3"
