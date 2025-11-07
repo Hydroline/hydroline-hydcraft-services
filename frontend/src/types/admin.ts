@@ -58,6 +58,11 @@ export interface AdminUserDetail extends AdminUserListItem {
     extra?: unknown;
   }) | null;
   authmeBindings: AdminAuthmeBindingEntry[];
+  permissionLabels?: Array<{
+    id: string;
+    labelId: string;
+    label: AdminPermissionLabelEntry;
+  }>;
 }
 
 export interface AdminAttachmentSummary {
@@ -112,4 +117,87 @@ export interface AdminPermissionEntry {
   metadata: unknown;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminPermissionLabelEntry {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  color?: string | null;
+  permissions: Array<{
+    id: string;
+    permission: AdminPermissionEntry;
+  }>;
+}
+
+export interface AdminBindingHistoryEntry {
+  id: string;
+  action: string;
+  reason: string | null;
+  createdAt: string;
+  payload?: unknown;
+  binding?: {
+    id: string;
+    authmeUsername: string;
+    authmeRealname: string | null;
+    authmeUuid: string | null;
+    status?: string;
+  } | null;
+  operator: {
+    id: string;
+    email: string;
+    profile?: { displayName: string | null } | null;
+  } | null;
+}
+
+export interface AdminPlayerEntry {
+  authme: {
+    username: string;
+    realname: string;
+    uuid: number;
+    lastlogin: number | null;
+    regdate: number;
+    ip: string | null;
+    regip: string | null;
+  } | null;
+  binding: (AdminAuthmeBindingEntry & {
+    user?: {
+      id: string;
+      email: string;
+      name: string | null;
+      profile?: { displayName: string | null } | null;
+    } | null;
+  }) | null;
+  history: AdminBindingHistoryEntry[];
+}
+
+export interface AdminPlayerListResponse {
+  items: AdminPlayerEntry[];
+  pagination: {
+    total: number;
+    page: number;
+    pageSize: number;
+    pageCount: number;
+  };
+  sourceStatus: 'ok' | 'degraded';
+  error?: string;
+}
+
+export interface AdminPermissionCatalogEntry {
+  id: string;
+  key: string;
+  description: string | null;
+  metadata: unknown;
+  roles: Array<{
+    id: string;
+    key: string;
+    name: string;
+  }>;
+  labels: Array<{
+    id: string;
+    key: string;
+    name: string;
+    color?: string | null;
+  }>;
 }

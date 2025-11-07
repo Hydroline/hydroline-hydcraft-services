@@ -67,6 +67,7 @@ export class ApiAuthmeController {
       return await this.authService.setPrimaryAuthmeBinding(
         req.user!.id,
         dto.bindingId,
+        req.user!.id,
       );
     } catch (error) {
       rethrowAuthmeError(error);

@@ -243,8 +243,16 @@ export class AuthService {
     return { user };
   }
 
-  async setPrimaryAuthmeBinding(userId: string, bindingId: string) {
-    await this.usersService.setPrimaryAuthmeBinding(userId, bindingId);
+  async setPrimaryAuthmeBinding(
+    userId: string,
+    bindingId: string,
+    actorId?: string,
+  ) {
+    await this.usersService.setPrimaryAuthmeBinding(
+      userId,
+      bindingId,
+      actorId ?? userId,
+    );
     const user = await this.usersService.getSessionUser(userId);
     return { user };
   }

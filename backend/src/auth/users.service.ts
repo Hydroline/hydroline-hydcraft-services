@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import {
+  AuthmeBindingAction,
   ContactVerificationStatus,
   LifecycleEventType,
   MinecraftProfileSource,
@@ -13,7 +14,9 @@ import {
   StatusSource,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { generateRandomString, hashPassword } from 'better-auth/crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthmeBindingService } from '../authme/authme-binding.service';
 import { AuthmeService } from '../authme/authme.service';
 import { LuckpermsService } from '../luckperms/luckperms.service';
 import type { LuckpermsPlayer } from '../luckperms/luckperms.interfaces';
@@ -31,6 +34,10 @@ import {
 } from './dto/update-current-user.dto';
 import { IpLocationService } from '../lib/ip2region/ip-location.service';
 import { normalizeIpAddress } from '../lib/ip2region/ip-normalizer';
+import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
+import { UpdateAuthmeBindingAdminDto } from './dto/update-authme-binding-admin.dto';
+import { AssignPermissionLabelsDto } from './dto/assign-permission-labels.dto';
+import { AdminAuditService } from './admin-audit.service';
 
 type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
 
@@ -67,8 +74,10 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authmeService: AuthmeService,
+    private readonly authmeBindingService: AuthmeBindingService,
     private readonly luckpermsService: LuckpermsService,
     private readonly ipLocationService: IpLocationService,
+    private readonly adminAuditService: AdminAuditService,
   ) {}
 
   async initializeUserRecords(
@@ -236,6 +245,17 @@ export class UsersService {
               },
             },
           },
+          permissionLabels: {
+            include: {
+              label: {
+                include: {
+                  permissions: {
+                    include: { permission: true },
+                  },
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.user.count({ where }),
@@ -335,6 +355,33 @@ export class UsersService {
                     id: true,
                     roleId: true,
                     permissionId: true,
+                    permission: {
+                      select: {
+                        id: true,
+                        key: true,
+                        description: true,
+                        metadata: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        permissionLabels: {
+          select: {
+            id: true,
+            labelId: true,
+            assignedAt: true,
+            label: {
+              select: {
+                id: true,
+                key: true,
+                name: true,
+                color: true,
+                permissions: {
+                  select: {
                     permission: {
                       select: {
                         id: true,
@@ -528,6 +575,17 @@ export class UsersService {
             },
           },
         },
+        permissionLabels: {
+          include: {
+            label: {
+              include: {
+                permissions: {
+                  include: { permission: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -548,6 +606,315 @@ export class UsersService {
       authmeBindings: typeof bindingData.bindings;
       luckperms: typeof bindingData.luckperms;
     };
+  }
+
+  async deleteUser(userId: string) {
+    await this.ensureUser(userId);
+    await this.prisma.user.delete({ where: { id: userId } });
+    return { success: true } as const;
+  }
+
+  async resetUserPassword(
+    userId: string,
+    dto: ResetUserPasswordDto,
+    actorId?: string,
+  ) {
+    await this.ensureUser(userId);
+    const trimmed =
+      typeof dto.password === 'string' && dto.password.trim().length > 0
+        ? dto.password.trim()
+        : null;
+    const nextPassword =
+      trimmed ?? generateRandomString(20, 'a-z', 'A-Z', '0-9');
+    const hashed = await hashPassword(nextPassword);
+    const accountIdentifier = generateRandomString(32, 'a-z', 'A-Z', '0-9');
+
+    await this.prisma.$transaction(async (tx) => {
+      const credential = await tx.account.findFirst({
+        where: {
+          userId,
+          OR: [
+            { provider: 'credential' },
+            { providerId: 'credential' },
+            { providerAccountId: 'credential' },
+          ],
+        },
+      });
+
+      if (credential) {
+        await tx.account.update({
+          where: { id: credential.id },
+          data: { password: hashed },
+        });
+      } else {
+        await tx.account.create({
+          data: {
+            userId,
+            accountId: accountIdentifier,
+            type: 'credential',
+            provider: 'credential',
+            providerId: 'credential',
+            providerAccountId: accountIdentifier,
+            password: hashed,
+          },
+        });
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { password: hashed },
+      });
+
+      await tx.userLifecycleEvent.create({
+        data: {
+          userId,
+          eventType: LifecycleEventType.OTHER,
+          occurredAt: new Date(),
+          source: 'admin-reset-password',
+          notes: '管理员重置密码',
+          metadata: this.toJsonValue({ actorId }),
+          createdById: actorId,
+        },
+      });
+    });
+
+    await this.adminAuditService.record({
+      actorId,
+      action: 'reset_password',
+      targetType: 'user',
+      targetId: userId,
+      payload: { generated: !trimmed },
+    });
+
+    return {
+      temporaryPassword: trimmed ? null : nextPassword,
+    };
+  }
+
+
+  async updateAuthmeBinding(
+    userId: string,
+    bindingId: string,
+    dto: UpdateAuthmeBindingAdminDto,
+    actorId?: string,
+  ) {
+    await this.ensureUser(userId);
+    const binding = await this.prisma.userAuthmeBinding.findUnique({
+      where: { id: bindingId },
+    });
+    if (!binding || binding.userId !== userId) {
+      throw new NotFoundException('AuthMe 绑定不存在');
+    }
+
+    const normalizedRealname =
+      dto.authmeRealname !== undefined
+        ? this.normalizeOptionalString(dto.authmeRealname ?? undefined)
+        : undefined;
+    const normalizedNotes =
+      dto.notes !== undefined
+        ? this.normalizeOptionalString(dto.notes ?? undefined)
+        : undefined;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      let destinationUserId = binding.userId;
+      if (dto.targetUserId && dto.targetUserId !== binding.userId) {
+        await this.ensureUser(dto.targetUserId);
+        await tx.userProfile.updateMany({
+          where: {
+            userId: binding.userId,
+            primaryAuthmeBindingId: binding.id,
+          },
+          data: { primaryAuthmeBindingId: null },
+        });
+        await tx.userMinecraftProfile.updateMany({
+          where: { userId: binding.userId, authmeBindingId: binding.id },
+          data: { authmeBindingId: null },
+        });
+        destinationUserId = dto.targetUserId;
+      }
+
+      const record = await tx.userAuthmeBinding.update({
+        where: { id: bindingId },
+        data: {
+          userId: destinationUserId,
+          authmeRealname:
+            normalizedRealname !== undefined
+              ? normalizedRealname
+              : binding.authmeRealname,
+          status: dto.status ?? binding.status,
+          notes:
+            normalizedNotes !== undefined ? normalizedNotes : binding.notes,
+          metadata:
+            dto.metadata !== undefined
+              ? this.toJsonValue(dto.metadata)
+              : (binding.metadata as Prisma.InputJsonValue | undefined),
+        },
+      });
+
+      if (dto.primary === false) {
+        await tx.userProfile.updateMany({
+          where: {
+            userId: destinationUserId,
+            primaryAuthmeBindingId: bindingId,
+          },
+          data: { primaryAuthmeBindingId: null },
+        });
+        await this.authmeBindingService.recordHistoryEntry(
+          {
+            bindingId: record.id,
+            userId: record.userId,
+            operatorId: actorId ?? null,
+            authmeUsername: record.authmeUsername,
+            authmeRealname: record.authmeRealname,
+            authmeUuid: record.authmeUuid,
+            action: AuthmeBindingAction.PRIMARY_UNSET,
+            reason: 'primary-cleared',
+          },
+          tx,
+        );
+      }
+
+      if (dto.targetUserId && dto.targetUserId !== binding.userId) {
+        await this.authmeBindingService.recordHistoryEntry(
+          {
+            bindingId: record.id,
+            userId: record.userId,
+            operatorId: actorId ?? null,
+            authmeUsername: record.authmeUsername,
+            authmeRealname: record.authmeRealname,
+            authmeUuid: record.authmeUuid,
+            action: AuthmeBindingAction.TRANSFER,
+            reason: 'binding-transfer',
+            payload: {
+              fromUserId: binding.userId,
+              toUserId: dto.targetUserId,
+            },
+          },
+          tx,
+        );
+      } else {
+        await this.authmeBindingService.recordHistoryEntry(
+          {
+            bindingId: record.id,
+            userId: record.userId,
+            operatorId: actorId ?? null,
+            authmeUsername: record.authmeUsername,
+            authmeRealname: record.authmeRealname,
+            authmeUuid: record.authmeUuid,
+            action: AuthmeBindingAction.MANUAL_ENTRY,
+            reason: 'binding-updated',
+            payload: {
+              status: dto.status,
+              notes: dto.notes,
+              metadata: dto.metadata,
+            },
+          },
+          tx,
+        );
+      }
+
+      return record;
+    });
+
+    if (dto.primary === true) {
+      await this.setPrimaryAuthmeBinding(
+        updated.userId,
+        updated.id,
+        actorId ?? userId,
+      );
+    }
+
+    return updated;
+  }
+
+  async listAuthmeBindingHistoryByUser(
+    userId: string,
+    params: { page?: number; pageSize?: number } = {},
+  ) {
+    await this.ensureUser(userId);
+    const page = Math.max(params.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(params.pageSize ?? 20, 1), 100);
+    const where = { userId };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.authmeBindingHistory.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          binding: {
+            select: {
+              id: true,
+              authmeUsername: true,
+              authmeRealname: true,
+              authmeUuid: true,
+              status: true,
+            },
+          },
+          operator: {
+            select: {
+              id: true,
+              email: true,
+              profile: { select: { displayName: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.authmeBindingHistory.count({ where }),
+    ]);
+
+    return {
+      items,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+      },
+    };
+  }
+
+  async assignPermissionLabels(
+    userId: string,
+    dto: AssignPermissionLabelsDto,
+    actorId?: string,
+  ) {
+    await this.ensureUser(userId);
+    const labelKeys = dto.labelKeys ?? [];
+    const labels = await this.prisma.permissionLabel.findMany({
+      where: labelKeys.length ? { key: { in: labelKeys } } : undefined,
+    });
+    if (labelKeys.length && labels.length !== labelKeys.length) {
+      const missing = labelKeys.filter(
+        (key) => !labels.find((label) => label.key === key),
+      );
+      throw new NotFoundException(
+        `Permission labels not found: ${missing.join(', ')}`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userPermissionLabel.deleteMany({ where: { userId } });
+      if (labels.length > 0) {
+        await tx.userPermissionLabel.createMany({
+          data: labels.map((label) => ({
+            userId,
+            labelId: label.id,
+            assignedById: actorId,
+          })),
+        });
+      }
+    });
+
+    await this.adminAuditService.record({
+      actorId,
+      action: 'assign_permission_labels',
+      targetType: 'user',
+      targetId: userId,
+      payload: { labelKeys },
+    });
+
+    return this.getUserDetail(userId);
   }
 
   async updateJoinDate(userId: string, joinDateIso: string) {
@@ -668,11 +1035,9 @@ export class UsersService {
     const updated = await this.prisma.userMinecraftProfile.update({
       where: { id: profileId },
       data: {
-        authmeBindingId: binding?.id ?? dto.authmeBindingId ?? target.authmeBindingId,
-        authmeUuid:
-          dto.authmeUuid ??
-          binding?.authmeUuid ??
-          target.authmeUuid,
+        authmeBindingId:
+          binding?.id ?? dto.authmeBindingId ?? target.authmeBindingId,
+        authmeUuid: dto.authmeUuid ?? binding?.authmeUuid ?? target.authmeUuid,
         nickname: dto.nickname ?? target.nickname,
         source: dto.source,
         isPrimary: dto.isPrimary ?? target.isPrimary,
@@ -954,14 +1319,32 @@ export class UsersService {
       });
     });
 
+    await this.adminAuditService.record({
+      actorId,
+      action: 'assign_roles',
+      targetType: 'user',
+      targetId: userId,
+      payload: { roleKeys },
+    });
+
     return this.getUserDetail(userId);
   }
 
-  async setPrimaryAuthmeBinding(userId: string, bindingId: string) {
+  async setPrimaryAuthmeBinding(
+    userId: string,
+    bindingId: string,
+    actorId?: string,
+  ) {
     await this.ensureUser(userId);
-    const binding = await this.prisma.userAuthmeBinding.findUnique({
-      where: { id: bindingId },
-    });
+    const [binding, profile] = await Promise.all([
+      this.prisma.userAuthmeBinding.findUnique({
+        where: { id: bindingId },
+      }),
+      this.prisma.userProfile.findUnique({
+        where: { userId },
+        select: { primaryAuthmeBindingId: true },
+      }),
+    ]);
     if (!binding || binding.userId !== userId) {
       throw new NotFoundException('AuthMe 绑定不存在');
     }
@@ -974,6 +1357,36 @@ export class UsersService {
       },
       update: { primaryAuthmeBindingId: bindingId },
     });
+
+    await this.authmeBindingService.recordHistoryEntry({
+      bindingId: binding.id,
+      userId: binding.userId,
+      operatorId: actorId ?? userId,
+      authmeUsername: binding.authmeUsername,
+      authmeRealname: binding.authmeRealname,
+      authmeUuid: binding.authmeUuid,
+      action: AuthmeBindingAction.PRIMARY_SET,
+      reason: 'set-primary',
+    });
+
+    const previousPrimaryId = profile?.primaryAuthmeBindingId;
+    if (previousPrimaryId && previousPrimaryId !== bindingId) {
+      const previous = await this.prisma.userAuthmeBinding.findUnique({
+        where: { id: previousPrimaryId },
+      });
+      if (previous) {
+        await this.authmeBindingService.recordHistoryEntry({
+          bindingId: previous.id,
+          userId: previous.userId,
+          operatorId: actorId ?? userId,
+          authmeUsername: previous.authmeUsername,
+          authmeRealname: previous.authmeRealname,
+          authmeUuid: previous.authmeUuid,
+          action: AuthmeBindingAction.PRIMARY_UNSET,
+          reason: 'replaced-primary',
+        });
+      }
+    }
 
     return binding;
   }

@@ -35,6 +35,22 @@ enum LifecycleEventType {
   OTHER
 }
 
+enum AuthmeBindingAction {
+  BIND
+  UNBIND
+  PRIMARY_SET
+  PRIMARY_UNSET
+  TRANSFER
+  SYNC
+  MANUAL_ENTRY
+}
+
+enum AuthmeBindingStatus {
+  ACTIVE
+  DETACHED
+  TRANSFERRED
+}
+
 enum ContactVerificationStatus {
   UNVERIFIED
   PENDING
@@ -101,8 +117,13 @@ model User {
   updatedConfigEntries    ConfigEntry[]          @relation("ConfigEntryUpdater")
   authmeBindings          UserAuthmeBinding[]
   authmeBindingOperations UserAuthmeBinding[]    @relation("AuthmeBindingOperator")
+  authmeBindingHistory    AuthmeBindingHistory[] @relation("AuthmeBindingHistoryUser")
+  authmeBindingHistoryOps AuthmeBindingHistory[] @relation("AuthmeBindingHistoryOperator")
   createdMinecraftServers MinecraftServer[]      @relation("MinecraftServerCreatedBy")
   updatedMinecraftServers MinecraftServer[]      @relation("MinecraftServerUpdatedBy")
+  permissionLabels        UserPermissionLabel[]
+  permissionLabelOps      UserPermissionLabel[]  @relation("PermissionLabelOperator")
+  adminAuditLogs          AdminAuditLog[]        @relation("AdminAuditActor")
 
   @@map("users")
 }
@@ -333,7 +354,8 @@ model Permission {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  rolePermissions RolePermission[]
+  rolePermissions     RolePermission[]
+  labelPermissions    PermissionLabelPermission[]
 
   @@map("permissions")
 }
@@ -366,6 +388,64 @@ model UserRole {
   @@map("user_roles")
 }
 
+model PermissionLabel {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String
+  description String?
+  color       String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions PermissionLabelPermission[]
+  assignments UserPermissionLabel[]
+
+  @@map("permission_labels")
+}
+
+model PermissionLabelPermission {
+  id           String @id @default(uuid())
+  labelId      String
+  permissionId String
+
+  label      PermissionLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  permission Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([labelId, permissionId], map: "uq_label_permission")
+  @@map("permission_label_permissions")
+}
+
+model UserPermissionLabel {
+  id           String   @id @default(uuid())
+  userId       String
+  labelId      String
+  assignedById String?
+  assignedAt   DateTime @default(now())
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      PermissionLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  assignedBy User?           @relation("PermissionLabelOperator", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, labelId], map: "uq_user_permission_label")
+  @@map("user_permission_labels")
+}
+
+model AdminAuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AdminAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId], map: "idx_admin_audit_target")
+  @@map("admin_audit_log")
+}
+
 model UserAuthmeBinding {
   id                  String   @id @default(uuid())
   userId              String
@@ -376,15 +456,45 @@ model UserAuthmeBinding {
   boundAt             DateTime @default(now())
   boundByUserId       String?
   boundByIp           String?
+  status              AuthmeBindingStatus @default(ACTIVE)
+  notes               String?
+  metadata            Json?
+  lastSyncedAt        DateTime?
   updatedAt           DateTime @updatedAt
 
   user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   boundBy           User?                  @relation("AuthmeBindingOperator", fields: [boundByUserId], references: [id], onDelete: SetNull)
   minecraftProfiles UserMinecraftProfile[]
   primaryProfileFor UserProfile[]          @relation("PrimaryAuthmeBinding")
+  historyEntries    AuthmeBindingHistory[]
 
   @@index([authmeUsernameLower], map: "idx_authme_binding_username_lower")
   @@map("user_authme_binding")
+}
+
+model AuthmeBindingHistory {
+  id                  String               @id @default(uuid())
+  bindingId           String?
+  authmeUsername      String
+  authmeUsernameLower String
+  authmeRealname      String?
+  authmeUuid          String?
+  userId              String?
+  operatorId          String?
+  action              AuthmeBindingAction
+  reason              String?
+  payload             Json?
+  createdAt           DateTime             @default(now())
+
+  binding  UserAuthmeBinding? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
+  user     User?              @relation("AuthmeBindingHistoryUser", fields: [userId], references: [id], onDelete: SetNull)
+  operator User?              @relation("AuthmeBindingHistoryOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([authmeUsernameLower], map: "idx_authme_history_username_lower")
+  @@index([authmeUuid], map: "idx_authme_history_uuid")
+  @@index([userId], map: "idx_authme_history_user")
+  @@index([bindingId], map: "idx_authme_history_binding")
+  @@map("authme_binding_history")
 }
 
 model MinecraftServer {

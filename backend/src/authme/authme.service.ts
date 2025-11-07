@@ -109,6 +109,27 @@ export class AuthmeService implements OnModuleInit, OnModuleDestroy {
     return lib.getByUsernameOrRealname(identifier);
   }
 
+  async listPlayers(params: {
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const lib = await this.ensureLib();
+    const pageSize = Math.min(Math.max(params.pageSize ?? 20, 1), 100);
+    const page = Math.max(params.page ?? 1, 1);
+    const result = await lib.listPaged({
+      keyword: params.keyword?.trim().toLowerCase() ?? null,
+      offset: (page - 1) * pageSize,
+      limit: pageSize,
+    });
+    return {
+      items: result.rows,
+      total: result.total,
+      page,
+      pageSize,
+    };
+  }
+
   isEnabled() {
     return Boolean(this.currentConfig?.enabled && this.lib);
   }

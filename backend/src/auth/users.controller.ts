@@ -27,6 +27,9 @@ import { UpdateUserContactDto } from './dto/update-user-contact.dto';
 import { RegeneratePiicDto } from './dto/regenerate-piic.dto';
 import { AssignRolesDto } from './dto/assign-roles.dto';
 import { UpdateJoinDateDto } from './dto/update-join-date.dto';
+import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
+import { UpdateAuthmeBindingAdminDto } from './dto/update-authme-binding-admin.dto';
+import { AssignPermissionLabelsDto } from './dto/assign-permission-labels.dto';
 
 @ApiTags('用户管理')
 @ApiBearerAuth()
@@ -56,6 +59,12 @@ export class UsersController {
     return this.usersService.getUserDetail(userId);
   }
 
+  @Delete(':userId')
+  @ApiOperation({ summary: '删除用户' })
+  async remove(@Param('userId') userId: string) {
+    return this.usersService.deleteUser(userId);
+  }
+
   @Patch(':userId/profile')
   @ApiOperation({ summary: '更新用户档案' })
   async updateProfile(
@@ -73,6 +82,59 @@ export class UsersController {
     @Body() dto: UpdateJoinDateDto,
   ) {
     return this.usersService.updateJoinDate(userId, dto.joinDate);
+  }
+
+  @Post(':userId/reset-password')
+  @ApiOperation({ summary: '重置用户密码' })
+  async resetPassword(
+    @Param('userId') userId: string,
+    @Body() dto: ResetUserPasswordDto,
+    @Req() req: Request,
+  ) {
+    return this.usersService.resetUserPassword(userId, dto, req.user?.id);
+  }
+
+  @Patch(':userId/bindings/:bindingId')
+  @ApiOperation({ summary: '更新 AuthMe 绑定信息' })
+  async updateBinding(
+    @Param('userId') userId: string,
+    @Param('bindingId') bindingId: string,
+    @Body() dto: UpdateAuthmeBindingAdminDto,
+    @Req() req: Request,
+  ) {
+    return this.usersService.updateAuthmeBinding(
+      userId,
+      bindingId,
+      dto,
+      req.user?.id,
+    );
+  }
+
+  @Patch(':userId/bindings/:bindingId/primary')
+  @ApiOperation({ summary: '设置主 AuthMe 绑定' })
+  async setPrimaryBinding(
+    @Param('userId') userId: string,
+    @Param('bindingId') bindingId: string,
+    @Req() req: Request,
+  ) {
+    return this.usersService.setPrimaryAuthmeBinding(
+      userId,
+      bindingId,
+      req.user?.id,
+    );
+  }
+
+  @Get(':userId/bindings/history')
+  @ApiOperation({ summary: '查看绑定流转记录' })
+  async listBindingHistory(
+    @Param('userId') userId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.usersService.listAuthmeBindingHistoryByUser(userId, {
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    });
   }
 
   @Post(':userId/minecraft-profiles')
@@ -171,5 +233,15 @@ export class UsersController {
     @Req() req: Request,
   ) {
     return this.usersService.assignRoles(userId, dto.roleKeys, req.user?.id);
+  }
+
+  @Post(':userId/permission-labels')
+  @ApiOperation({ summary: '分配权限标签' })
+  async assignPermissionLabels(
+    @Param('userId') userId: string,
+    @Body() dto: AssignPermissionLabelsDto,
+    @Req() req: Request,
+  ) {
+    return this.usersService.assignPermissionLabels(userId, dto, req.user?.id);
   }
 }

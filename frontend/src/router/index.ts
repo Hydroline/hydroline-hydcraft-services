@@ -94,6 +94,16 @@ export const adminRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'players',
+        name: 'admin.players',
+        component: () => import('@/views/admin/Players/PlayerDirectory.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresPermissions: ['auth.manage.users'],
+          layout: 'admin',
+        },
+      },
+      {
         path: 'users/:userId',
         name: 'admin.users.detail',
         component: () => import('@/views/admin/Users/UserDetail.vue'),

@@ -38,6 +38,11 @@ export interface AuthmeLib {
   getByRealname(realname: string): Promise<AuthmeUser | null>;
   getByUsernameOrRealname(identifier: string): Promise<AuthmeUser | null>;
   listAll(offset?: number, limit?: number): Promise<AuthmeUser[]>;
+  listPaged(params: {
+    keyword?: string | null;
+    offset?: number;
+    limit?: number;
+  }): Promise<{ rows: AuthmeUser[]; total: number }>;
   listAllByIp(
     ip: string,
     offset?: number,

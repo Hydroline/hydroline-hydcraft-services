@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { apiFetch, ApiError } from '@/utils/api'
-import type { AdminUserDetail } from '@/types/admin'
+import type { AdminBindingHistoryEntry, AdminUserDetail } from '@/types/admin'
 import dayjs from 'dayjs'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 
 const userId = computed(() => route.params.userId as string)
@@ -14,6 +15,9 @@ const loading = ref(false)
 const saving = ref(false)
 const detail = ref<AdminUserDetail | null>(null)
 const errorMsg = ref<string | null>(null)
+const bindingHistory = ref<AdminBindingHistoryEntry[]>([])
+const historyLoading = ref(false)
+const resetResult = ref<string | null>(null)
 
 const profileForm = reactive({
   displayName: '' as string | null,
@@ -46,10 +50,25 @@ async function fetchDetail() {
     profileForm.timezone = data.profile?.timezone ?? ''
     profileForm.locale = data.profile?.locale ?? ''
     joinDateEditing.value = data.joinDate ?? ''
+    await fetchBindingHistory()
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? e.message : '加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchBindingHistory() {
+  if (!auth.token || !detail.value) return
+  historyLoading.value = true
+  try {
+    const data = await apiFetch<{ items: AdminBindingHistoryEntry[] }>(
+      `/auth/users/${detail.value.id}/bindings/history?page=1&pageSize=20`,
+      { token: auth.token },
+    )
+    bindingHistory.value = data.items
+  } finally {
+    historyLoading.value = false
   }
 }
 
@@ -92,11 +111,51 @@ async function saveJoinDate() {
 }
 
 onMounted(fetchDetail)
+
+async function handleResetPassword() {
+  if (!auth.token || !detail.value) return
+  resetResult.value = null
+  const result = await apiFetch<{ temporaryPassword: string | null }>(
+    `/auth/users/${detail.value.id}/reset-password`,
+    {
+      method: 'POST',
+      token: auth.token,
+    },
+  )
+  resetResult.value =
+    result.temporaryPassword ??
+    '已重置密码（使用指定密码），请通知用户及时修改。'
+}
+
+async function handleDeleteUser() {
+  if (!auth.token || !detail.value) return
+  if (
+    !window.confirm(
+      `确定要删除 ${detail.value.email ?? detail.value.id} 吗？该操作不可恢复。`,
+    )
+  ) {
+    return
+  }
+  await apiFetch(`/auth/users/${detail.value.id}`, {
+    method: 'DELETE',
+    token: auth.token,
+  })
+  await router.push({ name: 'admin.users' })
+}
+
+async function markPrimaryBinding(bindingId: string) {
+  if (!auth.token || !detail.value) return
+  await apiFetch(
+    `/auth/users/${detail.value.id}/bindings/${bindingId}/primary`,
+    { method: 'PATCH', token: auth.token },
+  )
+  await Promise.all([fetchDetail(), fetchBindingHistory()])
+}
 </script>
 
 <template>
   <div class="space-y-6">
-    <header class="flex flex-col gap-1">
+    <header class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div class="flex items-baseline gap-3">
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
           {{ detail?.profile?.displayName ?? detail?.email ?? '用户详情' }}
@@ -109,8 +168,15 @@ onMounted(fetchDetail)
         <span class="mr-4">上次登录：{{ fmt(detail?.lastLoginAt) }}</span>
         <span>上次登录 IP：{{ detail?.lastLoginIp ?? '—' }}</span>
       </div>
-      <p v-if="errorMsg" class="mt-2 text-sm text-red-500">{{ errorMsg }}</p>
+      <div class="flex gap-2">
+        <UButton color="primary" variant="soft" size="xs" @click="handleResetPassword">重置密码</UButton>
+        <UButton color="red" variant="soft" size="xs" @click="handleDeleteUser">删除用户</UButton>
+      </div>
     </header>
+    <p v-if="resetResult" class="text-xs text-emerald-600 dark:text-emerald-400">
+      {{ resetResult }}
+    </p>
+    <p v-if="errorMsg" class="text-sm text-red-500">{{ errorMsg }}</p>
 
     <div class="grid gap-6 md:grid-cols-2">
       <!-- 基础资料编辑 -->
@@ -191,12 +257,84 @@ onMounted(fetchDetail)
                 <div v-if="b.regip">注册 IP：{{ b.regip }}</div>
               </div>
             </div>
-            <UBadge color="neutral" variant="soft">AuthMe</UBadge>
+            <div class="flex items-center gap-2">
+              <UBadge color="neutral" variant="soft">AuthMe</UBadge>
+              <UButton
+                v-if="b.id"
+                size="xs"
+                color="primary"
+                variant="ghost"
+                @click="markPrimaryBinding(b.id)"
+              >
+                设为主绑定
+              </UButton>
+            </div>
           </div>
         </div>
         <div v-if="(detail?.authmeBindings?.length ?? 0) === 0" class="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
           暂无绑定。
         </div>
+      </div>
+    </UCard>
+
+    <UCard>
+      <template #header>
+        <h2 class="text-base font-medium">权限标签</h2>
+      </template>
+      <div class="flex flex-wrap gap-2">
+        <UBadge
+          v-for="link in detail?.permissionLabels ?? []"
+          :key="link.id"
+          :color="link.label.color ? 'primary' : 'neutral'"
+          variant="soft"
+        >
+          {{ link.label.name }}
+        </UBadge>
+        <span v-if="(detail?.permissionLabels?.length ?? 0) === 0" class="text-sm text-slate-500 dark:text-slate-400">
+          尚未分配权限标签。
+        </span>
+      </div>
+    </UCard>
+
+    <UCard>
+      <template #header>
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-medium">绑定流转记录</h2>
+          <USkeleton v-if="historyLoading" class="h-4 w-24" />
+        </div>
+      </template>
+      <ul class="space-y-3">
+        <li
+          v-for="entry in bindingHistory"
+          :key="entry.id"
+          class="rounded-2xl border border-slate-200/70 bg-white/70 p-3 text-xs text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-slate-900 dark:text-white">{{ entry.action }}</span>
+            <span>{{ new Date(entry.createdAt).toLocaleString() }}</span>
+          </div>
+          <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            {{ entry.reason ?? '无备注' }}
+          </p>
+          <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            操作人：{{ entry.operator?.profile?.displayName ?? entry.operator?.email ?? '系统' }}
+          </p>
+        </li>
+        <li v-if="!historyLoading && bindingHistory.length === 0" class="text-center text-sm text-slate-500 dark:text-slate-400">
+          暂无流转记录。
+        </li>
+      </ul>
+    </UCard>
+
+    <UCard>
+      <template #header>
+        <h2 class="text-base font-medium text-red-600 dark:text-red-400">危险操作</h2>
+      </template>
+      <div class="flex flex-col gap-2 text-sm text-slate-600 dark:text-slate-300">
+        <p>删除用户会同时清除其会话、绑定与档案，且无法恢复。</p>
+        <UButton color="red" variant="soft" size="sm" @click="handleDeleteUser">
+          删除该用户
+        </UButton>
       </div>
     </UCard>
   </div>

@@ -1,10 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { LifecycleEventType, Prisma } from '@prisma/client';
+import {
+  AuthmeBindingAction,
+  LifecycleEventType,
+  Prisma,
+} from '@prisma/client';
+import { Counter } from 'prom-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthmeUser } from './authme.interfaces';
 import { businessError } from './authme.errors';
 import { normalizeIpAddress } from '../lib/ip2region/ip-normalizer';
 import { LuckpermsService } from '../luckperms/luckperms.service';
+
+const authmeBindingHistoryCounter = new Counter({
+  name: 'authme_binding_history_events_total',
+  help: 'Number of AuthMe binding history events',
+  labelNames: ['action'],
+});
 
 @Injectable()
 export class AuthmeBindingService {
@@ -106,6 +117,24 @@ export class AuthmeBindingService {
         },
       });
 
+      await this.recordHistoryEntry(
+        {
+          bindingId: binding.id,
+          userId: binding.userId,
+          operatorId: options.operatorUserId ?? options.userId,
+          authmeUsername: binding.authmeUsername,
+          authmeRealname: binding.authmeRealname,
+          authmeUuid: binding.authmeUuid,
+          action: AuthmeBindingAction.BIND,
+          reason: 'authme-binding',
+          payload: {
+            source: 'bindUser',
+            via: 'auth-service',
+          },
+        },
+        tx,
+      );
+
       return binding;
     });
   }
@@ -124,6 +153,23 @@ export class AuthmeBindingService {
         if (!target || target.userId !== options.userId) {
           return null;
         }
+        await this.recordHistoryEntry(
+          {
+            bindingId: target.id,
+            userId: target.userId,
+            operatorId: options.operatorUserId ?? options.userId,
+            authmeUsername: target.authmeUsername,
+            authmeRealname: target.authmeRealname,
+            authmeUuid: target.authmeUuid,
+            action: AuthmeBindingAction.UNBIND,
+            reason: 'authme-binding',
+            payload: {
+              sourceIp: sanitizeIp(options.sourceIp),
+              mode: 'single',
+            },
+          },
+          tx,
+        );
         await tx.userAuthmeBinding.delete({
           where: { authmeUsernameLower: options.usernameLower },
         });
@@ -149,6 +195,23 @@ export class AuthmeBindingService {
         where: { userId: options.userId },
       });
       for (const b of bindings) {
+        await this.recordHistoryEntry(
+          {
+            bindingId: b.id,
+            userId: b.userId,
+            operatorId: options.operatorUserId ?? options.userId,
+            authmeUsername: b.authmeUsername,
+            authmeRealname: b.authmeRealname,
+            authmeUuid: b.authmeUuid,
+            action: AuthmeBindingAction.UNBIND,
+            reason: 'authme-binding',
+            payload: {
+              sourceIp: sanitizeIp(options.sourceIp),
+              mode: 'bulk',
+            },
+          },
+          tx,
+        );
         await this.handleBindingRemoval(tx, b);
         await tx.userLifecycleEvent.create({
           data: {
@@ -205,6 +268,48 @@ export class AuthmeBindingService {
       where: { userId: binding.userId, authmeBindingId: binding.id },
       data: { authmeBindingId: null },
     });
+  }
+
+  async recordHistoryEntry(
+    params: {
+      bindingId?: string | null;
+      userId?: string | null;
+      operatorId?: string | null;
+      authmeUsername: string;
+      authmeRealname?: string | null;
+      authmeUuid?: string | null;
+      action: AuthmeBindingAction;
+      reason?: string | null;
+      payload?: Record<string, unknown> | null;
+    },
+    tx?: Prisma.TransactionClient,
+  ) {
+    const client = tx ?? this.prisma;
+    const history = await client.authmeBindingHistory.create({
+      data: {
+        bindingId: params.bindingId ?? undefined,
+        userId: params.userId ?? null,
+        operatorId: params.operatorId ?? null,
+        authmeUsername: params.authmeUsername,
+        authmeUsernameLower: params.authmeUsername.toLowerCase(),
+        authmeRealname: params.authmeRealname ?? null,
+        authmeUuid: params.authmeUuid ?? null,
+        action: params.action,
+        reason: params.reason ?? null,
+        payload: params.payload
+          ? this.toJson(params.payload)
+          : ((Prisma.JsonNull as unknown) as Prisma.InputJsonValue),
+      },
+    });
+    authmeBindingHistoryCounter.inc({ action: params.action });
+    this.logger.verbose(
+      `AuthMe binding history recorded: ${JSON.stringify({
+        action: params.action,
+        bindingId: params.bindingId ?? 'unknown',
+        userId: params.userId ?? 'unknown',
+      })}`,
+    );
+    return history;
   }
 }
 

@@ -40,6 +40,12 @@ function minecraftIds(item: typeof rows.value[number]) {
     .join('、')
 }
 
+function labelNames(item: typeof rows.value[number]) {
+  const links = item.permissionLabels ?? []
+  if (links.length === 0) return ['未设置']
+  return links.map((link) => link.label.name)
+}
+
 onMounted(async () => {
   if (rows.value.length === 0) {
     await refresh(1)
@@ -60,20 +66,27 @@ async function goToPage(page: number) {
   <div class="space-y-6">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">用户与玩家</h1>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">站内用户</h1>
         <p class="text-sm text-slate-600 dark:text-slate-300">
-          查看并管理 Hydroline 平台账户及其绑定的 Minecraft 身份。
+          查看 Hydroline 平台账号资料、权限标签及其 AuthMe 绑定摘要。
         </p>
       </div>
-      <form class="flex w-full max-w-md gap-2" @submit.prevent="handleSubmit">
-        <UInput
-          v-model="keyword"
-          type="search"
-          placeholder="搜索用户邮箱、名称或 PIIC"
-          class="flex-1"
-        />
-        <UButton type="submit" color="primary">搜索</UButton>
-      </form>
+      <div class="flex w-full flex-col gap-2 sm:max-w-xl">
+        <form class="flex w-full gap-2" @submit.prevent="handleSubmit">
+          <UInput
+            v-model="keyword"
+            type="search"
+            placeholder="搜索用户邮箱、名称或 PIIC"
+            class="flex-1"
+          />
+          <UButton type="submit" color="primary">搜索</UButton>
+        </form>
+        <div class="flex justify-end">
+          <RouterLink :to="{ name: 'admin.players' }">
+            <UButton color="neutral" variant="soft" size="xs">查看 AuthMe 玩家</UButton>
+          </RouterLink>
+        </div>
+      </div>
     </header>
 
     <div class="overflow-hidden rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70">
@@ -83,6 +96,7 @@ async function goToPage(page: number) {
             <th class="px-4 py-3">用户</th>
             <th class="px-4 py-3">PIIC</th>
             <th class="px-4 py-3">角色</th>
+            <th class="px-4 py-3">标签</th>
             <th class="px-4 py-3">Minecraft</th>
             <th class="px-4 py-3">注册时间</th>
             <th class="px-4 py-3">操作</th>
@@ -115,6 +129,18 @@ async function goToPage(page: number) {
                 </UBadge>
               </div>
             </td>
+            <td class="px-4 py-3">
+              <div class="flex flex-wrap gap-2">
+                <UBadge
+                  v-for="labelName in labelNames(item)"
+                  :key="labelName"
+                  color="neutral"
+                  variant="soft"
+                >
+                  {{ labelName }}
+                </UBadge>
+              </div>
+            </td>
             <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
               {{ minecraftIds(item) }}
             </td>
@@ -128,7 +154,7 @@ async function goToPage(page: number) {
             </td>
           </tr>
           <tr v-if="rows.length === 0">
-            <td colspan="6" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+            <td colspan="7" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
               未查询到符合条件的用户。
             </td>
           </tr>

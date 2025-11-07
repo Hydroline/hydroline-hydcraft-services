@@ -129,6 +129,44 @@ export class MysqlAuthmeLib implements AuthmeLib {
     return rows.map(mapUser);
   }
 
+  async listPaged(params: {
+    keyword?: string | null;
+    offset?: number;
+    limit?: number;
+  }): Promise<{ rows: AuthmeUser[]; total: number }> {
+    const limit = Math.min(Math.max(params.limit ?? DEFAULT_LIMIT, 1), 500);
+    const offset = Math.max(params.offset ?? 0, 0);
+    const keyword =
+      typeof params.keyword === 'string' && params.keyword.trim().length > 0
+        ? params.keyword.trim().toLowerCase()
+        : null;
+    const filters: string[] = [];
+    const values: Array<string> = [];
+    if (keyword) {
+      filters.push(
+        '(LOWER(username) LIKE ? OR LOWER(realname) LIKE ? OR LOWER(email) LIKE ?)',
+      );
+      const like = `%${keyword}%`;
+      values.push(like, like, like);
+    }
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rows = await this.query<AuthmeUserRow[]>(
+      `SELECT * FROM authme ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [...values, limit, offset],
+      'listPaged',
+    );
+    const totalRows = await this.query<RowDataPacket[]>(
+      `SELECT COUNT(1) as total FROM authme ${whereClause}`,
+      values,
+      'countPaged',
+    );
+    const total = Number(totalRows[0]?.total ?? rows.length);
+    return {
+      rows: rows.map(mapUser),
+      total,
+    };
+  }
+
   async listAllByIp(
     ip: string,
     offset = 0,
