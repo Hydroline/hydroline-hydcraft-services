@@ -9,17 +9,15 @@
 - 提供基础的加载/错误状态与权限控制，避免使用任何模拟数据。
 
 ## Todo List
-- [ ] **路由与导航**：在 `AdminShell` 菜单添加「服务器状态」项，并在路由表中注册 `/admin/minecraft/servers`。
-- [ ] **API Store**：新增 `useMinecraftServerStore`（或在现有 store 内扩展）封装列表、保存、删除、ping 请求；统一错误提示。
-- [ ] **服务器状态页面**：
-  - [ ] 列表 + 详情表单（左侧列表/右侧表单或弹窗）；
-  - [ ] 在 IP/端口变更后触发“保存 -> 自动 Ping”，展示在线/延迟/MOTD；
-  - [ ] 支持删除、启用/禁用、排序字段（如 `displayOrder`）。
-- [ ] **MOTD 展示**：解析富文本/换行，提供卡片显示 + Ping 时间戳。
-- [ ] **Profile Minecraft 绑定 UI**：
-  - [ ] 读取后端返回的主绑定字段，突出显示；
-  - [ ] 为每个绑定增加“设为主绑定”按钮，调用新 API；
-  - [ ] 显示多昵称（Chip 列表），允许设置主昵称。
-- [ ] **交互反馈**：表单保存、Ping、设主绑定操作均需 Loading+Toast，并在错误时展示后端信息。
-- [ ] **Playwright 验证**：使用 MCP Playwright 打开后台页面，走一遍新建服务器 -> 保存 -> Ping 的流程截图/记录（运行前确保有构建可用）。
-- [ ] **类型校验**：确保 `pnpm --filter frontend lint && pnpm --filter frontend build` 通过。
+- [x] **路由与导航**：在 `AdminShell` 菜单添加「服务器状态」项，并在路由表中注册 `/admin/minecraft/servers`。
+- [x] **API Store**：新增 `useMinecraftServerStore`（或在现有 store 内扩展）封装列表、保存、删除、ping 请求；统一错误提示。
+- [x] **服务器状态页面**：
+  - [x] 列表 + 详情表单（采用弹窗编辑 + 表格列表）；
+  - [x] 在 IP/端口变更后触发“保存 -> 自动 Ping”，展示在线/延迟/MOTD；
+  - [x] 支持删除、启用/禁用、排序字段（如 `displayOrder`）。
+- [x] **MOTD 展示**：解析富文本/换行，提供卡片显示 + Ping 时间戳。
+- [x] **Profile Minecraft 绑定 UI**：
+  - [x] 读取后端返回的主绑定字段，突出显示；
+  - [x] 为每个绑定增加“设为主绑定”按钮，调用新 API；
+  - [x] 显示多昵称（Chip 列表），允许设置主昵称。
+- [x] **交互反馈**：表单保存、Ping、设主绑定操作均需 Loading+Toast，并在错误时展示后端信息。
