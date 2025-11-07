@@ -36,15 +36,6 @@ const form = reactive({
   displayOrder: 0,
 })
 
-const columns = [
-  { key: 'displayName', label: '显示名称' },
-  { key: 'code', label: '内部代号' },
-  { key: 'host', label: '服务器地址' },
-  { key: 'edition', label: '版本' },
-  { key: 'status', label: '状态' },
-  { key: 'actions', label: '操作' },
-]
-
 const tableRows = computed(() =>
   servers.value.map((item) => ({
     ...item,
@@ -185,6 +176,11 @@ async function parseMotd(motd: unknown, bedrock: boolean) {
 
 async function triggerPing(serverId: string | null) {
   if (!serverId) return
+  const server =
+    servers.value.find((item) => item.id === serverId) ?? editingServer.value
+  if (server) {
+    editingServer.value = server
+  }
   pingLoading.value = true
   try {
     const result = await serverStore.ping(serverId)
@@ -214,6 +210,16 @@ async function triggerPing(serverId: string | null) {
 function editionLabel(edition: MinecraftServerEdition) {
   return edition === 'BEDROCK' ? '基岩版' : 'Java 版'
 }
+
+async function handlePing(server: MinecraftServer) {
+  await triggerPing(server.id)
+}
+
+function confirmDelete(server: MinecraftServer) {
+  if (window.confirm(`确认删除 ${server.displayName}？`)) {
+    void removeServer(server)
+  }
+}
 </script>
 
 <template>
@@ -230,59 +236,84 @@ function editionLabel(edition: MinecraftServerEdition) {
       </div>
     </header>
 
-    <UCard>
-      <UTable :rows="tableRows" :columns="columns" :loading="serverStore.loading">
-        <template #code-data="{ row }">
-          <div class="text-xs text-slate-500 dark:text-slate-400">{{ row.code }}</div>
-        </template>
-        <template #host-data="{ row }">
-          <div class="flex flex-col">
-            <span class="font-medium text-slate-900 dark:text-white">{{ row.hostLabel }}</span>
-            <span class="text-xs text-slate-500 dark:text-slate-400">{{ row.description || '—' }}</span>
-          </div>
-        </template>
-        <template #edition-data="{ row }">
-          <UBadge variant="soft" color="neutral">{{ editionLabel(row.edition) }}</UBadge>
-        </template>
-        <template #status-data="{ row }">
-          <UBadge :color="row.isActive ? 'success' : 'neutral'" variant="soft">
-            {{ row.isActive ? '启用' : '停用' }}
-          </UBadge>
-        </template>
-        <template #actions-data="{ row }">
-          <div class="flex gap-2">
-            <UButton size="2xs" variant="ghost" @click="triggerPing(row.id)" :loading="pingLoading && editingServer?.id === row.id">
-              Ping
-            </UButton>
-            <UButton size="2xs" variant="ghost" color="primary" @click="openEditDialog(row)">编辑</UButton>
-            <UPopover>
-              <UButton size="2xs" color="error" variant="ghost">删除</UButton>
-              <template #panel>
-                <div class="space-y-2 p-3 text-sm">
-                  <p>确认删除 {{ row.displayName }}？</p>
-                  <div class="flex gap-2">
-                    <UButton size="2xs" color="error" :loading="deleting" @click="removeServer(row)">确定</UButton>
-                    <UButton size="2xs" variant="ghost">取消</UButton>
-                  </div>
-                </div>
-              </template>
-            </UPopover>
-          </div>
-        </template>
-      </UTable>
-      <template #footer>
-        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span>共 {{ servers.length }} 台服务器</span>
-          <UButton variant="ghost" size="2xs" icon="i-lucide-refresh-ccw" @click="serverStore.fetchAll()">刷新列表</UButton>
-        </div>
-      </template>
-    </UCard>
+    <div class="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70">
+      <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+        <thead class="bg-slate-50/60 dark:bg-slate-900/60">
+          <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-3">名称</th>
+            <th class="px-4 py-3">内部代号</th>
+            <th class="px-4 py-3">服务器地址</th>
+            <th class="px-4 py-3">版本</th>
+            <th class="px-4 py-3">状态</th>
+            <th class="px-4 py-3 text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+          <tr
+            v-for="row in tableRows"
+            :key="row.id"
+            class="transition hover:bg-slate-50/80 dark:hover:bg-slate-900/60"
+          >
+            <td class="px-4 py-3">
+              <div class="flex flex-col">
+                <span class="font-medium text-slate-900 dark:text-white">{{ row.displayName }}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{{ row.description || '无备注' }}</span>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+              {{ row.code }}
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex flex-col text-xs text-slate-500 dark:text-slate-400">
+                <span class="font-medium text-slate-900 dark:text-white">{{ row.hostLabel }}</span>
+                <span>{{ row.host }}</span>
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              <UBadge variant="soft" color="neutral">{{ editionLabel(row.edition) }}</UBadge>
+            </td>
+            <td class="px-4 py-3">
+              <UBadge :color="row.isActive ? 'success' : 'neutral'" variant="soft">
+                {{ row.isActive ? '启用' : '停用' }}
+              </UBadge>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-2">
+                <UButton
+                  size="xs"
+                  variant="ghost"
+                  @click="handlePing(row)"
+                  :loading="pingLoading && editingServer?.id === row.id"
+                >
+                  Ping
+                </UButton>
+                <UButton size="xs" variant="ghost" color="primary" @click="openEditDialog(row)">编辑</UButton>
+                <UButton size="xs" color="error" variant="ghost" :loading="deleting" @click="confirmDelete(row)">
+                  删除
+                </UButton>
+              </div>
+            </td>
+          </tr>
+          <tr v-if="tableRows.length === 0">
+            <td colspan="6" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+              暂无服务器配置，点击右上角“新建服务器”开始。
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+        <span>共 {{ servers.length }} 台服务器</span>
+        <UButton variant="ghost" size="2xs" icon="i-lucide-refresh-ccw" @click="serverStore.fetchAll()">刷新列表</UButton>
+      </div>
+    </div>
 
     <UCard v-if="lastPing">
       <template #header>
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-base font-semibold text-slate-900 dark:text-white">最近一次 Ping</h3>
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white">
+              最近一次 Ping · {{ editingServer?.displayName ?? '未选择服务器' }}
+            </h3>
             <p class="text-xs text-slate-500 dark:text-slate-400">
               {{ editionLabel(lastPing.edition) }} · 延迟 {{ lastPing.response.latency ?? '—' }} ms
             </p>
@@ -341,42 +372,54 @@ function editionLabel(edition: MinecraftServerEdition) {
             </div>
           </template>
 
-          <div class="space-y-4">
-            <div class="grid gap-4 md:grid-cols-2">
-              <UFormGroup label="显示名称" required>
-                <UInput v-model="form.displayName" placeholder="示例：主城 Lobby" />
-              </UFormGroup>
-              <UFormGroup label="中文内部代号" required>
-                <UInput v-model="form.internalCodeCn" placeholder="示例：主城" />
-              </UFormGroup>
-              <UFormGroup label="英文内部代号" required>
-                <UInput v-model="form.internalCodeEn" placeholder="示例：lobby" />
-              </UFormGroup>
-              <UFormGroup label="版本">
-                <USelectMenu v-model="form.edition" :options="editionOptions" />
-              </UFormGroup>
+          <!-- 统一的两列布局，左侧 Label 右侧控件；保证所有标签对齐 -->
+          <div class="grid gap-4 md:grid-cols-2">
+            <!-- 显示名称 -->
+            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+              <label for="displayName" class="text-sm text-slate-600 dark:text-slate-300">显示名称<span class="text-red-500">*</span></label>
+              <UInput id="displayName" v-model="form.displayName" placeholder="示例：主城 Lobby" />
             </div>
-
-            <div class="grid gap-4 md:grid-cols-[2fr_1fr]">
-              <UFormGroup label="服务器 Host" required>
-                <UInput v-model="form.host" placeholder="mc.hydroline.example" />
-              </UFormGroup>
-              <UFormGroup label="端口">
-                <UInput v-model.number="form.port" type="number" min="1" max="65535" />
-              </UFormGroup>
+            <!-- 中文内部代号 -->
+            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+              <label for="internalCodeCn" class="text-sm text-slate-600 dark:text-slate-300">中文内部代号<span class="text-red-500">*</span></label>
+              <UInput id="internalCodeCn" v-model="form.internalCodeCn" placeholder="示例：主城" />
             </div>
-
-            <UFormGroup label="描述">
-              <UTextarea v-model="form.description" placeholder="用于后台备注信息" />
-            </UFormGroup>
-
-            <div class="grid gap-4 md:grid-cols-2">
-              <UFormGroup label="显示顺序">
-                <UInput v-model.number="form.displayOrder" type="number" />
-              </UFormGroup>
-              <UFormGroup label="状态">
-                <UToggle v-model="form.isActive" label="启用" />
-              </UFormGroup>
+            <!-- 英文内部代号 -->
+            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+              <label for="internalCodeEn" class="text-sm text-slate-600 dark:text-slate-300">英文内部代号<span class="text-red-500">*</span></label>
+              <UInput id="internalCodeEn" v-model="form.internalCodeEn" placeholder="示例：lobby" />
+            </div>
+            <!-- 版本 -->
+            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+              <label for="edition" class="text-sm text-slate-600 dark:text-slate-300">版本</label>
+              <USelectMenu id="edition" v-model="form.edition" :options="editionOptions" />
+            </div>
+            <!-- Host -->
+            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+              <label for="host" class="text-sm text-slate-600 dark:text-slate-300">服务器 Host<span class="text-red-500">*</span></label>
+              <UInput id="host" v-model="form.host" placeholder="mc.hydroline.example" />
+            </div>
+            <!-- Port -->
+            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+              <label for="port" class="text-sm text-slate-600 dark:text-slate-300">端口</label>
+              <UInput id="port" v-model.number="form.port" type="number" min="1" max="65535" />
+            </div>
+            <!-- 描述 -->
+            <div class="grid grid-cols-[7rem,1fr] items-start gap-2 md:col-span-2">
+              <label for="description" class="mt-2 text-sm text-slate-600 dark:text-slate-300">描述</label>
+              <UTextarea id="description" v-model="form.description" placeholder="用于后台备注信息" />
+            </div>
+            <!-- 显示顺序 -->
+            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+              <label for="displayOrder" class="text-sm text-slate-600 dark:text-slate-300">显示顺序</label>
+              <UInput id="displayOrder" v-model.number="form.displayOrder" type="number" />
+            </div>
+            <!-- 状态 -->
+            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+              <label for="isActive" class="text-sm text-slate-600 dark:text-slate-300">状态</label>
+              <div class="flex h-10 items-center rounded-xl border border-slate-200 px-3 dark:border-slate-700">
+                <UToggle id="isActive" v-model="form.isActive" label="启用" />
+              </div>
             </div>
           </div>
 
