@@ -3,10 +3,14 @@ import { apiFetch } from '@/utils/api'
 import { useAuthStore } from './auth'
 import type { AdminUserListItem, AdminUserListResponse } from '@/types/admin'
 
+type SortOrder = 'asc' | 'desc'
+
 interface FetchUsersOptions {
-  keyword?: string;
-  page?: number;
-  pageSize?: number;
+  keyword?: string
+  page?: number
+  pageSize?: number
+  sortField?: string
+  sortOrder?: SortOrder
 }
 
 export const useAdminUsersStore = defineStore('admin-users', {
@@ -20,6 +24,8 @@ export const useAdminUsersStore = defineStore('admin-users', {
     },
     keyword: '',
     loading: false,
+    sortField: 'createdAt' as string,
+    sortOrder: 'desc' as SortOrder,
   }),
   actions: {
     async fetch(options: FetchUsersOptions = {}) {
@@ -31,6 +37,8 @@ export const useAdminUsersStore = defineStore('admin-users', {
       const keyword = options.keyword ?? this.keyword
       const page = options.page ?? this.pagination.page
       const pageSize = options.pageSize ?? this.pagination.pageSize
+      const sortField = options.sortField ?? this.sortField
+      const sortOrder = options.sortOrder ?? this.sortOrder
 
       const params = new URLSearchParams()
       params.set('page', page.toString())
@@ -38,15 +46,26 @@ export const useAdminUsersStore = defineStore('admin-users', {
       if (keyword) {
         params.set('keyword', keyword)
       }
+      if (sortField) {
+        params.set('sortField', sortField)
+      }
+      if (sortOrder) {
+        params.set('sortOrder', sortOrder)
+      }
 
       this.loading = true
       try {
-        const data = await apiFetch<AdminUserListResponse>(`/auth/users?${params.toString()}`, {
-          token: auth.token,
-        })
+        const data = await apiFetch<AdminUserListResponse>(
+          `/auth/users?${params.toString()}`,
+          {
+            token: auth.token,
+          },
+        )
         this.items = data.items
         this.pagination = data.pagination
         this.keyword = keyword
+        this.sortField = sortField
+        this.sortOrder = sortOrder
         return data
       } finally {
         this.loading = false
@@ -54,6 +73,10 @@ export const useAdminUsersStore = defineStore('admin-users', {
     },
     setKeyword(value: string) {
       this.keyword = value
+    },
+    setSort(field: string, order: SortOrder) {
+      this.sortField = field
+      this.sortOrder = order
     },
     async delete(userId: string) {
       const auth = useAuthStore()
@@ -71,11 +94,44 @@ export const useAdminUsersStore = defineStore('admin-users', {
       if (!auth.token) {
         throw new Error('未登录，无法重置密码')
       }
-      return apiFetch<{ temporaryPassword: string | null }>(`/auth/users/${userId}/reset-password`, {
+      return apiFetch<{ temporaryPassword: string | null }>(
+        `/auth/users/${userId}/reset-password`,
+        {
+          method: 'POST',
+          token: auth.token,
+          body: password ? { password } : {},
+        },
+      )
+    },
+    async regeneratePiic(userId: string, reason?: string) {
+      const auth = useAuthStore()
+      if (!auth.token) throw new Error('未登录，无法生成 PIIC')
+      await apiFetch(`/auth/users/${userId}/piic/regenerate`, {
         method: 'POST',
         token: auth.token,
-        body: password ? { password } : {},
+        body: reason ? { reason } : {},
       })
+      await this.fetch({ page: this.pagination.page })
+    },
+    async assignRoles(userId: string, roleKeys: string[]) {
+      const auth = useAuthStore()
+      if (!auth.token) throw new Error('未登录，无法分配角色')
+      await apiFetch(`/auth/users/${userId}/roles`, {
+        method: 'POST',
+        token: auth.token,
+        body: { roleKeys },
+      })
+      await this.fetch({ page: this.pagination.page })
+    },
+    async assignPermissionLabels(userId: string, labelKeys: string[]) {
+      const auth = useAuthStore()
+      if (!auth.token) throw new Error('未登录，无法分配标签')
+      await apiFetch(`/auth/users/${userId}/permission-labels`, {
+        method: 'POST',
+        token: auth.token,
+        body: { labelKeys },
+      })
+      await this.fetch({ page: this.pagination.page })
     },
   },
 })

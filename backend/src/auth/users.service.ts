@@ -187,8 +187,10 @@ export class UsersService {
     keyword?: string;
     page?: number;
     pageSize?: number;
+    sortField?: string;
+    sortOrder?: string;
   }) {
-    const { keyword, page = 1, pageSize = 20 } = params;
+    const { keyword, page = 1, pageSize = 20, sortField, sortOrder } = params;
     const where: Prisma.UserWhereInput = keyword
       ? {
           OR: [
@@ -223,10 +225,17 @@ export class UsersService {
         }
       : {};
 
+    const orderBy: Prisma.UserOrderByWithRelationInput[] = [];
+    const sort = this.resolveUserSort(sortField, sortOrder);
+    if (sort) {
+      orderBy.push(sort);
+    }
+    orderBy.push({ createdAt: 'desc' });
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
@@ -234,6 +243,8 @@ export class UsersService {
           statusSnapshot: true,
           roles: { include: { role: true } },
           minecraftIds: {
+            orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
+            take: 5,
             include: {
               authmeBinding: {
                 select: {
@@ -270,6 +281,38 @@ export class UsersService {
         pageCount: Math.ceil(total / pageSize),
       },
     };
+  }
+
+  private resolveUserSort(
+    field?: string,
+    order?: string,
+  ): Prisma.UserOrderByWithRelationInput | null {
+    if (!field) return null;
+    const direction = order?.toLowerCase() === 'asc' ? 'asc' : 'desc';
+    switch (field) {
+      case 'displayName':
+        return { profile: { displayName: direction } };
+      case 'username':
+        return { name: direction };
+      case 'email':
+        return { email: direction };
+      case 'piic':
+        return { profile: { piic: direction } };
+      case 'roles':
+        return { roles: { _count: direction } };
+      case 'labels':
+        return { permissionLabels: { _count: direction } };
+      case 'minecraft':
+        return { minecraftIds: { _count: direction } };
+      case 'createdAt':
+        return { createdAt: direction };
+      case 'lastLoginAt':
+        return { lastLoginAt: direction };
+      case 'joinDate':
+        return { joinDate: direction };
+      default:
+        return null;
+    }
   }
 
   async getSessionUser(userId: string) {
@@ -550,6 +593,10 @@ export class UsersService {
           },
         },
         authmeBindings: true,
+        sessions: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
         statusSnapshot: {
           include: { event: true },
         },

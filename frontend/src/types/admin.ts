@@ -1,20 +1,36 @@
-import type { PortalMinecraftProfile, PortalRole } from './portal'
+import type { PortalRole } from './portal'
+
+export interface AdminMinecraftProfile {
+  id: string
+  nickname?: string | null
+  authmeUuid?: string | null
+  isPrimary: boolean
+  authmeBinding?: {
+    id: string | null
+    authmeUsername: string | null
+    authmeRealname: string | null
+    authmeUuid: string | null
+  } | null
+}
 
 export interface AdminUserListItem {
   id: string
   email: string
   name: string | null
   createdAt: string
+  joinDate: string | null
+  lastLoginAt: string | null
+  lastLoginIp: string | null
   profile: {
     displayName: string | null
     piic: string | null
     primaryAuthmeBindingId?: string | null
-    primaryMinecraft?: PortalMinecraftProfile | null
+    primaryMinecraft?: AdminMinecraftProfile | null
   } | null
   statusSnapshot?: {
     status: string
   } | null
-  minecraftIds?: Array<PortalMinecraftProfile & { isPrimary: boolean }>
+  minecraftIds?: AdminMinecraftProfile[]
   roles: Array<{
     id: string
     roleId: string
@@ -69,6 +85,13 @@ export interface AdminUserDetail extends AdminUserListItem {
     id: string
     labelId: string
     label: AdminPermissionLabelEntry
+  }>
+  sessions?: Array<{
+    id: string
+    createdAt: string
+    expiresAt: string
+    ipAddress: string | null
+    userAgent: string | null
   }>
 }
 
