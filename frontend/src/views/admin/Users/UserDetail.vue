@@ -39,6 +39,11 @@ const passwordSubmitting = ref(false)
 const deleteDialogOpen = ref(false)
 const deleteSubmitting = ref(false)
 
+// 新增：三个列表对话框的开关
+const bindingHistoryDialogOpen = ref(false)
+const sessionsDialogOpen = ref(false)
+const contactsListDialogOpen = ref(false)
+
 const profileForm = reactive({
   displayName: '' as string | undefined,
   birthday: '' as string | undefined,
@@ -801,6 +806,16 @@ watch(
           </UButton>
           <UButton
             class="flex items-center justify-center leading-none"
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :disabled="!detail"
+            @click="contactsListDialogOpen = true"
+          >
+            管理联系方式
+          </UButton>
+          <UButton
+            class="flex items-center justify-center leading-none"
             color="primary"
             variant="soft"
             size="sm"
@@ -996,8 +1011,22 @@ watch(
         </div>
 
         <div>
-          <div class="text-xs text-slate-500 dark:text-slate-500">
+          <div
+            class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+          >
             最近登录时间
+            <span>
+              <UButton
+                size="xs"
+                class="p-0 leading-none font-medium"
+                color="primary"
+                variant="link"
+                :disabled="!detail"
+                @click="sessionsDialogOpen = true"
+              >
+                查看全部
+              </UButton>
+            </span>
           </div>
           <div
             class="text-base font-semibold text-slate-800 dark:text-slate-300"
@@ -1159,6 +1188,15 @@ watch(
           >
             新增绑定
           </UButton>
+          <UButton
+            size="sm"
+            color="neutral"
+            variant="ghost"
+            :disabled="!detail"
+            @click="bindingHistoryDialogOpen = true"
+          >
+            流转记录
+          </UButton>
         </div>
       </div>
 
@@ -1287,6 +1325,190 @@ watch(
     </section>
   </div>
 
+  <!-- 绑定流转记录 对话框 -->
+  <UModal
+    :open="bindingHistoryDialogOpen"
+    @update:open="bindingHistoryDialogOpen = $event"
+    :ui="{ content: 'w-full max-w-2xl' }"
+  >
+    <template #content>
+      <div class="space-y-5 p-6 text-sm">
+        <div class="flex items-center justify-between">
+          <h3
+            class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+          >
+            绑定流转记录
+          </h3>
+          <div class="flex items-center gap-2">
+            <USkeleton v-if="historyLoading" class="h-4 w-20" />
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              @click="bindingHistoryDialogOpen = false"
+            />
+          </div>
+        </div>
+        <ul class="space-y-3">
+          <li
+            v-for="entry in bindingHistory"
+            :key="entry.id"
+            class="rounded-lg bg-slate-100/60 px-4 py-3 text-[11px] text-slate-600 dark:bg-slate-900/40 dark:text-slate-300"
+          >
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-slate-900 dark:text-white">
+                {{ entry.action }}
+              </span>
+              <span>{{ fmtDateTime(entry.createdAt) }}</span>
+            </div>
+            <p class="mt-1">{{ entry.reason ?? '无备注' }}</p>
+            <p class="mt-1">
+              操作人：{{
+                entry.operator?.profile?.displayName ??
+                entry.operator?.email ??
+                '系统'
+              }}
+            </p>
+          </li>
+          <li
+            v-if="!historyLoading && bindingHistory.length === 0"
+            class="text-xs text-slate-500 dark:text-slate-400"
+          >
+            暂无流转记录。
+          </li>
+        </ul>
+      </div>
+    </template>
+  </UModal>
+
+  <!-- 登录轨迹 对话框 -->
+  <UModal
+    :open="sessionsDialogOpen"
+    @update:open="sessionsDialogOpen = $event"
+    :ui="{ content: 'w-full max-w-2xl' }"
+  >
+    <template #content>
+      <div class="space-y-5 p-6 text-sm">
+        <div class="flex items-center justify-between">
+          <h3
+            class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+          >
+            登录轨迹
+          </h3>
+          <UButton
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="sessionsDialogOpen = false"
+          />
+        </div>
+        <ul class="space-y-3">
+          <li
+            v-for="session in sessions"
+            :key="session.id"
+            class="rounded-lg bg-slate-100/60 px-3 py-2 text-[11px] text-slate-600 dark:bg-slate-900/40 dark:text-slate-300"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-medium text-slate-900 dark:text-white">
+                {{ fmtDateTime(session.createdAt) }}
+              </span>
+              <span>IP：{{ session.ipAddress ?? '—' }}</span>
+            </div>
+            <p class="mt-1">过期：{{ fmtDateTime(session.expiresAt) }}</p>
+            <p class="mt-1 break-all">UA：{{ session.userAgent ?? '—' }}</p>
+          </li>
+          <li
+            v-if="sessions.length === 0"
+            class="text-xs text-slate-500 dark:text-slate-400"
+          >
+            暂无登录记录。
+          </li>
+        </ul>
+      </div>
+    </template>
+  </UModal>
+
+  <!-- 联系方式列表 对话框 -->
+  <UModal
+    :open="contactsListDialogOpen"
+    @update:open="contactsListDialogOpen = $event"
+    :ui="{ content: 'w-full max-w-3xl' }"
+  >
+    <template #content>
+      <div class="space-y-5 p-6 text-sm">
+        <div class="flex items-center justify-between">
+          <h3
+            class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+          >
+            联系方式
+          </h3>
+          <div class="flex items-center gap-2">
+            <UButton
+              size="xs"
+              color="primary"
+              variant="soft"
+              :disabled="!detail"
+              @click="openCreateContactDialog"
+              >新增联系方式</UButton
+            >
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              @click="contactsListDialogOpen = false"
+            />
+          </div>
+        </div>
+        <ul class="space-y-2 text-xs">
+          <li
+            v-for="c in detail?.contacts ?? []"
+            :key="c.id"
+            class="flex items-center justify-between gap-3 rounded-lg bg-slate-100/60 px-4 py-2 dark:bg-slate-900/40"
+          >
+            <div class="flex flex-col">
+              <span class="font-medium text-slate-900 dark:text-white">
+                {{ c.channel?.displayName ?? c.channel?.key ?? '未知渠道' }}
+                <span
+                  v-if="c.isPrimary"
+                  class="ml-2 text-[10px] font-semibold text-indigo-600 dark:text-indigo-300"
+                  >主</span
+                >
+              </span>
+              <span
+                class="text-[11px] text-slate-600 dark:text-slate-300 break-all"
+                >{{ c.value }}</span
+              >
+            </div>
+            <div class="flex gap-2">
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                @click="openEditContactDialog(c)"
+                >编辑</UButton
+              >
+              <UButton
+                size="xs"
+                color="error"
+                variant="soft"
+                @click="deleteContact(c.id)"
+                >删除</UButton
+              >
+            </div>
+          </li>
+          <li
+            v-if="(detail?.contacts?.length ?? 0) === 0"
+            class="text-xs text-slate-500 dark:text-slate-400"
+          >
+            暂无联系方式。
+          </li>
+        </ul>
+      </div>
+    </template>
+  </UModal>
   <UModal
     :open="resetResultDialogOpen"
     @update:open="resetResultDialogOpen = $event"
@@ -1569,7 +1791,7 @@ watch(
             >
             <USelect
               v-model="contactChannelId"
-              :options="
+              :items="
                 contactChannels.map((c) => ({
                   label: c.displayName || c.key,
                   value: c.id,
