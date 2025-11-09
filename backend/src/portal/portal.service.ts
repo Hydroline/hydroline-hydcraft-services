@@ -89,31 +89,11 @@ export class PortalService {
         include: {
           profile: {
             include: {
-              primaryMinecraftProfile: {
-                include: {
-                  authmeBinding: {
-                    select: {
-                      id: true,
-                      authmeUsername: true,
-                      authmeRealname: true,
-                      authmeUuid: true,
-                    },
-                  },
-                },
-              },
+              primaryMinecraftProfile: true,
             },
           },
           minecraftIds: {
-            include: {
-              authmeBinding: {
-                select: {
-                  id: true,
-                  authmeUsername: true,
-                  authmeRealname: true,
-                  authmeUuid: true,
-                },
-              },
-            },
+            include: {},
           },
           roles: {
             include: {
@@ -155,24 +135,7 @@ export class PortalService {
                   ? {
                       id: user.profile.primaryMinecraftProfile.id,
                       nickname: user.profile.primaryMinecraftProfile.nickname,
-                      authmeUuid:
-                        user.profile.primaryMinecraftProfile.authmeUuid,
-                      authmeBinding: user.profile.primaryMinecraftProfile
-                        .authmeBinding
-                        ? {
-                            id: user.profile.primaryMinecraftProfile
-                              .authmeBinding.id,
-                            username:
-                              user.profile.primaryMinecraftProfile
-                                .authmeBinding.authmeUsername,
-                            realname:
-                              user.profile.primaryMinecraftProfile
-                                .authmeBinding.authmeRealname,
-                            uuid:
-                              user.profile.primaryMinecraftProfile
-                                .authmeBinding.authmeUuid,
-                          }
-                        : null,
+                      isPrimary: true,
                     }
                   : null,
               }
@@ -181,15 +144,6 @@ export class PortalService {
             id: profile.id,
             nickname: profile.nickname,
             isPrimary: profile.isPrimary,
-            authmeUuid: profile.authmeUuid,
-            authmeBinding: profile.authmeBinding
-              ? {
-                  id: profile.authmeBinding.id,
-                  username: profile.authmeBinding.authmeUsername,
-                  realname: profile.authmeBinding.authmeRealname,
-                  uuid: profile.authmeBinding.authmeUuid,
-                }
-              : null,
           })),
           roles: user.roles.map(({ role }) => ({
             id: role.id,

@@ -241,15 +241,20 @@ async function handleLabelsChange(user: AdminUserListItem, value: unknown) {
 }
 
 function minecraftBadges(user: AdminUserListItem) {
-  return (user.minecraftIds ?? []).map((profile) => ({
-    id: profile.id,
-    username: profile.authmeBinding?.authmeUsername ?? null,
-    label:
-      profile.authmeBinding?.authmeUsername ??
-      profile.nickname ??
-      profile.authmeBinding?.authmeRealname ??
-      '未命名',
-    isPrimary: profile.isPrimary,
+  const list =
+    (
+      user as unknown as {
+        nicknames?: Array<{
+          id: string
+          nickname?: string | null
+          isPrimary?: boolean
+        }>
+      }
+    ).nicknames ?? []
+  return list.map((p) => ({
+    id: p.id,
+    label: p.nickname ?? '未命名',
+    isPrimary: p.isPrimary ?? false,
   }))
 }
 
@@ -422,7 +427,7 @@ onMounted(async () => {
               </div>
             </td>
             <td class="px-4 py-4 text-sm">
-              <USelectMenu
+              <USelect
                 :model-value="roleKeysOf(item)"
                 :items="roleOptions"
                 multiple
@@ -437,7 +442,7 @@ onMounted(async () => {
               />
             </td>
             <td class="px-4 py-4 text-sm">
-              <USelectMenu
+              <USelect
                 :model-value="labelKeysOf(item)"
                 :items="labelOptions"
                 multiple
@@ -453,55 +458,41 @@ onMounted(async () => {
             </td>
             <td class="px-4 py-4 text-sm">
               <div class="flex flex-wrap items-center gap-2">
-                <RouterLink
+                <UBadge
                   v-for="badge in minecraftBadges(item).slice(
                     0,
                     maxMinecraftBadges,
                   )"
                   :key="badge.id"
-                  :to="
-                    badge.username
-                      ? {
-                          name: 'admin.players',
-                          query: { keyword: badge.username },
-                        }
-                      : { name: 'admin.players' }
-                  "
+                  color="neutral"
+                  variant="soft"
+                  class="text-[11px]"
                 >
-                  <UBadge
-                    color="neutral"
-                    variant="soft"
-                    class="cursor-pointer text-[11px]"
+                  {{ badge.label }}
+                  <span v-if="badge.isPrimary" class="ml-1 text-[10px]"
+                    >主</span
                   >
-                    {{ badge.label }}
-                    <span v-if="badge.isPrimary" class="ml-1 text-[10px]"
-                      >主</span
-                    >
-                  </UBadge>
-                </RouterLink>
+                </UBadge>
                 <UTooltip
-                  v-if="(item.minecraftIds?.length ?? 0) > maxMinecraftBadges"
+                  v-if="
+                    (minecraftBadges(item).length ?? 0) > maxMinecraftBadges
+                  "
                   :text="
-                    (item.minecraftIds ?? [])
+                    minecraftBadges(item)
                       .slice(maxMinecraftBadges)
-                      .map(
-                        (profile) =>
-                          profile.authmeBinding?.authmeUsername ??
-                          profile.nickname ??
-                          '未命名',
-                      )
+                      .map((p) => p.label)
                       .join('、')
                   "
                 >
                   <UBadge color="neutral" variant="soft" class="text-[11px]">
-                    +{{ (item.minecraftIds?.length ?? 0) - maxMinecraftBadges }}
+                    +{{ minecraftBadges(item).length - maxMinecraftBadges }}
                   </UBadge>
                 </UTooltip>
                 <span
-                  v-if="!item.minecraftIds || item.minecraftIds.length === 0"
+                  v-if="minecraftBadges(item).length === 0"
                   class="text-xs text-slate-400"
                 >
-                  未绑定
+                  无昵称
                 </span>
               </div>
             </td>
@@ -568,22 +559,23 @@ onMounted(async () => {
       </div>
     </div>
 
-    <UModal v-model:open="detailDialogOpen" :ui="{ content: 'w-full max-w-5xl' }">
+    <UModal
+      v-model:open="detailDialogOpen"
+      :ui="{ content: 'w-full max-w-3xl' }"
+    >
       <template #content>
         <div class="flex h-full max-h-[85vh] flex-col">
           <div
-            class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800/60"
+            class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800"
           >
             <div>
-              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <p
+                class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+              >
                 用户详情
               </p>
               <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
-                {{
-                  detailSelectedUser?.profile?.displayName ??
-                    detailSelectedUser?.email ??
-                    '用户详情'
-                }}
+                {{ detailSelectedUser?.email ?? '无用户信息' }}
               </h3>
             </div>
             <UButton
@@ -611,7 +603,11 @@ onMounted(async () => {
       </template>
     </UModal>
 
-    <UModal :open="piicDialogOpen" @update:open="piicDialogOpen = $event" :ui="{ content: 'w-full max-w-lg' }">
+    <UModal
+      :open="piicDialogOpen"
+      @update:open="piicDialogOpen = $event"
+      :ui="{ content: 'w-full max-w-lg' }"
+    >
       <template #content>
         <div class="space-y-4 p-6 text-sm">
           <div class="flex items-center justify-between">
@@ -628,7 +624,9 @@ onMounted(async () => {
             将为用户重新生成 PIIC 编号，历史编号会作废。请填写备注以便审计记录。
           </p>
           <div class="space-y-1">
-            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">
+            <label
+              class="block text-xs font-medium text-slate-600 dark:text-slate-300"
+            >
               备注（可选）
             </label>
             <UTextarea
@@ -638,8 +636,15 @@ onMounted(async () => {
             />
           </div>
           <div class="flex justify-end gap-2">
-            <UButton color="neutral" variant="ghost" @click="closePiicDialog">取消</UButton>
-            <UButton color="primary" :loading="piicSubmitting" @click="confirmPiicRegeneration">确认重新生成</UButton>
+            <UButton color="neutral" variant="ghost" @click="closePiicDialog"
+              >取消</UButton
+            >
+            <UButton
+              color="primary"
+              :loading="piicSubmitting"
+              @click="confirmPiicRegeneration"
+              >确认重新生成</UButton
+            >
           </div>
         </div>
       </template>

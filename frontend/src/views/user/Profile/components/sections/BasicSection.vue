@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { parseDate } from '@internationalized/date'
-import dayjs from 'dayjs'
 import type { GenderType } from '@/stores/auth'
 import RegionSelector from '../RegionSelector.vue'
 import { countries } from '../region-data'
@@ -90,7 +88,6 @@ const languageLabel = computed(() => {
   )
 })
 
-const birthdayOpen = ref(false)
 const editingBasic = ref(false)
 const editingRegion = ref(false)
 const basicSnapshot = ref<string | null>(null)
@@ -394,7 +391,7 @@ defineExpose({ forceEdit })
           性别
         </div>
         <div class="flex-1">
-          <USelectMenu
+          <USelect
             v-if="editingBasic"
             :model-value="props.modelValue.gender"
             :items="props.genderOptions"
@@ -422,45 +419,13 @@ defineExpose({ forceEdit })
           生日
         </div>
         <div class="flex-1">
-          <UPopover
+          <UInput
             v-if="editingBasic"
-            :open="birthdayOpen"
-            @update:open="(v: boolean) => (birthdayOpen = v)"
-          >
-            <UInput
-              :model-value="props.modelValue.birthday"
-              readonly
-              class="w-full flex cursor-pointer"
-              placeholder="选择日期"
-              @click="birthdayOpen = true"
-            />
-            <template #content>
-              <div class="p-2">
-                <UCalendar
-                  :model-value="
-                    props.modelValue.birthday
-                      ? parseDate(props.modelValue.birthday)
-                      : undefined
-                  "
-                  fixed-weeks
-                  @update:model-value="
-                    (d: any) => {
-                      if (!d) {
-                        update('birthday', '')
-                        birthdayOpen = false
-                        return
-                      }
-                      const dateStr = dayjs(
-                        new Date(d.year, d.month - 1, d.day),
-                      ).format('YYYY-MM-DD')
-                      update('birthday', dateStr)
-                      birthdayOpen = false
-                    }
-                  "
-                />
-              </div>
-            </template>
-          </UPopover>
+            :model-value="props.modelValue.birthday"
+            type="date"
+            class="w-full"
+            @update:model-value="(v: string) => update('birthday', v)"
+          />
           <p 
             v-else 
             class="text-sm"
@@ -480,7 +445,7 @@ defineExpose({ forceEdit })
           时区
         </div>
         <div class="flex-1">
-          <USelectMenu
+          <USelect
             v-if="editingBasic"
             :model-value="props.modelValue.timezone"
             :items="props.timezoneOptions"
@@ -509,7 +474,7 @@ defineExpose({ forceEdit })
           语言
         </div>
         <div class="flex-1">
-          <USelectMenu
+          <USelect
             v-if="editingBasic"
             :model-value="props.modelValue.locale"
             :items="props.languageOptions"
@@ -605,7 +570,7 @@ defineExpose({ forceEdit })
           手机号
         </div>
         <div class="flex-1 flex gap-2">
-          <USelectMenu
+          <USelect
             v-if="editingRegion"
             :model-value="props.modelValue.phoneCountry"
             :items="[...phoneRegions]"

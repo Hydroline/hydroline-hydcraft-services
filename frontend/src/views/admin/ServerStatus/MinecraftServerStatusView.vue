@@ -540,7 +540,7 @@ async function submitAdhoc() {
           >服务器历史图表</span
         >
         <div class="flex items-center gap-2">
-          <USelectMenu
+          <USelect
             v-model="chartServerId"
             :items="serverSelectItems"
             value-key="id"
@@ -871,7 +871,7 @@ async function submitAdhoc() {
                 class="text-sm text-slate-600 dark:text-slate-300"
                 >版本</label
               >
-              <USelectMenu
+              <USelect
                 id="edition"
                 v-model="form.edition"
                 :items="editionOptions"
@@ -1073,7 +1073,7 @@ async function submitAdhoc() {
                 <label class="text-xs text-slate-500 dark:text-slate-400"
                   >版本</label
                 >
-                <USelectMenu
+                <USelect
                   v-model="adhocForm.edition"
                   :items="editionOptions"
                   value-key="value"

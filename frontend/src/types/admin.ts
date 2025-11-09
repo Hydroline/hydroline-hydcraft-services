@@ -3,14 +3,7 @@ import type { PortalRole } from './portal'
 export interface AdminMinecraftProfile {
   id: string
   nickname?: string | null
-  authmeUuid?: string | null
   isPrimary: boolean
-  authmeBinding?: {
-    id: string | null
-    authmeUsername: string | null
-    authmeRealname: string | null
-    authmeUuid: string | null
-  } | null
 }
 
 export interface AdminUserListItem {
@@ -40,6 +33,7 @@ export interface AdminUserListItem {
     labelId: string
     label: AdminPermissionLabelEntry
   }>
+  nicknames?: AdminMinecraftProfile[]
 }
 
 export interface AdminUserListResponse {
@@ -69,6 +63,7 @@ export interface AdminUserDetail extends AdminUserListItem {
   joinDate: string | null
   lastLoginAt: string | null
   lastLoginIp: string | null
+  avatarUrl?: string | null
   profile:
     | (AdminUserListItem['profile'] & {
         birthday?: string | null
@@ -80,6 +75,7 @@ export interface AdminUserDetail extends AdminUserListItem {
       })
     | null
   authmeBindings: AdminAuthmeBindingEntry[]
+  nicknames?: AdminMinecraftProfile[]
   contacts?: Array<AdminContactEntry>
   permissionLabels?: Array<{
     id: string

@@ -200,17 +200,7 @@ export class UsersService {
             {
               minecraftIds: {
                 some: {
-                  OR: [
-                    { nickname: { contains: keyword, mode: 'insensitive' } },
-                    {
-                      authmeBinding: {
-                        authmeUsername: {
-                          contains: keyword,
-                          mode: 'insensitive',
-                        },
-                      },
-                    },
-                  ],
+                  nickname: { contains: keyword, mode: 'insensitive' },
                 },
               },
             },
@@ -239,22 +229,16 @@ export class UsersService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
-          profile: true,
+          profile: {
+            include: {
+              primaryMinecraftProfile: true,
+            },
+          },
           statusSnapshot: true,
           roles: { include: { role: true } },
           minecraftIds: {
             orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
             take: 5,
-            include: {
-              authmeBinding: {
-                select: {
-                  id: true,
-                  authmeUsername: true,
-                  authmeRealname: true,
-                  authmeUuid: true,
-                },
-              },
-            },
           },
           permissionLabels: {
             include: {
@@ -272,8 +256,83 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
+    const mappedItems = items.map((user) => {
+      const nicknames = (user.minecraftIds ?? []).map((p) => {
+        const res: {
+          id: string;
+          userId: string;
+          nickname: string | null;
+          isPrimary: boolean;
+          createdAt: Date;
+          updatedAt: Date;
+          source?: string | null;
+          verifiedAt?: Date | null;
+          verificationNote?: string | null;
+          metadata?: unknown;
+        } = {
+          id: p.id,
+          userId: p.userId,
+          nickname: p.nickname,
+          isPrimary: p.isPrimary,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        };
+        const anyP = p as unknown as Partial<{
+          source: string | null;
+          verifiedAt: Date | null;
+          verificationNote: string | null;
+          metadata: unknown;
+        }>;
+        if (Object.prototype.hasOwnProperty.call(anyP, 'source')) {
+          res.source = anyP.source ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(anyP, 'verifiedAt')) {
+          res.verifiedAt = anyP.verifiedAt ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(anyP, 'verificationNote')) {
+          res.verificationNote = anyP.verificationNote ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(anyP, 'metadata')) {
+          res.metadata = anyP.metadata ?? null;
+        }
+        return res;
+      });
+
+      // 提供简化的 primaryMinecraft 以便前端列表显示（无 authme 绑定信息）
+      const primaryMinecraft = user.profile?.primaryMinecraftProfile
+        ? {
+            id: user.profile.primaryMinecraftProfile.id,
+            nickname: user.profile.primaryMinecraftProfile.nickname,
+            isPrimary: true,
+          }
+        : null;
+
+      return {
+        ...user,
+        profile: user.profile
+          ? { ...user.profile, primaryMinecraft }
+          : user.profile,
+        nicknames,
+        minecraftIds: undefined,
+      } as typeof user & {
+        nicknames: typeof nicknames;
+        minecraftIds?: undefined;
+        profile: typeof user.profile extends infer P
+          ? P extends object
+            ? Omit<P, 'primaryMinecraftProfile'> & {
+                primaryMinecraft: {
+                  id: string;
+                  nickname: string | null;
+                  isPrimary: boolean;
+                } | null;
+              }
+            : P
+          : typeof user.profile;
+      };
+    });
+
     return {
-      items,
+      items: mappedItems,
       pagination: {
         total,
         page,
@@ -580,18 +639,7 @@ export class UsersService {
       where: { id: userId },
       include: {
         profile: true,
-        minecraftIds: {
-          include: {
-            authmeBinding: {
-              select: {
-                id: true,
-                authmeUsername: true,
-                authmeRealname: true,
-                authmeUuid: true,
-              },
-            },
-          },
-        },
+        minecraftIds: true, // 原始字段内部仅保留昵称相关数据，后续将映射为 nicknames
         authmeBindings: true,
         sessions: {
           orderBy: { createdAt: 'desc' },
@@ -647,11 +695,65 @@ export class UsersService {
 
     return {
       ...user,
+      nicknames: user.minecraftIds.map((p) => {
+        const res: {
+          id: string;
+          userId: string;
+          nickname: string | null;
+          isPrimary: boolean;
+          createdAt: Date;
+          updatedAt: Date;
+          source?: string | null;
+          verifiedAt?: Date | null;
+          verificationNote?: string | null;
+          metadata?: unknown;
+        } = {
+          id: p.id,
+          userId: p.userId,
+          nickname: p.nickname,
+          isPrimary: p.isPrimary,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        };
+        const anyP = p as unknown as Partial<{
+          source: string | null;
+          verifiedAt: Date | null;
+          verificationNote: string | null;
+          metadata: unknown;
+        }>;
+        if (Object.prototype.hasOwnProperty.call(anyP, 'source')) {
+          res.source = anyP.source ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(anyP, 'verifiedAt')) {
+          res.verifiedAt = anyP.verifiedAt ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(anyP, 'verificationNote')) {
+          res.verificationNote = anyP.verificationNote ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(anyP, 'metadata')) {
+          res.metadata = anyP.metadata ?? null;
+        }
+        return res;
+      }),
+      minecraftIds: undefined,
       authmeBindings: bindingData.bindings,
       luckperms: bindingData.luckperms,
     } as typeof user & {
       authmeBindings: typeof bindingData.bindings;
       luckperms: typeof bindingData.luckperms;
+      nicknames: Array<{
+        id: string;
+        userId: string;
+        nickname: string | null;
+        isPrimary: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        source?: string | null;
+        verifiedAt?: Date | null;
+        verificationNote?: string | null;
+        metadata?: unknown;
+      }>;
+      minecraftIds?: undefined;
     };
   }
 
