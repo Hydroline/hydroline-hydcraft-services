@@ -499,6 +499,21 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    const passwordRows = await this.prisma.$queryRaw<
+      Array<{
+        password: string | null;
+        passwordNeedsReset: boolean | null;
+        passwordUpdatedAt: Date | null;
+      }>
+    >`SELECT "password", "passwordNeedsReset", "passwordUpdatedAt" FROM "users" WHERE "id" = ${userId} LIMIT 1`;
+
+    const passwordSnapshot = passwordRows[0] ?? null;
+    const security = {
+      hasPassword: Boolean(passwordSnapshot?.password),
+      passwordNeedsReset: Boolean(passwordSnapshot?.passwordNeedsReset),
+      passwordUpdatedAt: passwordSnapshot?.passwordUpdatedAt ?? null,
+    } as const;
+
     // Enrich AuthMe bindings with live metadata and expose LuckPerms snapshots alongside bindings
     const normalizedLastLoginIp = normalizeIpAddress(user.lastLoginIp);
     const [lastLoginLocation, bindingData] = await Promise.all([
@@ -515,12 +530,14 @@ export class UsersService {
       lastLoginIpLocationRaw: lastLoginLocation?.raw ?? null,
       authmeBindings: bindingData.bindings,
       luckperms: bindingData.luckperms,
+      security,
     } as typeof user & {
       authmeBindings: typeof bindingData.bindings;
       luckperms: typeof bindingData.luckperms;
       lastLoginIp: typeof normalizedLastLoginIp;
       lastLoginIpLocation: string | null;
       lastLoginIpLocationRaw: string | null;
+      security: typeof security;
     };
   }
 
@@ -771,6 +788,68 @@ export class UsersService {
     return { success: true } as const;
   }
 
+  async updateOwnPassword(userId: string, password: string) {
+    await this.ensureUser(userId);
+    const trimmed = password.trim();
+    if (trimmed.length < 8) {
+      throw new BadRequestException('密码长度至少 8 位');
+    }
+    const hashed = await hashPassword(trimmed);
+    const accountIdentifier = generateRandomString(32, 'a-z', 'A-Z', '0-9');
+
+    await this.prisma.$transaction(async (tx) => {
+      const credential = await tx.account.findFirst({
+        where: {
+          userId,
+          OR: [
+            { provider: 'credential' },
+            { providerId: 'credential' },
+            { providerAccountId: 'credential' },
+          ],
+        },
+      });
+
+      if (credential) {
+        await tx.account.update({
+          where: { id: credential.id },
+          data: { password: hashed },
+        });
+      } else {
+        await tx.account.create({
+          data: {
+            userId,
+            accountId: accountIdentifier,
+            type: 'credential',
+            provider: 'credential',
+            providerId: 'credential',
+            providerAccountId: accountIdentifier,
+            password: hashed,
+          },
+        });
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          password: hashed,
+          passwordNeedsReset: false,
+          passwordUpdatedAt: new Date(),
+        } as Prisma.UserUpdateInput,
+      });
+
+      await tx.userLifecycleEvent.create({
+        data: {
+          userId,
+          eventType: LifecycleEventType.OTHER,
+          occurredAt: new Date(),
+          source: 'self-password-update',
+          notes: '用户更新登录密码',
+          metadata: this.toJsonValue({ selfService: true }),
+        },
+      });
+    });
+  }
+
   async resetUserPassword(
     userId: string,
     dto: ResetUserPasswordDto,
@@ -819,7 +898,11 @@ export class UsersService {
 
       await tx.user.update({
         where: { id: userId },
-        data: { password: hashed },
+        data: {
+          password: hashed,
+          passwordNeedsReset: !trimmed,
+          passwordUpdatedAt: trimmed ? new Date() : null,
+        } as Prisma.UserUpdateInput,
       });
 
       await tx.userLifecycleEvent.create({

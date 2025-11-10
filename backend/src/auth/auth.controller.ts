@@ -22,6 +22,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthGuard } from './auth.guard';
 import { buildRequestContext } from './helpers/request-context.helper';
 import { IpLocationService } from '../lib/ip2region/ip-location.service';
+import { ChangePasswordWithCodeDto } from './dto/change-password-with-code.dto';
 
 @ApiTags('认证')
 @Controller('auth')
@@ -94,6 +95,33 @@ export class AuthController {
     }
     const token = authHeader.slice(7);
     return this.authService.signOut(token);
+  }
+
+  @Post('password/code')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '发送密码验证码到邮箱' })
+  async requestPasswordCode(@Req() req: Request) {
+    await this.authService.requestPasswordChangeCode(
+      req.user!.id,
+      buildRequestContext(req),
+    );
+    return { success: true };
+  }
+
+  @Post('password')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '使用验证码更新密码' })
+  async updatePassword(
+    @Req() req: Request,
+    @Body() dto: ChangePasswordWithCodeDto,
+  ) {
+    const result = await this.authService.updatePasswordWithCode(
+      req.user!.id,
+      dto,
+    );
+    return result;
   }
 
   @Get('session')

@@ -14,13 +14,14 @@ import { OptionalAuthGuard } from './optional-auth.guard';
 import { ApiAuthController } from './api-auth.controller';
 import { ApiAuthmeController } from './api-authme.controller';
 import { Ip2RegionModule } from '../lib/ip2region/ip2region.module';
+import { MailModule } from '../mail/mail.module';
 import { PlayersController } from './players.controller';
 import { PlayersService } from './players.service';
 import { RbacSelfController } from './rbac-self.controller';
 import { AdminAuditService } from './admin-audit.service';
 
 @Module({
-  imports: [Ip2RegionModule],
+  imports: [Ip2RegionModule, MailModule],
   controllers: [
     AuthController,
     ApiAuthController,

@@ -4,6 +4,8 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { compare as bcryptCompare, hash as bcryptHash } from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { auth } from '../lib/shared/auth';
 import { PrismaService } from '../prisma/prisma.service';
 import { RolesService, DEFAULT_ROLES } from './roles.service';
@@ -24,6 +26,8 @@ import {
   AuthFeatureFlags,
 } from '../authme/auth-feature.service';
 import { businessError } from '../authme/authme.errors';
+import { MailService } from '../mail/mail.service';
+import { ChangePasswordWithCodeDto } from './dto/change-password-with-code.dto';
 
 interface AuthResponse {
   token: string | null;
@@ -65,7 +69,10 @@ export class AuthService {
     private readonly authmeService: AuthmeService,
     private readonly authmeBindingService: AuthmeBindingService,
     private readonly authFeatureService: AuthFeatureService,
+    private readonly mailService: MailService,
   ) {}
+
+  private readonly passwordCodeTtlMs = 10 * 60 * 1000;
 
   async initializeDefaults() {
     await this.rolesService.ensureDefaultRolesAndPermissions();
@@ -261,21 +268,127 @@ export class AuthService {
     return this.authFeatureService.getFlags();
   }
 
+  async requestPasswordChangeCode(
+    userId: string,
+    context: RequestContext = {},
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    });
+    if (!user || !user.email) {
+      throw new BadRequestException('当前账户尚未配置邮箱');
+    }
+
+    const identifier = this.buildPasswordCodeIdentifier(user.email);
+    const code = generateRandomString(6, '0-9');
+    const hashed = await bcryptHash(code, 10);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.verification.deleteMany({ where: { identifier } });
+      await tx.verification.create({
+        data: {
+          identifier,
+          value: hashed,
+          expiresAt: new Date(Date.now() + this.passwordCodeTtlMs),
+        },
+      });
+    });
+
+    const displayName = user.name ?? user.email;
+    const ipHint = context.ip ? `（IP：${context.ip}）` : '';
+    const subject = 'Hydroline 密码安全验证码';
+    const plainText = `您好 ${displayName}，\n\n您的密码安全验证码为 ${code}，有效期 10 分钟${ipHint}。如非本人操作，请忽略本邮件。\n\nHydroline 安全中心`;
+    const htmlContent = `
+      <p>您好 ${displayName}：</p>
+      <p>您的密码安全验证码为 <strong>${code}</strong>，有效期 10 分钟${ipHint ? `，${ipHint}` : ''}。</p>
+      <p>如非本人操作，请忽略本邮件。</p>
+      <p>Hydroline 安全中心</p>
+    `;
+
+    await this.mailService.sendMail({
+      to: user.email,
+      subject,
+      text: plainText,
+      html: htmlContent,
+    });
+
+    return { success: true } as const;
+  }
+
+  async updatePasswordWithCode(userId: string, dto: ChangePasswordWithCodeDto) {
+    if (dto.password.length < 8) {
+      throw new BadRequestException('密码长度至少 8 位');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user || !user.email) {
+      throw new BadRequestException('当前账户尚未配置邮箱');
+    }
+
+    const identifier = this.buildPasswordCodeIdentifier(user.email);
+    const record = await this.prisma.verification.findFirst({
+      where: {
+        identifier,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    if (!record) {
+      throw new BadRequestException('验证码无效或已过期');
+    }
+
+    const isMatch = await bcryptCompare(dto.code, record.value);
+    if (!isMatch) {
+      throw new BadRequestException('验证码不正确');
+    }
+
+    await this.prisma.verification
+      .delete({ where: { id: record.id } })
+      .catch(() => undefined);
+
+    await this.usersService.updateOwnPassword(userId, dto.password);
+    const userPayload = await this.usersService.getSessionUser(userId);
+    return { user: userPayload };
+  }
+
   private async registerWithEmail(
     dto: AuthRegisterDto,
     context: RequestContext,
   ) {
-    return this.signUpInternal(
+    if (dto.password.length < 8) {
+      throw new BadRequestException('密码长度至少 8 位');
+    }
+    const email = this.normalizeEmail(dto.email);
+    if (!email) {
+      throw new BadRequestException('邮箱地址不能为空');
+    }
+    const result = await this.signUpInternal(
       {
-        email: dto.email!,
+        email,
         password: dto.password,
-        name: dto.name ?? dto.email!,
+        name: dto.name ?? email,
         rememberMe: dto.rememberMe ?? false,
         minecraftId: dto.minecraftId,
         minecraftNick: dto.minecraftNick,
       },
       context,
     );
+
+    await this.prisma.user.update({
+      where: { id: result.user.id },
+      data: {
+        passwordNeedsReset: false,
+        passwordUpdatedAt: new Date(),
+      } as Prisma.UserUpdateInput,
+    });
+
+    const user = await this.usersService.getSessionUser(result.user.id);
+    return { ...result, user } satisfies AuthOperationResult;
   }
 
   private async registerWithAuthme(
@@ -293,7 +406,16 @@ export class AuthService {
       dto.authmeId,
       dto.password,
     );
-    const email = this.resolveAuthmeEmail(authmeAccount.email);
+    const providedEmail = this.normalizeEmail(dto.email);
+    const authmeEmail = this.normalizeEmail(authmeAccount.email);
+    const email = providedEmail ?? authmeEmail;
+    if (!email) {
+      throw businessError({
+        type: 'BUSINESS_VALIDATION_FAILED',
+        code: 'AUTHME_EMAIL_REQUIRED',
+        safeMessage: '请填写有效的邮箱地址以完成注册',
+      });
+    }
     const usernameLower = authmeAccount.username.toLowerCase();
     const existingBinding =
       await this.authmeBindingService.getBindingByUsernameLower(usernameLower);
@@ -315,6 +437,14 @@ export class AuthService {
       context,
     );
 
+    await this.prisma.user.update({
+      where: { id: result.user.id },
+      data: {
+        passwordNeedsReset: true,
+        passwordUpdatedAt: null,
+      } as Prisma.UserUpdateInput,
+    });
+
     await this.authmeBindingService.bindUser({
       userId: result.user.id,
       authmeUser: authmeAccount,
@@ -326,18 +456,25 @@ export class AuthService {
     return { ...result, user } satisfies AuthOperationResult;
   }
 
-  private resolveAuthmeEmail(email: string | null | undefined) {
-    if (email && email.includes('@')) {
-      return email.trim();
+  private normalizeEmail(email: string | null | undefined) {
+    if (typeof email !== 'string') {
+      return null;
     }
-    throw businessError({
-      type: 'BUSINESS_VALIDATION_FAILED',
-      code: 'AUTHME_EMAIL_REQUIRED',
-      safeMessage: 'AuthMe 账号未配置邮箱，请联系管理员处理',
-    });
+    const trimmed = email.trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  private buildPasswordCodeIdentifier(email: string) {
+    return `password:${email.toLowerCase()}`;
   }
 
   private async loginWithEmail(dto: AuthLoginDto, context: RequestContext) {
+    if (dto.password.length < 8) {
+      throw new BadRequestException('密码长度至少 8 位');
+    }
     const result = await this.signInInternal({
       email: dto.email!,
       password: dto.password,
