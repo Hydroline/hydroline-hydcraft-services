@@ -78,7 +78,15 @@ function deviceIcon(value: string | null | undefined) {
 <template>
   <div class="space-y-3">
     <div class="flex items-center justify-between gap-3">
-      <h3 class="px-1 text-lg text-slate-600 dark:text-slate-300">会话管理</h3>
+      <h3
+        class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300"
+      >
+        会话管理
+
+        <span class="block" v-if="props.loading && props.sessions.length === 0">
+          <UIcon name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+        </span>
+      </h3>
       <UButton
         size="sm"
         variant="ghost"
@@ -96,14 +104,7 @@ function deviceIcon(value: string | null | undefined) {
     </div>
 
     <div
-      v-if="props.loading && props.sessions.length === 0"
-      class="rounded-xl border border-slate-200/70 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800/70 dark:text-slate-400"
-    >
-      正在获取活跃会话...
-    </div>
-
-    <div
-      v-else-if="props.sessions.length === 0"
+      v-if="props.sessions.length === 0"
       class="rounded-xl border border-dashed border-slate-200/70 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800/70 dark:text-slate-400"
     >
       暂无活跃会话。
@@ -168,7 +169,9 @@ function deviceIcon(value: string | null | undefined) {
               class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"
             >
               <UIcon :name="deviceIcon(session.userAgent)" class="h-3" />
-              <span class="leading-none">{{ parseUserAgent(session.userAgent).display }}</span>
+              <span class="leading-none">{{
+                parseUserAgent(session.userAgent).display
+              }}</span>
             </div>
             <div
               class="grid gap-1 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-3"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import {
   Dialog,
   DialogPanel,
@@ -31,6 +31,7 @@ const forgotSending = ref(false)
 const forgotError = ref('')
 const codeDialogOpen = ref(false)
 const registerError = ref('')
+const suppressLoginClose = ref(false) // prevents login dialog close when forgot modal toggles
 
 const loginForm = reactive({
   email: '',
@@ -158,6 +159,18 @@ async function handleRegister() {
 }
 
 function closeDialog() {
+  if (suppressLoginClose.value) {
+    suppressLoginClose.value = false
+    return
+  }
+  if (forgotOpen.value) {
+    suppressLoginClose.value = true
+    closeForgot()
+    nextTick(() => {
+      suppressLoginClose.value = false
+    })
+    return
+  }
   uiStore.closeLoginDialog()
 }
 
@@ -173,6 +186,16 @@ async function openForgot() {
 function closeForgot() {
   forgotOpen.value = false
   codeDialogOpen.value = false
+}
+
+function handleForgotDialogButton(event: Event) {
+  event.stopPropagation()
+  event.preventDefault()
+  suppressLoginClose.value = true
+  closeForgot()
+  nextTick(() => {
+    suppressLoginClose.value = false
+  })
 }
 
 async function sendForgotCode() {
@@ -616,9 +639,13 @@ function resendForgotCode() {
                       @click="sendForgotCode"
                       >发送验证码</UButton
                     >
-                    <UButton variant="ghost" class="flex-1" @click="closeForgot"
-                      >取消</UButton
+                    <UButton
+                      variant="ghost"
+                      class="flex-1"
+                      @click="handleForgotDialogButton"
                     >
+                      取消
+                    </UButton>
                   </div>
                 </template>
                 <template v-else-if="forgotStep === 'CODE'">
@@ -651,9 +678,13 @@ function resendForgotCode() {
                     <UIcon name="i-lucide-check" class="h-5 w-5" />
                     密码已重置，请使用新密码登录。
                   </div>
-                  <UButton color="primary" class="w-full" @click="closeForgot"
-                    >关闭</UButton
+                  <UButton
+                    color="primary"
+                    class="w-full"
+                    @click="handleForgotDialogButton"
                   >
+                    关闭
+                  </UButton>
                 </template>
                 <p
                   v-if="forgotError"

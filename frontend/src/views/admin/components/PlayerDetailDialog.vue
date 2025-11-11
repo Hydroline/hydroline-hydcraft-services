@@ -316,7 +316,7 @@ function openBoundUser() {
             class="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400"
           >
             <UIcon name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            正在加载玩家信息…
+            正在加载玩家信息
           </div>
           <UAlert
             v-else-if="error"

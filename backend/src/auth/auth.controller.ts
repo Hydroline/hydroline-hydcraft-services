@@ -190,7 +190,7 @@ export class AuthController {
     const userId = req.user?.id;
     if (!userId) throw new UnauthorizedException('Invalid session');
     const items = await this.usersService.listEmailContacts(userId);
-    return { items };
+    return { items, contacts: items };
   }
 
   @Post('me/contacts/email')

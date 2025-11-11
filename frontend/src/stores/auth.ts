@@ -241,14 +241,18 @@ export const useAuthStore = defineStore('auth', {
       if (!this.token) {
         throw new ApiError(401, '未登录')
       }
-      const result = await apiFetch<{ contacts: EmailContact[] }>(
-        '/auth/me/contacts/email',
-        {
-          token: this.token,
-        },
-      )
-      // Optionally merge into user cache if backend also returns on /me
-      return result.contacts
+      const result = await apiFetch<{
+        items?: EmailContact[]
+        contacts?: EmailContact[]
+      }>('/auth/me/contacts/email', {
+        token: this.token,
+      })
+      const contacts = Array.isArray(result.items)
+        ? result.items
+        : Array.isArray(result.contacts)
+          ? result.contacts
+          : []
+      return contacts
     },
     // Authenticated: add an email contact (will send verification code)
     async addEmailContact(email: string) {

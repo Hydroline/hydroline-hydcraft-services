@@ -39,18 +39,20 @@ type PortalAdminConfigResponse = {
   }>
 }
 
-type EditableHeroBackground = PortalAdminConfigResponse['hero']['backgrounds'][number] & {
-  editAttachmentId: string
-  editDescription: string
-}
+type EditableHeroBackground =
+  PortalAdminConfigResponse['hero']['backgrounds'][number] & {
+    editAttachmentId: string
+    editDescription: string
+  }
 
-type EditableNavigationItem = PortalAdminConfigResponse['navigation'][number] & {
-  editLabel: string
-  editTooltip: string
-  editUrl: string
-  editIcon: string
-  editAvailable: boolean
-}
+type EditableNavigationItem =
+  PortalAdminConfigResponse['navigation'][number] & {
+    editLabel: string
+    editTooltip: string
+    editUrl: string
+    editIcon: string
+    editAvailable: boolean
+  }
 
 type CardRegistryEntry = PortalAdminConfigResponse['registry'][number]
 
@@ -149,11 +151,14 @@ async function fetchConfig() {
   loading.value = true
   uiStore.startLoading()
   try {
-    const response = await apiFetch<PortalAdminConfigResponse>('/admin/portal/config', {
-      token,
-    })
-  heroSubtitle.value = response.hero.subtitle
-  heroSubtitleDraft.value = response.hero.subtitle
+    const response = await apiFetch<PortalAdminConfigResponse>(
+      '/admin/portal/config',
+      {
+        token,
+      },
+    )
+    heroSubtitle.value = response.hero.subtitle
+    heroSubtitleDraft.value = response.hero.subtitle
     assignHeroBackgrounds(
       response.hero.backgrounds.map((item) => ({
         ...item,
@@ -553,7 +558,9 @@ onMounted(() => {
 <template>
   <div class="space-y-8">
     <header>
-      <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Portal 首页配置</h2>
+      <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">
+        Portal 首页配置
+      </h2>
       <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
         管理 Hero 背景、导航按钮与卡片可见性，所有改动实时保存至后端配置中心。
       </p>
@@ -564,31 +571,48 @@ onMounted(() => {
       color="neutral"
       variant="soft"
       title="正在加载配置"
-      description="请稍候，正在同步最新的 Portal 首页配置……"
+      description="正在同步最新的 Portal 首页配置"
     />
 
     <UCard>
       <template #header>
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Hero 区域配置</h3>
-            <p class="text-sm text-slate-500 dark:text-slate-400">设置首页顶部背景轮播与副标题文案。</p>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              Hero 区域配置
+            </h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+              设置首页顶部背景轮播与副标题文案。
+            </p>
           </div>
-          <UBadge variant="soft" color="primary">{{ heroBackgrounds.length }} 张背景图</UBadge>
+          <UBadge variant="soft" color="primary"
+            >{{ heroBackgrounds.length }} 张背景图</UBadge
+          >
         </div>
       </template>
 
       <div class="space-y-6">
-        <section class="rounded-2xl border border-slate-200/70 bg-white/80 p-4 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70">
-          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <section
+          class="rounded-2xl border border-slate-200/70 bg-white/80 p-4 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+        >
+          <div
+            class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+          >
             <div>
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <p
+                class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+              >
                 Hero 副标题
               </p>
-              <p v-if="heroSubtitle" class="text-base font-medium text-slate-900 dark:text-white">
+              <p
+                v-if="heroSubtitle"
+                class="text-base font-medium text-slate-900 dark:text-white"
+              >
                 {{ heroSubtitle }}
               </p>
-              <p v-else class="text-base text-slate-400 dark:text-slate-500">尚未设置副标题</p>
+              <p v-else class="text-base text-slate-400 dark:text-slate-500">
+                尚未设置副标题
+              </p>
             </div>
             <UButton
               v-if="!isEditingHeroSubtitle"
@@ -609,14 +633,15 @@ onMounted(() => {
               placeholder="例如：ALPHA 测试阶段"
             />
             <div class="flex items-center justify-end gap-2 md:justify-start">
-              <UButton
-                type="submit"
-                color="primary"
-                :loading="isMutating"
-              >
+              <UButton type="submit" color="primary" :loading="isMutating">
                 保存副标题
               </UButton>
-              <UButton type="button" variant="ghost" :disabled="isMutating" @click="cancelHeroSubtitleEdit">
+              <UButton
+                type="button"
+                variant="ghost"
+                :disabled="isMutating"
+                @click="cancelHeroSubtitleEdit"
+              >
                 取消
               </UButton>
             </div>
@@ -647,18 +672,32 @@ onMounted(() => {
                     alt="背景图预览"
                     class="h-full w-full rounded-xl object-cover"
                   />
-                  <span v-else class="text-xs text-slate-400 dark:text-slate-500">暂无预览</span>
+                  <span
+                    v-else
+                    class="text-xs text-slate-400 dark:text-slate-500"
+                    >暂无预览</span
+                  >
                 </div>
                 <div class="flex-1 space-y-3">
                   <div class="grid gap-3 sm:grid-cols-2">
                     <div class="space-y-1">
-                      <p class="text-xs font-medium text-slate-500 dark:text-slate-300">附件 ID</p>
-                      <p class="text-sm text-slate-900 dark:text-white break-all">
+                      <p
+                        class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                      >
+                        附件 ID
+                      </p>
+                      <p
+                        class="text-sm text-slate-900 dark:text-white break-all"
+                      >
                         {{ background.attachmentId || '未配置' }}
                       </p>
                     </div>
                     <div class="space-y-1">
-                      <p class="text-xs font-medium text-slate-500 dark:text-slate-300">描述</p>
+                      <p
+                        class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                      >
+                        描述
+                      </p>
                       <p class="text-sm text-slate-600 dark:text-slate-300">
                         {{ background.description || '未填写描述' }}
                       </p>
@@ -667,7 +706,9 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <div
+                class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400"
+              >
                 <div class="flex items-center gap-2">
                   <UBadge
                     :color="background.available ? 'primary' : 'neutral'"
@@ -680,7 +721,11 @@ onMounted(() => {
                   <UButton
                     size="xs"
                     variant="soft"
-                    :disabled="index === 0 || isMutating || editingHeroBackgroundId === background.id"
+                    :disabled="
+                      index === 0 ||
+                      isMutating ||
+                      editingHeroBackgroundId === background.id
+                    "
                     @click="moveHeroBackground(index, -1)"
                   >
                     上移
@@ -688,7 +733,11 @@ onMounted(() => {
                   <UButton
                     size="xs"
                     variant="soft"
-                    :disabled="index === heroBackgrounds.length - 1 || isMutating || editingHeroBackgroundId === background.id"
+                    :disabled="
+                      index === heroBackgrounds.length - 1 ||
+                      isMutating ||
+                      editingHeroBackgroundId === background.id
+                    "
                     @click="moveHeroBackground(index, 1)"
                   >
                     下移
@@ -739,14 +788,20 @@ onMounted(() => {
               >
                 <div class="grid gap-3 md:grid-cols-2">
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">附件 ID</label>
+                    <label
+                      class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                      >附件 ID</label
+                    >
                     <UInput
                       v-model="background.editAttachmentId"
                       placeholder="输入附件 ID"
                     />
                   </div>
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">描述</label>
+                    <label
+                      class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                      >描述</label
+                    >
                     <UInput
                       v-model="background.editDescription"
                       placeholder="用于顶部标题显示"
@@ -776,14 +831,20 @@ onMounted(() => {
           <div v-if="showNewBackgroundForm" class="mt-3 space-y-4">
             <div class="grid gap-3 md:grid-cols-2">
               <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">附件 ID</label>
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >附件 ID</label
+                >
                 <UInput
                   v-model="newBackground.attachmentId"
                   placeholder="来自附件系统的 ID"
                 />
               </div>
               <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">描述（可选）</label>
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >描述（可选）</label
+                >
                 <UInput
                   v-model="newBackground.description"
                   placeholder="用于顶部标题显示"
@@ -798,7 +859,12 @@ onMounted(() => {
               >
                 添加背景图
               </UButton>
-              <UButton type="button" variant="ghost" :disabled="isMutating" @click="resetHeroBackgroundForm">
+              <UButton
+                type="button"
+                variant="ghost"
+                :disabled="isMutating"
+                @click="resetHeroBackgroundForm"
+              >
                 重置
               </UButton>
             </div>
@@ -811,10 +877,16 @@ onMounted(() => {
       <template #header>
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">导航链接管理</h3>
-            <p class="text-sm text-slate-500 dark:text-slate-400">维护首页按钮的图标、链接与顺序。</p>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              导航链接管理
+            </h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+              维护首页按钮的图标、链接与顺序。
+            </p>
           </div>
-          <UBadge variant="soft" color="primary">{{ navigationItems.length }} 条导航</UBadge>
+          <UBadge variant="soft" color="primary"
+            >{{ navigationItems.length }} 条导航</UBadge
+          >
         </div>
       </template>
 
@@ -833,17 +905,29 @@ onMounted(() => {
             class="rounded-2xl border border-slate-200/70 bg-white/80 p-4 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
           >
             <div class="space-y-4">
-              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div
+                class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"
+              >
                 <div class="space-y-2">
-                  <h4 class="text-base font-semibold text-slate-900 dark:text-white">
+                  <h4
+                    class="text-base font-semibold text-slate-900 dark:text-white"
+                  >
                     {{ item.label || '未命名导航' }}
-                    <span class="text-xs font-normal text-slate-400 dark:text-slate-500">（{{ item.id }}）</span>
+                    <span
+                      class="text-xs font-normal text-slate-400 dark:text-slate-500"
+                      >（{{ item.id }}）</span
+                    >
                   </h4>
-                  <div class="grid gap-1 text-xs text-slate-500 dark:text-slate-400 sm:grid-cols-2">
+                  <div
+                    class="grid gap-1 text-xs text-slate-500 dark:text-slate-400 sm:grid-cols-2"
+                  >
                     <span>图标：{{ item.icon || '未设置' }}</span>
                     <span>链接：{{ item.url || '未配置' }}</span>
                   </div>
-                  <p v-if="item.tooltip" class="text-xs text-slate-400 dark:text-slate-500">
+                  <p
+                    v-if="item.tooltip"
+                    class="text-xs text-slate-400 dark:text-slate-500"
+                  >
                     提示：{{ item.tooltip }}
                   </p>
                 </div>
@@ -851,7 +935,11 @@ onMounted(() => {
                   <UButton
                     size="xs"
                     variant="soft"
-                    :disabled="index === 0 || isMutating || editingNavigationId === item.id"
+                    :disabled="
+                      index === 0 ||
+                      isMutating ||
+                      editingNavigationId === item.id
+                    "
                     @click="moveNavigationItem(index, -1)"
                   >
                     上移
@@ -859,7 +947,11 @@ onMounted(() => {
                   <UButton
                     size="xs"
                     variant="soft"
-                    :disabled="index === navigationItems.length - 1 || isMutating || editingNavigationId === item.id"
+                    :disabled="
+                      index === navigationItems.length - 1 ||
+                      isMutating ||
+                      editingNavigationId === item.id
+                    "
                     @click="moveNavigationItem(index, 1)"
                   >
                     下移
@@ -885,8 +977,13 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <UBadge :color="item.available ? 'primary' : 'neutral'" variant="soft">
+              <div
+                class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
+              >
+                <UBadge
+                  :color="item.available ? 'primary' : 'neutral'"
+                  variant="soft"
+                >
                   {{ item.available ? '已启用' : '已禁用' }}
                 </UBadge>
                 <span>当前排序：第 {{ index + 1 }} 位</span>
@@ -898,25 +995,50 @@ onMounted(() => {
               >
                 <div class="grid gap-3 md:grid-cols-2">
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">显示标题</label>
+                    <label
+                      class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                      >显示标题</label
+                    >
                     <UInput v-model="item.editLabel" placeholder="按钮标题" />
                   </div>
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">图标名称</label>
-                    <UInput v-model="item.editIcon" placeholder="如 i-heroicons-map" />
+                    <label
+                      class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                      >图标名称</label
+                    >
+                    <UInput
+                      v-model="item.editIcon"
+                      placeholder="如 i-heroicons-map"
+                    />
                   </div>
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">链接地址</label>
-                    <UInput v-model="item.editUrl" placeholder="https://example.com" />
+                    <label
+                      class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                      >链接地址</label
+                    >
+                    <UInput
+                      v-model="item.editUrl"
+                      placeholder="https://example.com"
+                    />
                   </div>
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-slate-500 dark:text-slate-300">提示文案</label>
-                    <UInput v-model="item.editTooltip" placeholder="鼠标 hover 提示" />
+                    <label
+                      class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                      >提示文案</label
+                    >
+                    <UInput
+                      v-model="item.editTooltip"
+                      placeholder="鼠标 hover 提示"
+                    />
                   </div>
                 </div>
 
-                <div class="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <div
+                  class="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+                >
+                  <label
+                    class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
+                  >
                     <UCheckbox v-model="item.editAvailable" />
                     启用按钮（未启用时前台将禁用点击）
                   </label>
@@ -962,26 +1084,55 @@ onMounted(() => {
           <div v-if="showNewNavigationForm" class="mt-3 space-y-4">
             <div class="grid gap-3 md:grid-cols-2">
               <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">导航 ID</label>
-                <UInput v-model="newNavigation.id" placeholder="唯一 ID，用于权限控制" />
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >导航 ID</label
+                >
+                <UInput
+                  v-model="newNavigation.id"
+                  placeholder="唯一 ID，用于权限控制"
+                />
               </div>
               <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">显示标题</label>
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >显示标题</label
+                >
                 <UInput v-model="newNavigation.label" placeholder="按钮名称" />
               </div>
               <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">链接地址</label>
-                <UInput v-model="newNavigation.url" placeholder="https://example.com" />
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >链接地址</label
+                >
+                <UInput
+                  v-model="newNavigation.url"
+                  placeholder="https://example.com"
+                />
               </div>
               <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">提示文案</label>
-                <UInput v-model="newNavigation.tooltip" placeholder="悬停提示" />
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >提示文案</label
+                >
+                <UInput
+                  v-model="newNavigation.tooltip"
+                  placeholder="悬停提示"
+                />
               </div>
               <div class="space-y-2">
-                <label class="text-xs font-medium text-slate-500 dark:text-slate-300">图标</label>
-                <UInput v-model="newNavigation.icon" placeholder="如 i-heroicons-map" />
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >图标</label
+                >
+                <UInput
+                  v-model="newNavigation.icon"
+                  placeholder="如 i-heroicons-map"
+                />
               </div>
-              <div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+              <div
+                class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
+              >
                 <UCheckbox v-model="newNavigation.available" />
                 默认启用
               </div>
@@ -994,7 +1145,12 @@ onMounted(() => {
               >
                 添加导航
               </UButton>
-              <UButton type="button" variant="ghost" :disabled="isMutating" @click="resetNavigationForm">
+              <UButton
+                type="button"
+                variant="ghost"
+                :disabled="isMutating"
+                @click="resetNavigationForm"
+              >
                 重置
               </UButton>
             </div>
@@ -1007,12 +1163,16 @@ onMounted(() => {
       <template #header>
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">卡片可见性</h3>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              卡片可见性
+            </h3>
             <p class="text-sm text-slate-500 dark:text-slate-400">
               为已注册的首页卡片分配访问控制，支持按角色或用户精准下发。
             </p>
           </div>
-          <UBadge variant="soft" color="primary">{{ cardsRegistry.length }} 张卡片</UBadge>
+          <UBadge variant="soft" color="primary"
+            >{{ cardsRegistry.length }} 张卡片</UBadge
+          >
         </div>
       </template>
 
@@ -1031,16 +1191,23 @@ onMounted(() => {
         >
           <div class="space-y-3">
             <header>
-              <h4 class="text-base font-semibold text-slate-900 dark:text-white">
+              <h4
+                class="text-base font-semibold text-slate-900 dark:text-white"
+              >
                 {{ entry.card.name }}
-                <span class="text-xs font-normal text-slate-400 dark:text-slate-500">（{{ entry.card.id }}）</span>
+                <span
+                  class="text-xs font-normal text-slate-400 dark:text-slate-500"
+                  >（{{ entry.card.id }}）</span
+                >
               </h4>
               <p class="text-xs text-slate-500 dark:text-slate-400">
                 {{ entry.card.description || '暂无描述信息' }}
               </p>
             </header>
 
-            <div class="flex flex-col gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <div
+              class="flex flex-col gap-2 text-sm text-slate-600 dark:text-slate-300"
+            >
               <label class="flex items-center gap-2">
                 <UCheckbox v-model="entry.form.enabled" />
                 启用卡片
@@ -1052,7 +1219,9 @@ onMounted(() => {
             </div>
 
             <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">
+              <label
+                class="text-xs font-medium text-slate-500 dark:text-slate-300"
+              >
                 角色 Key 列表（逗号分隔）
               </label>
               <UInput
@@ -1062,7 +1231,9 @@ onMounted(() => {
             </div>
 
             <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-500 dark:text-slate-300">
+              <label
+                class="text-xs font-medium text-slate-500 dark:text-slate-300"
+              >
                 指定用户（ID 或邮箱，逗号分隔）
               </label>
               <UInput

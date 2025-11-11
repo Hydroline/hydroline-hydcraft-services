@@ -1649,7 +1649,7 @@ export class UsersService {
         },
       });
     });
-    // 发送邮件（静默失败）
+    // 发送邮件（失败时抛出异常，交由调用方处理）
     try {
       await this.mailService.sendMail({
         to: email,
@@ -1657,8 +1657,13 @@ export class UsersService {
         text: `验证码: ${code}，10 分钟内有效。`,
         html: `<p>您的邮箱验证码为 <strong>${code}</strong>，10 分钟内有效。</p>`,
       });
-    } catch {
-      this.logger.warn('发送邮箱验证邮件失败，已忽略');
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error);
+      this.logger.warn(`发送邮箱验证邮件失败: ${reason}`);
+      throw new BadRequestException('验证码发送失败，请稍后重试');
     }
     return { success: true } as const;
   }
@@ -1712,6 +1717,7 @@ export class UsersService {
 
   async listEmailContacts(userId: string) {
     await this.ensureUser(userId);
+    await this.ensurePrimaryEmailContactRecord(userId);
     return this.prisma.userContact.findMany({
       where: { userId, channel: { key: 'email' } },
       orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
@@ -1722,6 +1728,96 @@ export class UsersService {
         verification: true,
         verifiedAt: true,
       },
+    });
+  }
+
+  private async ensurePrimaryEmailContactRecord(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, emailVerified: true },
+    });
+    if (!user?.email) {
+      return;
+    }
+
+    const channel = await this.prisma.contactChannel.upsert({
+      where: { key: 'email' },
+      update: {},
+      create: {
+        key: 'email',
+        displayName: '邮箱',
+        description: '账号安全与通知邮箱',
+        allowMultiple: true,
+        isRequired: false,
+        isVerifiable: true,
+      },
+      select: { id: true },
+    });
+
+    const existing = await this.prisma.userContact.findFirst({
+      where: { userId, channelId: channel.id, value: user.email },
+      select: {
+        id: true,
+        isPrimary: true,
+        verification: true,
+        verifiedAt: true,
+      },
+    });
+
+    const promoteVerification =
+      user.emailVerified &&
+      existing?.verification !== ContactVerificationStatus.VERIFIED;
+
+    if (!existing) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.userContact.updateMany({
+          where: { userId, channelId: channel.id, isPrimary: true },
+          data: { isPrimary: false },
+        });
+        await tx.userContact.create({
+          data: {
+            userId,
+            channelId: channel.id,
+            value: user.email,
+            isPrimary: true,
+            verification: promoteVerification
+              ? ContactVerificationStatus.VERIFIED
+              : ContactVerificationStatus.UNVERIFIED,
+            verifiedAt: promoteVerification ? new Date() : null,
+          },
+        });
+      });
+      return;
+    }
+
+    if (existing.isPrimary && !promoteVerification) {
+      return;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (!existing.isPrimary) {
+        await tx.userContact.updateMany({
+          where: {
+            userId,
+            channelId: channel.id,
+            isPrimary: true,
+            id: { not: existing.id },
+          },
+          data: { isPrimary: false },
+        });
+      }
+      await tx.userContact.update({
+        where: { id: existing.id },
+        data: {
+          isPrimary: true,
+          verification: promoteVerification
+            ? ContactVerificationStatus.VERIFIED
+            : existing.verification,
+          verifiedAt: promoteVerification
+            ? (existing.verifiedAt ?? new Date())
+            : existing.verifiedAt,
+        },
+      });
     });
   }
 
