@@ -34,6 +34,24 @@ const flags = reactive<VerificationFlags>({
 
 const flagsLoading = ref(false)
 const flagsSaving = ref(false)
+const configDialogOpen = ref(false)
+
+const statusSummaries = computed(() => [
+  {
+    label: '短信验证',
+    enabled: Boolean(flags.enablePasswordReset),
+    description: flags.enablePasswordReset
+      ? '验证码找回密码功能已启用'
+      : '暂未开放验证码找回功能',
+  },
+  {
+    label: '手机验证',
+    enabled: Boolean(flags.enablePhoneVerification),
+    description: flags.enablePhoneVerification
+      ? '支持 +86/+852/+853/+886 区号'
+      : '暂未开启手机号验证',
+  },
+])
 
 async function fetchFlags() {
   if (!auth.token) return
@@ -57,6 +75,10 @@ async function fetchFlags() {
   } finally {
     flagsLoading.value = false
   }
+}
+
+function updateConfigDialog(value: boolean) {
+  configDialogOpen.value = value
 }
 
 async function saveFlags() {
@@ -199,118 +221,178 @@ watch(
 
 <template>
   <div class="space-y-6">
-    <!-- 验证开关 -->
+    <!-- 验证管理入口 -->
     <section
       class="rounded-3xl border border-slate-200/70 bg-white/80 p-5 text-sm dark:border-slate-800/60 dark:bg-slate-900/70"
     >
-      <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-base font-semibold">验证管理</h2>
-        <div class="flex items-center gap-2">
-          <UBadge
-            v-if="!canManageConfig"
-            size="xs"
-            color="warning"
-            variant="soft"
-          >
-            需要 config.manage 权限
-          </UBadge>
-          <UButton
-            color="primary"
-            :disabled="!canManageConfig || flagsSaving"
-            :loading="flagsSaving"
-            @click="saveFlags"
-            >保存</UButton
-          >
+      <div
+        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div class="space-y-3">
+          <h2 class="text-base font-semibold">验证管理</h2>
+          <div class="flex flex-wrap gap-3">
+            <div
+              v-for="item in statusSummaries"
+              :key="item.label"
+              class="flex items-center gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-3 py-2 dark:border-slate-800/60 dark:bg-slate-900/60"
+            >
+              <UIcon
+                :name="
+                  item.enabled ? 'i-lucide-check-circle-2' : 'i-lucide-x-circle'
+                "
+                class="h-5 w-5"
+                :class="item.enabled ? 'text-emerald-500' : 'text-slate-400'"
+              />
+              <div>
+                <p class="text-sm font-medium">
+                  {{ item.label }}{{ item.enabled ? '已启动' : '未启动' }}
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  {{ item.description }}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-
-      <div class="grid gap-4 sm:grid-cols-2">
-        <label
-          class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-900/60"
+        <UButton
+          color="primary"
+          size="sm"
+          :loading="flagsLoading"
+          @click="configDialogOpen = true"
         >
-          <div>
-            <p class="text-sm font-medium">启用邮箱验证</p>
-            <p class="text-xs text-slate-500">
-              用户绑定邮箱需验证后才可设为主邮箱
-            </p>
-          </div>
-          <input
-            type="checkbox"
-            v-model="flags.enableEmailVerification"
-            :disabled="!canManageConfig"
-            class="h-4 w-4"
-          />
-        </label>
-
-        <label
-          class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-900/60"
-        >
-          <div>
-            <p class="text-sm font-medium">启用手机号验证</p>
-            <p class="text-xs text-slate-500">
-              仅大中华区号段（+86/+852/+853/+886）
-            </p>
-          </div>
-          <input
-            type="checkbox"
-            v-model="flags.enablePhoneVerification"
-            :disabled="!canManageConfig"
-            class="h-4 w-4"
-          />
-        </label>
-
-        <label
-          class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-900/60"
-        >
-          <div>
-            <p class="text-sm font-medium">启用“忘记密码”</p>
-            <p class="text-xs text-slate-500">通过邮箱验证码重置密码</p>
-          </div>
-          <input
-            type="checkbox"
-            v-model="flags.enablePasswordReset"
-            :disabled="!canManageConfig"
-            class="h-4 w-4"
-          />
-        </label>
-
-        <div
-          class="grid gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-900/60"
-        >
-          <label class="flex items-center justify-between gap-3">
-            <span class="text-sm">邮箱验证码有效期（分钟）</span>
-            <UInput
-              type="number"
-              v-model.number="flags.emailCodeTtlMinutes"
-              :disabled="!canManageConfig"
-              class="w-28 text-right"
-              min="1"
-            />
-          </label>
-          <label class="flex items-center justify-between gap-3">
-            <span class="text-sm">同邮箱每小时发送上限</span>
-            <UInput
-              type="number"
-              v-model.number="flags.rateLimitPerEmailPerHour"
-              :disabled="!canManageConfig"
-              class="w-28 text-right"
-              min="1"
-            />
-          </label>
-          <label class="flex flex-col gap-2">
-            <span class="text-sm">支持手机号区号</span>
-            <USelect
-              v-model="flags.supportedPhoneRegions"
-              :items="phoneRegionOptions"
-              multiple
-              value-key="value"
-              label-key="label"
-              :disabled="!canManageConfig"
-            />
-          </label>
-        </div>
+          <template #leading>
+            <UIcon name="i-lucide-sliders-horizontal" class="h-4 w-4" />
+          </template>
+          配置开关
+        </UButton>
       </div>
     </section>
+
+    <UModal
+      :open="configDialogOpen"
+      @update:open="updateConfigDialog"
+      :ui="{ content: 'w-full max-w-3xl' }"
+    >
+      <template #content>
+        <div class="space-y-5 p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3
+                class="text-base font-semibold text-slate-900 dark:text-white"
+              >
+                验证配置
+              </h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <UBadge
+                v-if="!canManageConfig"
+                size="xs"
+                color="warning"
+                variant="soft"
+              >
+                需要 config.manage 权限
+              </UBadge>
+              <UButton
+                color="primary"
+                variant="link"
+                :disabled="!canManageConfig || flagsSaving"
+                :loading="flagsSaving"
+                @click="saveFlags"
+              >
+                保存
+              </UButton>
+            </div>
+          </div>
+
+          <div class="grid gap-4">
+            <label
+              class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-900/60"
+            >
+              <div>
+                <p class="text-sm font-medium">启用邮箱验证</p>
+                <p class="text-xs text-slate-500">
+                  用户绑定邮箱需验证后才可设为主邮箱
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                v-model="flags.enableEmailVerification"
+                :disabled="!canManageConfig"
+                class="h-4 w-4"
+              />
+            </label>
+
+            <label
+              class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-900/60"
+            >
+              <div>
+                <p class="text-sm font-medium">启用手机号验证</p>
+                <p class="text-xs text-slate-500">
+                  仅大中华区号段（+86/+852/+853/+886）
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                v-model="flags.enablePhoneVerification"
+                :disabled="!canManageConfig"
+                class="h-4 w-4"
+              />
+            </label>
+
+            <label
+              class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-900/60"
+            >
+              <div>
+                <p class="text-sm font-medium">启用“忘记密码”</p>
+                <p class="text-xs text-slate-500">通过邮箱验证码重置密码</p>
+              </div>
+              <input
+                type="checkbox"
+                v-model="flags.enablePasswordReset"
+                :disabled="!canManageConfig"
+                class="h-4 w-4"
+              />
+            </label>
+
+            <div
+              class="grid gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-900/60"
+            >
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm">邮箱验证码有效期（分钟）</span>
+                <UInput
+                  type="number"
+                  v-model.number="flags.emailCodeTtlMinutes"
+                  :disabled="!canManageConfig"
+                  class="w-28 text-right"
+                  min="1"
+                />
+              </label>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm">同邮箱每小时发送上限</span>
+                <UInput
+                  type="number"
+                  v-model.number="flags.rateLimitPerEmailPerHour"
+                  :disabled="!canManageConfig"
+                  class="w-28 text-right"
+                  min="1"
+                />
+              </label>
+              <label class="flex flex-col gap-2">
+                <span class="text-sm">支持手机号区号</span>
+                <USelect
+                  v-model="flags.supportedPhoneRegions"
+                  :items="phoneRegionOptions"
+                  multiple
+                  value-key="value"
+                  label-key="label"
+                  :disabled="!canManageConfig"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </template>
+    </UModal>
 
     <!-- 未验证用户列表 -->
     <section

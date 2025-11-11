@@ -112,7 +112,7 @@ function resolveGroupLabel(
                 />
                 <img
                   :src="'https://mc-heads.net/avatar/' + b.username"
-                  class="block h-6 w-6 rounded"
+                  class="h-6 w-6 rounded-md border border-slate-200 object-cover dark:border-slate-700"
                   :class="{
                     'opacity-0 absolute': !imageLoadStates[b.username],
                   }"

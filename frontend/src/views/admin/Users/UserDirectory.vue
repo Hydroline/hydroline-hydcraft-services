@@ -6,8 +6,6 @@ import { useUiStore } from '@/stores/ui'
 import type { AdminUserListItem } from '@/types/admin'
 import UserDetailDialog from '@/views/admin/components/UserDetailDialog.vue'
 import PlayerDetailDialog from '@/views/admin/components/PlayerDetailDialog.vue'
-import { apiFetch } from '@/utils/api'
-import { useAuthStore } from '@/stores/auth'
 
 type SortOrder = 'asc' | 'desc'
 type RefreshOptions = {
@@ -141,64 +139,23 @@ function debouncedSearch() {
 
 // 监听关键词变化，自动搜索
 watch(keyword, (newVal) => {
-  if (newVal === '') {
-    // 清空搜索框，立即还原到初始状态
-    if (searchTimeout) clearTimeout(searchTimeout)
-    refresh({ page: 1 })
-  } else {
-    // 有内容则防抖搜索
-    debouncedSearch()
-  }
+  usersStore.keyword = newVal
+  debouncedSearch()
 })
-
-watch(
-  () => pagination.value.page,
-  (page) => {
-    pageInput.value = page ?? 1
-  },
-  { immediate: true },
-)
-
-async function goToPage(page: number) {
-  if (
-    page === pagination.value.page ||
-    page < 1 ||
-    page > safePageCount.value
-  ) {
-    return
-  }
-  await refresh({ page })
-}
-
-function handlePageInput() {
-  const currentPage = pagination.value.page ?? 1
-  const pageCount = safePageCount.value
-  if (pageInput.value === null || Number.isNaN(pageInput.value)) {
-    pageInput.value = currentPage
-    return
-  }
-  const normalized = Math.min(
-    Math.max(Math.trunc(pageInput.value), 1),
-    pageCount,
-  )
-  pageInput.value = normalized
-  void goToPage(normalized)
-}
-
-function toggleSort(field: string) {
-  const nextOrder: SortOrder =
-    sortField.value === field
-      ? sortOrder.value === 'asc'
-        ? 'desc'
-        : 'asc'
-      : 'desc'
-  usersStore.setSort(field, nextOrder)
-  void refresh({ page: 1, sortField: field, sortOrder: nextOrder })
-}
 
 function sortIcon(field: string) {
   if (sortField.value !== field) return 'i-lucide-arrow-up-down'
   return sortOrder.value === 'asc' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'
+}
+
+function toggleSort(field: string) {
+  const currentField = usersStore.sortField
+  const currentOrder = usersStore.sortOrder
+  const nextOrder: SortOrder =
+    currentField === field && currentOrder === 'asc' ? 'desc' : 'asc'
+  usersStore.sortField = field
+  usersStore.sortOrder = nextOrder
+  refresh({ sortField: field, sortOrder: nextOrder, page: 1 })
 }
 
 function openPiicDialog(user: AdminUserListItem) {
@@ -328,6 +285,32 @@ async function handleLabelsChange(user: AdminUserListItem, value: unknown) {
   }
 }
 
+watch(
+  () => pagination.value?.page,
+  (page) => {
+    pageInput.value = page ?? 1
+  },
+  { immediate: true },
+)
+
+async function goToPage(page: number) {
+  const target = Math.max(1, Math.min(page, safePageCount.value))
+  await refresh({ page: target })
+}
+
+function handlePageInput() {
+  if (pageInput.value === null || Number.isNaN(pageInput.value)) {
+    pageInput.value = pagination.value?.page ?? 1
+    return
+  }
+  const normalized = Math.max(
+    1,
+    Math.min(Math.trunc(pageInput.value), safePageCount.value),
+  )
+  pageInput.value = normalized
+  void goToPage(normalized)
+}
+
 type AdminUserAuthmeBinding = {
   id?: string | null
   authmeUsername?: string | null
@@ -445,48 +428,6 @@ function extraEmails(user: AdminUserListItem) {
   )
 }
 
-const addEmailOpen = ref(false)
-const addEmailUser = ref<AdminUserListItem | null>(null)
-const addEmailValue = ref('')
-const addEmailSubmitting = ref(false)
-
-function openAddEmail(user: AdminUserListItem) {
-  addEmailUser.value = user
-  addEmailValue.value = ''
-  addEmailOpen.value = true
-}
-
-function closeAddEmail() {
-  addEmailOpen.value = false
-  addEmailUser.value = null
-  addEmailValue.value = ''
-}
-
-async function submitAddEmail() {
-  if (!addEmailUser.value) return
-  const email = addEmailValue.value.trim()
-  if (!email) return
-  const auth = useAuthStore()
-  if (!auth.token) throw new Error('未登录，无法添加邮箱')
-  addEmailSubmitting.value = true
-  uiStore.startLoading()
-  try {
-    await apiFetch(`/auth/users/${addEmailUser.value.id}/contacts`, {
-      method: 'POST',
-      token: auth.token,
-      body: { channelKey: 'email', value: email, isPrimary: false },
-    })
-    toast.add({ title: '已添加邮箱（未验证）', color: 'primary' })
-    closeAddEmail()
-    await refresh({ page: pagination.value.page })
-  } catch (error) {
-    console.warn('[admin] add email failed', error)
-    toast.add({ title: '添加邮箱失败', color: 'error' })
-  } finally {
-    addEmailSubmitting.value = false
-    uiStore.stopLoading()
-  }
-}
 </script>
 
 <template>
@@ -707,7 +648,7 @@ async function submitAddEmail() {
                       <img
                         :src="mcAvatarUrl(bind.username)"
                         :alt="bind.username || 'minecraft avatar'"
-                        class="h-6 w-6 rounded border border-slate-200 dark:border-slate-700"
+                        class="h-6 w-6 rounded-md border border-slate-200 dark:border-slate-700"
                         loading="lazy"
                         @error="onAvatarError"
                       />
@@ -750,15 +691,6 @@ async function submitAddEmail() {
                 @click="openDetailDialog(item)"
               >
                 查看
-              </UButton>
-              <UButton
-                class="ml-2"
-                color="neutral"
-                size="xs"
-                variant="ghost"
-                @click="openAddEmail(item)"
-              >
-                添加邮箱
               </UButton>
             </td>
           </tr>
@@ -991,51 +923,5 @@ async function submitAddEmail() {
       @open-user="openUserDetailFromPlayer"
     />
 
-    <UModal
-      :open="addEmailOpen"
-      @update:open="
-        (v) => {
-          addEmailOpen = v
-          if (!v) closeAddEmail()
-        }
-      "
-      :ui="{ content: 'w-full max-w-sm' }"
-    >
-      <template #content>
-        <div class="p-5 space-y-4 text-sm">
-          <div class="flex items-center justify-between">
-            <h3 class="text-base font-semibold">添加辅助邮箱</h3>
-            <UButton
-              icon="i-lucide-x"
-              size="xs"
-              variant="ghost"
-              color="neutral"
-              @click="closeAddEmail"
-            />
-          </div>
-          <p class="text-xs text-slate-500 dark:text-slate-400">
-            新增邮箱不会自动发送验证码，用户需在个人中心自行验证。
-          </p>
-          <UInput v-model="addEmailValue" placeholder="辅助邮箱" type="email" />
-          <div class="flex justify-end gap-2">
-            <UButton
-              size="sm"
-              variant="ghost"
-              color="neutral"
-              @click="closeAddEmail"
-              >取消</UButton
-            >
-            <UButton
-              size="sm"
-              color="primary"
-              :loading="addEmailSubmitting"
-              :disabled="!addEmailValue.trim()"
-              @click="submitAddEmail"
-              >添加</UButton
-            >
-          </div>
-        </div>
-      </template>
-    </UModal>
   </div>
 </template>

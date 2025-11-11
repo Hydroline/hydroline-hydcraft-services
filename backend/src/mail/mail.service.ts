@@ -3,7 +3,8 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import nodemailer, { Transporter } from 'nodemailer';
+import * as nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
 type SendMailOptions = {
   to: string;

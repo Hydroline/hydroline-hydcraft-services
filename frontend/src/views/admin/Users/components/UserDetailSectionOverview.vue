@@ -96,6 +96,98 @@ const primaryMinecraft = computed(() => {
     nickname: primaryNick,
   }
 })
+
+type EmailContactDisplay = {
+  id: string
+  value: string
+  isPrimary: boolean
+  verified: boolean
+}
+
+function normalizeEmail(value: string | null | undefined) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+const emailContacts = computed<EmailContactDisplay[]>(() => {
+  const d = detail
+  if (!d) return []
+
+  const items: EmailContactDisplay[] = []
+  const seen = new Map<string, EmailContactDisplay>()
+  const contacts = (d.contacts ?? []).filter(
+    (c) => c.channel?.key === 'email' && normalizeEmail(c.value),
+  )
+
+  for (const contact of contacts) {
+    const value = normalizeEmail(contact.value)
+    if (!value) continue
+    const key = value.toLowerCase()
+    const existing = seen.get(key)
+    const next: EmailContactDisplay = {
+      id: contact.id,
+      value,
+      isPrimary: Boolean(contact.isPrimary),
+      verified:
+        contact.verification === 'VERIFIED' || Boolean(contact.verifiedAt),
+    }
+    if (existing) {
+      existing.isPrimary = existing.isPrimary || next.isPrimary
+      existing.verified = existing.verified || next.verified
+      continue
+    }
+    seen.set(key, next)
+    items.push(next)
+  }
+
+  const userEmail = normalizeEmail(d.email)
+  if (userEmail && !seen.has(userEmail.toLowerCase())) {
+    items.push({
+      id: 'primary-email',
+      value: userEmail,
+      isPrimary: true,
+      verified: true,
+    })
+  }
+
+  if (items.length === 0 && userEmail) {
+    return [
+      {
+        id: 'primary-email',
+        value: userEmail,
+        isPrimary: true,
+        verified: true,
+      },
+    ]
+  }
+
+  if (items.length > 0 && !items.some((c) => c.isPrimary)) {
+    items[0].isPrimary = true
+  }
+
+  return items.sort((a, b) => {
+    if (a.isPrimary !== b.isPrimary) {
+      return a.isPrimary ? -1 : 1
+    }
+    if (a.verified !== b.verified) {
+      return a.verified ? -1 : 1
+    }
+    return a.value.localeCompare(b.value)
+  })
+})
+
+function emailChipClasses(clickable: boolean) {
+  return [
+    'inline-flex items-center gap-2 rounded-xl border px-2 py-1 text-xs font-medium',
+    'bg-white/80 dark:bg-slate-900/50 border-slate-200/70 dark:border-slate-800/60',
+    clickable
+      ? 'cursor-pointer transition hover:border-primary-400 hover:text-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500'
+      : 'cursor-default',
+  ]
+}
+
+function handleEmailChipClick() {
+  emit('openContacts')
+}
 </script>
 
 <template>
@@ -135,15 +227,6 @@ const primaryMinecraft = computed(() => {
         >
         <UButton
           class="flex items-center justify-center leading-none"
-          color="neutral"
-          variant="soft"
-          size="sm"
-          :disabled="!detail"
-          @click="emit('openContacts')"
-          >管理联系方式</UButton
-        >
-        <UButton
-          class="flex items-center justify-center leading-none"
           color="primary"
           variant="soft"
           size="sm"
@@ -167,7 +250,7 @@ const primaryMinecraft = computed(() => {
       <div>
         <div class="text-xs text-slate-500 dark:text-slate-500">邮箱</div>
         <div
-          class="line-clamp-1 truncate text-base font-semibold text-slate-800 dark:text-slate-300"
+          class="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-300"
         >
           <template v-if="isLoading">
             <UIcon
@@ -175,7 +258,41 @@ const primaryMinecraft = computed(() => {
               class="inline-block h-4 w-4 animate-spin"
             />
           </template>
-          <template v-else>{{ detail?.email ?? '—' }}</template>
+          <template v-else-if="emailContacts.length === 0"> — </template>
+          <template v-else>
+            <UButton
+              v-for="contact in emailContacts"
+              :key="contact.id + contact.value"
+              class="flex gap-2 items-center w-full text-slate-800 dark:text-slate-300"
+              variant="ghost"
+              size="xs"
+              :class="emailChipClasses(emailContacts.length > 1 && !!detail)"
+              :disabled="!detail"
+              @click="detail && handleEmailChipClick()"
+            >
+              <span class="line-clamp-1 truncate text-sm">{{
+                contact.value
+              }}</span>
+              <UBadge
+                :color="contact.isPrimary ? 'primary' : 'neutral'"
+                size="sm"
+                variant="soft"
+              >
+                {{ contact.isPrimary ? '主' : '辅' }}
+              </UBadge>
+              <UIcon
+                :name="
+                  contact.verified
+                    ? 'i-lucide-check-circle-2'
+                    : 'i-lucide-alert-triangle'
+                "
+                :class="
+                  contact.verified ? 'text-emerald-500' : 'text-amber-500'
+                "
+                class="h-4 w-4"
+              />
+            </UButton>
+          </template>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import { ApiError } from '@/utils/api'
 
 const auth = useAuthStore()
 const feature = useFeatureStore()
+const toast = useToast()
 
 // Password reset flow (public endpoints, but we allow triggering while logged in for convenience)
 const resetForm = reactive({ email: '', code: '', password: '' })
@@ -56,9 +57,19 @@ async function requestPasswordCode() {
     await auth.requestPasswordResetCode(email)
     codeDialogOpen.value = true
     resetStep.value = 'CODE'
+    toast.add({
+      title: '验证码已发送',
+      description: '请检查您的邮箱',
+      color: 'success',
+    })
   } catch (error) {
     resetError.value =
       error instanceof ApiError ? error.message : '发送失败，请稍后重试'
+    toast.add({
+      title: '发送失败',
+      description: resetError.value,
+      color: 'error',
+    })
   } finally {
     sendingReset.value = false
   }
@@ -77,9 +88,19 @@ async function confirmPasswordReset() {
   try {
     await auth.confirmPasswordReset({ email, code, password })
     resetStep.value = 'DONE'
+    toast.add({
+      title: '密码重置成功',
+      description: '请使用新密码登录',
+      color: 'success',
+    })
   } catch (error) {
     resetError.value =
       error instanceof ApiError ? error.message : '重置失败，请稍后再试'
+    toast.add({
+      title: '重置失败',
+      description: resetError.value,
+      color: 'error',
+    })
   } finally {
     sendingReset.value = false
   }
@@ -131,8 +152,18 @@ async function addEmail() {
     await auth.addEmailContact(value)
     newEmail.value = ''
     await loadContacts()
+    toast.add({
+      title: '邮箱添加成功',
+      description: '请验证此邮箱地址',
+      color: 'success',
+    })
   } catch (error) {
     contactError.value = error instanceof ApiError ? error.message : '添加失败'
+    toast.add({
+      title: '添加失败',
+      description: contactError.value,
+      color: 'error',
+    })
   }
 }
 
@@ -206,9 +237,19 @@ async function sendVerificationCode() {
     await auth.resendEmailVerification(email)
     startVerificationCountdown()
     verificationDialog.codeRequested = true
+    toast.add({
+      title: '验证码已发送',
+      description: '请检查您的邮箱',
+      color: 'success',
+    })
   } catch (error) {
     verificationError.value =
       error instanceof ApiError ? error.message : '验证码发送失败，请稍后重试'
+    toast.add({
+      title: '发送失败',
+      description: verificationError.value,
+      color: 'error',
+    })
   } finally {
     verificationDialog.sendingCode = false
   }
@@ -235,9 +276,18 @@ async function submitVerification() {
     await auth.verifyEmailContact({ email, code })
     await loadContacts()
     closeVerificationDialog()
+    toast.add({
+      title: '邮箱验证成功',
+      color: 'success',
+    })
   } catch (error) {
     verificationError.value =
       error instanceof ApiError ? error.message : '验证失败，请稍后重试'
+    toast.add({
+      title: '验证失败',
+      description: verificationError.value,
+      color: 'error',
+    })
   } finally {
     verificationDialog.verifying = false
   }
@@ -248,8 +298,17 @@ async function setPrimary(contact: any) {
   try {
     await auth.setPrimaryEmailContact(contact.id as string)
     await loadContacts()
+    toast.add({
+      title: '已设为主邮箱',
+      color: 'success',
+    })
   } catch (error) {
     contactError.value = error instanceof ApiError ? error.message : '设置失败'
+    toast.add({
+      title: '设置失败',
+      description: contactError.value,
+      color: 'error',
+    })
   }
 }
 
@@ -258,8 +317,17 @@ async function removeContact(contact: any) {
   try {
     await auth.removeEmailContact(contact.id as string)
     await loadContacts()
+    toast.add({
+      title: '已删除',
+      color: 'success',
+    })
   } catch (error) {
     contactError.value = error instanceof ApiError ? error.message : '删除失败'
+    toast.add({
+      title: '删除失败',
+      description: contactError.value,
+      color: 'error',
+    })
   }
 }
 
@@ -301,7 +369,7 @@ onBeforeUnmount(() => {
       <h3
         class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300"
       >
-        邮箱绑定
+        电子邮箱
 
         <span v-if="loadingContacts" class="block">
           <UIcon name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
@@ -318,6 +386,7 @@ onBeforeUnmount(() => {
             />
             <UButton
               color="primary"
+              variant="soft"
               :disabled="!newEmail.trim()"
               @click="addEmail"
               >添加</UButton
@@ -326,12 +395,10 @@ onBeforeUnmount(() => {
 
           <div
             v-if="showEmailVerifyBanner"
-            class="mb-3 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-xs text-amber-700 dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-200 flex items-start gap-2"
+            class="mb-3 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-sm text-amber-700 dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-200 flex items-start gap-2"
           >
             <UIcon name="i-lucide-alert-triangle" class="h-4 w-4 shrink-0" />
-            <span
-              >部分邮箱尚未完成验证，请及时输入验证码或重发邮件以确保账户安全与找回功能。</span
-            >
+            <span>您有部分邮箱尚未完成验证，请及时验证以确保账户安全。</span>
           </div>
 
           <p v-if="contactError" class="text-sm text-red-600 dark:text-red-400">
@@ -359,14 +426,16 @@ onBeforeUnmount(() => {
                   >
                   <UBadge
                     v-if="contact.isPrimary"
+                    size="sm"
                     color="primary"
-                    variant="solid"
+                    variant="soft"
                     >主邮箱</UBadge
                   >
                   <UBadge v-else color="neutral" variant="soft">辅助</UBadge>
                   <UBadge
                     :color="isContactVerified(contact) ? 'success' : 'warning'"
                     variant="soft"
+                    size="sm"
                     >{{
                       isContactVerified(contact) ? '已验证' : '未验证'
                     }}</UBadge
@@ -417,9 +486,6 @@ onBeforeUnmount(() => {
               >
                 验证邮箱
               </h3>
-              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                向 {{ verificationDialog.email }} 发送验证码并完成验证。
-              </p>
             </div>
             <UButton
               icon="i-lucide-x"
@@ -439,10 +505,9 @@ onBeforeUnmount(() => {
               >
               <span class="font-medium">{{ verificationDialog.email }}</span>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex justify-center items-center gap-2">
               <UButton
                 color="primary"
-                class="flex-1"
                 :loading="verificationDialog.sendingCode"
                 :disabled="verificationDialog.countdown > 0"
                 @click="sendVerificationCode"
@@ -477,30 +542,20 @@ onBeforeUnmount(() => {
                 >确认验证</UButton
               >
             </div>
-            <div
-              v-else
-              class="rounded-lg border border-dashed border-slate-300/70 px-4 py-3 text-xs text-slate-500 dark:border-slate-700/70 dark:text-slate-400"
-            >
-              请先点击上方的“发送验证码”，等待邮件到达后再输入验证码。
-            </div>
-            <p
-              v-if="verificationError"
-              class="text-sm text-red-600 dark:text-red-400"
-            >
-              {{ verificationError }}
-            </p>
           </div>
         </div>
       </template>
     </UModal>
 
     <!-- Phone Placeholder Section -->
-    <section v-if="phoneEnabled" class="space-y-4">
-      <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">
-        手机验证（预留）
+    <section v-if="phoneEnabled" class="space-y-3">
+      <h3
+        class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300"
+      >
+        手机号码
       </h3>
       <div
-        class="rounded-xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-slate-700/60 dark:text-slate-400 bg-white/70 dark:bg-slate-800/40"
+        class="rounded-xl border border-slate-200/60 bg-white p-4 dark:border-slate-800/60 dark:bg-slate-700/60"
       >
         功能暂未开启，后续支持 +86/+852/+853/+886
         区号，仅用于安全验证和找回密码。
@@ -608,13 +663,6 @@ onBeforeUnmount(() => {
                   关闭
                 </UButton>
               </template>
-
-              <p
-                v-if="resetError"
-                class="text-sm text-red-600 dark:text-red-400"
-              >
-                {{ resetError }}
-              </p>
             </div>
           </div>
         </template>
