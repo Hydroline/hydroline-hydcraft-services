@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsEmail,
   IsIn,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
@@ -19,6 +20,8 @@ export class AuthRegisterDto {
   )
   @IsEmail()
   @MaxLength(254)
+  @ValidateIf((dto: AuthRegisterDto) => dto.mode === 'AUTHME')
+  @IsNotEmpty()
   email?: string;
 
   @IsString()

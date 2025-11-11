@@ -231,7 +231,8 @@ export class UsersController {
     @Param('userId') userId: string,
     @Body() dto: CreateUserContactDto,
   ) {
-    return this.usersService.addContact(userId, dto);
+    // 管理端新增邮箱联系方式：不自动发送验证码，由用户在个人中心发起
+    return this.usersService.addContactAdmin(userId, dto);
   }
 
   @Patch(':userId/contacts/:contactId')

@@ -1,8 +1,48 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { PrismaClient } from '@prisma/client';
+import { Logger } from '@nestjs/common';
 
 const prisma = new PrismaClient();
+const betterAuthLogger = new Logger('BetterAuth');
+
+function formatLogItem(item: unknown): string {
+  if (item instanceof Error) {
+    return item.stack ?? item.message;
+  }
+  if (item && typeof item === 'object') {
+    try {
+      return JSON.stringify(item);
+    } catch {
+      return Object.prototype.toString.call(item) as string;
+    }
+  }
+  if (typeof item === 'string') {
+    return item;
+  }
+  if (
+    typeof item === 'number' ||
+    typeof item === 'boolean' ||
+    typeof item === 'bigint'
+  ) {
+    return String(item);
+  }
+  if (typeof item === 'symbol') {
+    return item.description ?? item.toString();
+  }
+  if (typeof item === 'function') {
+    return item.name ? `[function ${item.name}]` : '[function]';
+  }
+  return '';
+}
+
+function serializeLogArgs(args: unknown[]): string | undefined {
+  if (!args || args.length === 0) return undefined;
+  return args
+    .map((item) => formatLogItem(item))
+    .filter(Boolean)
+    .join(' ');
+}
 const prismaForAdapter = prisma.$extends({
   query: {
     account: {
@@ -73,6 +113,42 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
+  },
+  logger: {
+    level: 'error',
+    log(level, message, ...args) {
+      const normalizedMessage =
+        typeof message === 'string'
+          ? message.toLowerCase()
+          : String(message).toLowerCase();
+      if (normalizedMessage.includes('invalid password')) {
+        return;
+      }
+
+      const extras = serializeLogArgs(args);
+      const payload = extras ? `${String(message)} ${extras}` : String(message);
+      const firstError = args.find(
+        (item): item is Error => item instanceof Error,
+      );
+
+      switch (level) {
+        case 'warn':
+          betterAuthLogger.warn(payload);
+          break;
+        case 'debug':
+          betterAuthLogger.debug(payload);
+          break;
+        case 'info':
+          betterAuthLogger.log(payload);
+          break;
+        default:
+          if (firstError) {
+            betterAuthLogger.error(payload, firstError.stack);
+          } else {
+            betterAuthLogger.error(payload);
+          }
+      }
+    },
   },
   socialProviders: {
     github: {

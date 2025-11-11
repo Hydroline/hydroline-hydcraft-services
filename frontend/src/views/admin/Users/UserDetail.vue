@@ -223,6 +223,22 @@ async function deleteContact(contactId: string) {
   }
 }
 
+async function submitSetPrimaryEmail(contactId: string) {
+  if (!auth.token || !detail.value) return
+  try {
+    await apiFetch(`/auth/users/${detail.value.id}/contacts/${contactId}`, {
+      method: 'PATCH',
+      token: auth.token,
+      body: { isPrimary: true },
+    })
+    toast.add({ title: '已设为主邮箱', color: 'primary' })
+    await fetchDetail()
+  } catch (error) {
+    console.warn('[admin] set primary email failed', error)
+    toast.add({ title: '设置主邮箱失败', color: 'error' })
+  }
+}
+
 // === 新增绑定 UI 状态 ===
 const createBindingDialogOpen = ref(false)
 const createBindingIdentifier = ref('')
@@ -409,15 +425,18 @@ async function fetchDetail() {
         ? (data.profile.extra as Record<string, unknown>)
         : {}
     profileForm.phone =
-      typeof extra['phone'] === 'string' ? (extra['phone'] as string) : undefined
-    profileForm.phoneCountry =
-      ((extra['phoneCountry'] as 'CN' | 'HK' | 'MO' | 'TW') || profileForm.phoneCountry || 'CN') as
-        | 'CN'
-        | 'HK'
-        | 'MO'
-        | 'TW'
-    const country =
-      ((extra['regionCountry'] as string) || 'CN') as RegionValue['country']
+      typeof extra['phone'] === 'string'
+        ? (extra['phone'] as string)
+        : undefined
+    profileForm.phoneCountry = ((extra['phoneCountry'] as
+      | 'CN'
+      | 'HK'
+      | 'MO'
+      | 'TW') ||
+      profileForm.phoneCountry ||
+      'CN') as 'CN' | 'HK' | 'MO' | 'TW'
+    const country = ((extra['regionCountry'] as string) ||
+      'CN') as RegionValue['country']
     const province =
       typeof extra['regionProvince'] === 'string'
         ? (extra['regionProvince'] as string)
@@ -430,7 +449,7 @@ async function fetchDetail() {
       typeof extra['regionDistrict'] === 'string'
         ? (extra['regionDistrict'] as string)
         : null
-  profileForm.region = { country, province, city, district }
+    profileForm.region = { country, province, city, district }
     // 转换 joinDate 为 YYYY-MM-DD 格式
     joinDateEditing.value = data.joinDate
       ? dayjs(data.joinDate).format('YYYY-MM-DD')
@@ -906,6 +925,19 @@ watch(
                   class="ml-2 text-[10px] font-semibold text-indigo-600 dark:text-indigo-300"
                   >主</span
                 >
+                <span
+                  v-if="c.channel?.key === 'email'"
+                  class="ml-2 inline-flex items-center gap-1 rounded px-1 py-px text-[10px] font-semibold"
+                  :class="
+                    c.verification === 'VERIFIED'
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                      : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+                  "
+                >
+                  <span>{{
+                    c.verification === 'VERIFIED' ? '已验证' : '未验证'
+                  }}</span>
+                </span>
               </span>
               <span
                 class="text-[11px] text-slate-600 dark:text-slate-300 break-all"
@@ -919,6 +951,19 @@ watch(
                 variant="ghost"
                 @click="openEditContactDialog(c)"
                 >编辑</UButton
+              >
+              <UButton
+                v-if="
+                  c.channel?.key === 'email' &&
+                  c.verification === 'VERIFIED' &&
+                  !c.isPrimary
+                "
+                size="xs"
+                color="primary"
+                variant="soft"
+                :disabled="!detail"
+                @click="submitSetPrimaryEmail(c.id)"
+                >设为主邮箱</UButton
               >
               <UButton
                 size="xs"

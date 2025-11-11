@@ -47,6 +47,14 @@ export interface AdminUserListItem {
   nicknames?: AdminMinecraftProfile[]
   // 新增：AuthMe 绑定列表（列表页使用）
   authmeBindings?: AdminAuthmeBindingListItem[]
+  // 新增：邮箱联系人（主邮箱优先排在前）
+  contacts?: Array<{
+    id: string
+    value: string | null
+    isPrimary?: boolean
+    verification?: string | null
+    verifiedAt?: string | null
+  }>
 }
 
 export interface AdminUserListResponse {

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import {
   AuthmeBindingAction,
@@ -15,6 +16,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { generateRandomString, hashPassword } from 'better-auth/crypto';
+import { compare as bcryptCompare } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthmeBindingService } from '../authme/authme-binding.service';
 import { AuthmeService } from '../authme/authme.service';
@@ -38,6 +40,7 @@ import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { UpdateAuthmeBindingAdminDto } from './dto/update-authme-binding-admin.dto';
 import { AssignPermissionLabelsDto } from './dto/assign-permission-labels.dto';
 import { AdminAuditService } from './admin-audit.service';
+import { MailService } from '../mail/mail.service';
 
 type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
 
@@ -74,6 +77,7 @@ type LuckpermsSnapshot = {
 @Injectable()
 export class UsersService {
   private readonly piicPrefix = 'HC';
+  private readonly logger = new Logger(UsersService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -82,7 +86,11 @@ export class UsersService {
     private readonly luckpermsService: LuckpermsService,
     private readonly ipLocationService: IpLocationService,
     private readonly adminAuditService: AdminAuditService,
+    private readonly mailService: MailService,
   ) {}
+
+  private readonly emailVerificationIdentifierPrefix = 'email-verify:';
+  private readonly verificationTtlMs = 10 * 60 * 1000;
 
   async initializeUserRecords(
     userId: string,
@@ -241,6 +249,17 @@ export class UsersService {
           },
           statusSnapshot: true,
           roles: { include: { role: true } },
+          contacts: {
+            where: { channel: { key: 'email' } },
+            select: {
+              id: true,
+              value: true,
+              isPrimary: true,
+              verification: true,
+              verifiedAt: true,
+            },
+            orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+          },
           authmeBindings: {
             orderBy: { boundAt: 'asc' },
             select: {
@@ -277,6 +296,7 @@ export class UsersService {
         profile: { include: { primaryMinecraftProfile: true } };
         statusSnapshot: true;
         roles: { include: { role: true } };
+        contacts: true;
         permissionLabels: {
           include: {
             label: {
@@ -308,6 +328,7 @@ export class UsersService {
         authmeBindings,
         // 不返回 minecraftIds 以避免前端误用昵称数据
         minecraftIds: undefined,
+        // contacts 已包含邮箱联系人（主邮箱优先）
       } as unknown as Record<string, unknown>;
     });
 
@@ -1499,19 +1520,64 @@ export class UsersService {
       await this.clearPrimaryContact(userId, channel.id);
     }
 
+    // 统一：新增副邮箱/手机号均为 UNVERIFIED，忽略传入 verification/verifiedAt
     const contact = await this.prisma.userContact.create({
       data: {
         userId,
         channelId: channel.id,
         value: dto.value,
         isPrimary: dto.isPrimary ?? false,
-        verification: dto.verification ?? ContactVerificationStatus.UNVERIFIED,
-        verifiedAt: dto.verifiedAt ? new Date(dto.verifiedAt) : undefined,
+        verification: ContactVerificationStatus.UNVERIFIED,
+        verifiedAt: null,
         metadata: this.toJson(dto.metadata),
       },
       include: { channel: true },
     });
 
+    // 若为 email 渠道且启用邮箱验证，发送验证码（静默失败）
+    if (channel.key === 'email') {
+      try {
+        await this.sendEmailVerificationCode(userId, contact.value);
+      } catch {
+        this.logger.warn('发送邮箱验证邮件失败，已忽略');
+      }
+    }
+    return contact;
+  }
+
+  // 管理端新增联系方式（不自动发送邮箱验证码，由用户自助验证）
+  async addContactAdmin(userId: string, dto: CreateUserContactDto) {
+    await this.ensureUser(userId);
+    const channel = await this.prisma.contactChannel.findUnique({
+      where: { key: dto.channelKey },
+    });
+    if (!channel) {
+      throw new NotFoundException('Contact channel not found');
+    }
+    if (!channel.allowMultiple) {
+      const exists = await this.prisma.userContact.findFirst({
+        where: { userId, channelId: channel.id },
+      });
+      if (exists) {
+        throw new BadRequestException('Channel does not allow multiple values');
+      }
+    }
+    if (dto.isPrimary) {
+      await this.clearPrimaryContact(userId, channel.id);
+    }
+    const contact = await this.prisma.userContact.create({
+      data: {
+        userId,
+        channelId: channel.id,
+        value: dto.value,
+        isPrimary: dto.isPrimary ?? false,
+        verification: ContactVerificationStatus.UNVERIFIED,
+        verifiedAt: null,
+        metadata: this.toJson(dto.metadata),
+      },
+      include: { channel: true },
+    });
+    // 注意：不发送邮箱验证码
     return contact;
   }
 
@@ -1533,15 +1599,12 @@ export class UsersService {
       await this.clearPrimaryContact(userId, existing.channelId);
     }
 
+    // 不允许直接通过 update 接口修改 verification / verifiedAt，需走专门验证码流程
     const contact = await this.prisma.userContact.update({
       where: { id: contactId },
       data: {
-        value: dto.value,
+        value: dto.value ?? existing.value,
         isPrimary: dto.isPrimary ?? existing.isPrimary,
-        verification: dto.verification ?? existing.verification,
-        verifiedAt: dto.verifiedAt
-          ? new Date(dto.verifiedAt)
-          : existing.verifiedAt,
         metadata:
           dto.metadata !== undefined
             ? this.toJson(dto.metadata)
@@ -1561,7 +1624,137 @@ export class UsersService {
     if (!existing || existing.userId !== userId) {
       throw new NotFoundException('Contact not found');
     }
+    if (existing.isPrimary) {
+      throw new BadRequestException('不能删除主联系信息');
+    }
     await this.prisma.userContact.delete({ where: { id: contactId } });
+  }
+
+  // 发送邮箱验证验证码（副/主均可），identifier 前缀区分作用域
+  async sendEmailVerificationCode(userId: string, emailRaw: string) {
+    const email = this.normalizeOptionalString(emailRaw);
+    if (!email) {
+      throw new BadRequestException('邮箱地址无效');
+    }
+    const identifier = `${this.emailVerificationIdentifierPrefix}${email.toLowerCase()}`;
+    const code = generateRandomString(6, '0-9');
+    const hashed = await hashPassword(code);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.verification.deleteMany({ where: { identifier } });
+      await tx.verification.create({
+        data: {
+          identifier,
+          value: hashed,
+          expiresAt: new Date(Date.now() + this.verificationTtlMs),
+        },
+      });
+    });
+    // 发送邮件（静默失败）
+    try {
+      await this.mailService.sendMail({
+        to: email,
+        subject: 'Hydroline 邮箱验证',
+        text: `验证码: ${code}，10 分钟内有效。`,
+        html: `<p>您的邮箱验证码为 <strong>${code}</strong>，10 分钟内有效。</p>`,
+      });
+    } catch {
+      this.logger.warn('发送邮箱验证邮件失败，已忽略');
+    }
+    return { success: true } as const;
+  }
+
+  async verifyEmailContact(userId: string, emailRaw: string, code: string) {
+    const email = this.normalizeOptionalString(emailRaw);
+    if (!email) {
+      throw new BadRequestException('邮箱地址无效');
+    }
+    const identifier = `${this.emailVerificationIdentifierPrefix}${email.toLowerCase()}`;
+    const record = await this.prisma.verification.findFirst({
+      where: { identifier, expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    if (!record) {
+      throw new BadRequestException('验证码无效或已过期');
+    }
+    const isMatch = await bcryptCompare(code, record.value);
+    if (!isMatch) {
+      throw new BadRequestException('验证码错误');
+    }
+    // 标记所有匹配该邮箱的联系人为 VERIFIED（只针对当前用户）
+    const contacts = await this.prisma.userContact.findMany({
+      where: { userId, value: email, channel: { key: 'email' } },
+    });
+    if (contacts.length === 0) {
+      throw new NotFoundException('未找到对应的邮箱联系人');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.verification
+        .delete({ where: { id: record.id } })
+        .catch(() => undefined);
+      await tx.userContact.updateMany({
+        where: { userId, value: email, channel: { key: 'email' } },
+        data: {
+          verification: ContactVerificationStatus.VERIFIED,
+          verifiedAt: new Date(),
+        },
+      });
+      // 如果该邮箱被标记为主联系人，同时同步到 users 表
+      const primary = contacts.find((c) => c.isPrimary);
+      if (primary) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { email, emailVerified: true },
+        });
+      }
+    });
+    return { success: true } as const;
+  }
+
+  async listEmailContacts(userId: string) {
+    await this.ensureUser(userId);
+    return this.prisma.userContact.findMany({
+      where: { userId, channel: { key: 'email' } },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+        value: true,
+        isPrimary: true,
+        verification: true,
+        verifiedAt: true,
+      },
+    });
+  }
+
+  async setPrimaryEmailContact(userId: string, contactId: string) {
+    await this.ensureUser(userId);
+    const contact = await this.prisma.userContact.findUnique({
+      where: { id: contactId },
+      include: { channel: true },
+    });
+    if (!contact || contact.userId !== userId) {
+      throw new NotFoundException('Contact not found');
+    }
+    if (contact.channel.key !== 'email') {
+      throw new BadRequestException('只能设置邮箱为主联系信息');
+    }
+    if (contact.verification !== ContactVerificationStatus.VERIFIED) {
+      throw new BadRequestException('请先完成邮箱验证后再设为主邮箱');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userContact.updateMany({
+        where: { userId, channelId: contact.channelId, isPrimary: true },
+        data: { isPrimary: false },
+      });
+      await tx.userContact.update({
+        where: { id: contactId },
+        data: { isPrimary: true },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: { email: contact.value, emailVerified: true },
+      });
+    });
+    return { success: true } as const;
   }
 
   async regeneratePiic(

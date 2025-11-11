@@ -47,6 +47,11 @@ const menuGroups = computed<MenuGroup[]>(() => [
       { label: '用户信息', to: '/admin/users', icon: 'i-lucide-user-round' },
       { label: '玩家信息', to: '/admin/players', icon: 'i-lucide-users' },
       { label: 'RBAC 管理', to: '/admin/rbac', icon: 'i-lucide-shield-check' },
+      {
+        label: '验证管理',
+        to: '/admin/verification',
+        icon: 'i-lucide-mail-check',
+      },
     ],
   },
   {
@@ -192,7 +197,11 @@ onMounted(() => {
           }}</span>
           <UserAvatar
             :name="authStore.displayName"
-            :src="authStore.user?.image ?? null"
+            :src="
+              typeof authStore.user?.image === 'string'
+                ? authStore.user?.image
+                : null
+            "
             size="sm"
           />
         </div>

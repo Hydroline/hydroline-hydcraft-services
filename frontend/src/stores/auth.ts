@@ -6,7 +6,8 @@ const ACCESS_TOKEN_KEY = 'hydroline.accessToken'
 const REFRESH_TOKEN_KEY = 'hydroline.refreshToken'
 const USER_CACHE_KEY = 'hydroline.cachedUser'
 
-type RawUser = Record<string, any>
+type RawUser = Record<string, unknown>
+type EmailContact = Record<string, unknown>
 
 type GenderType = 'UNSPECIFIED' | 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER'
 
@@ -52,7 +53,13 @@ type AuthRegisterPayload =
       minecraftNick?: string
       rememberMe?: boolean
     }
-  | { mode: 'AUTHME'; authmeId: string; password: string; rememberMe?: boolean }
+  | {
+      mode: 'AUTHME'
+      authmeId: string
+      password: string
+      email: string
+      rememberMe?: boolean
+    }
 
 function readStoredValue(key: string): string | null {
   if (typeof window === 'undefined') {
@@ -74,7 +81,10 @@ function readStoredUser(): RawUser | null {
   try {
     return JSON.parse(raw) as RawUser
   } catch (error) {
-    console.warn('[auth] failed to parse cached user payload, clearing it', error)
+    console.warn(
+      '[auth] failed to parse cached user payload, clearing it',
+      error,
+    )
     if (typeof window !== 'undefined') {
       localStorage.removeItem(USER_CACHE_KEY)
     }
@@ -100,17 +110,56 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isAuthenticated: (state) => Boolean(state.token && state.user),
     roleKeys(state): string[] {
-      if (!state.user?.roles) return []
-      return state.user.roles.map((entry: any) => entry.role?.key).filter(Boolean)
+      const roles = (state.user as { roles?: unknown } | null)?.roles
+      if (!Array.isArray(roles)) {
+        return []
+      }
+      const keys: string[] = []
+      for (const entry of roles) {
+        if (!entry || typeof entry !== 'object') {
+          continue
+        }
+        const role = (entry as { role?: unknown }).role
+        if (!role || typeof role !== 'object') {
+          continue
+        }
+        const key = (role as { key?: unknown }).key
+        if (typeof key === 'string' && key.length > 0) {
+          keys.push(key)
+        }
+      }
+      return keys
     },
     permissionKeys(state): string[] {
-      if (!state.user?.roles) return []
+      const roles = (state.user as { roles?: unknown } | null)?.roles
+      if (!Array.isArray(roles)) {
+        return []
+      }
       const keys = new Set<string>()
-      for (const entry of state.user.roles as any[]) {
-        const perms = entry.role?.rolePermissions ?? []
-        for (const rp of perms) {
-          if (rp.permission?.key) {
-            keys.add(rp.permission.key)
+      for (const entry of roles) {
+        if (!entry || typeof entry !== 'object') {
+          continue
+        }
+        const role = (entry as { role?: unknown }).role
+        if (!role || typeof role !== 'object') {
+          continue
+        }
+        const rolePermissions = (role as { rolePermissions?: unknown })
+          .rolePermissions
+        if (!Array.isArray(rolePermissions)) {
+          continue
+        }
+        for (const rp of rolePermissions) {
+          if (!rp || typeof rp !== 'object') {
+            continue
+          }
+          const permission = (rp as { permission?: unknown }).permission
+          if (!permission || typeof permission !== 'object') {
+            continue
+          }
+          const key = (permission as { key?: unknown }).key
+          if (typeof key === 'string' && key.length > 0) {
+            keys.add(key)
           }
         }
       }
@@ -120,16 +169,30 @@ export const useAuthStore = defineStore('auth', {
       return (roleKey: string) => this.roleKeys.includes(roleKey)
     },
     hasPermission() {
-      return (permissionKey: string) => this.permissionKeys.includes(permissionKey)
+      return (permissionKey: string) =>
+        this.permissionKeys.includes(permissionKey)
     },
     displayName(state): string | null {
-      if (!state.user) return null
-      return (
-        state.user.profile?.displayName ??
-        state.user.name ??
-        state.user.email ??
-        null
-      )
+      const user = state.user
+      if (!user || typeof user !== 'object') {
+        return null
+      }
+      const profile = (user as { profile?: unknown }).profile
+      if (profile && typeof profile === 'object') {
+        const displayName = (profile as { displayName?: unknown }).displayName
+        if (typeof displayName === 'string' && displayName.length > 0) {
+          return displayName
+        }
+      }
+      const name = (user as { name?: unknown }).name
+      if (typeof name === 'string' && name.length > 0) {
+        return name
+      }
+      const email = (user as { email?: unknown }).email
+      if (typeof email === 'string' && email.length > 0) {
+        return email
+      }
+      return null
     },
   },
   actions: {
@@ -142,6 +205,151 @@ export const useAuthStore = defineStore('auth', {
           localStorage.removeItem(ACCESS_TOKEN_KEY)
         }
       }
+    },
+    // Public: request a password reset verification code to email
+    async requestPasswordResetCode(email: string) {
+      const trimmed = (email || '').trim()
+      if (!trimmed) {
+        throw new ApiError(400, '请输入邮箱')
+      }
+      await apiFetch<{ success: boolean }>('/auth/password/forgot', {
+        method: 'POST',
+        body: { email: trimmed },
+      })
+      return true
+    },
+    // Public: confirm password reset with code and new password
+    async confirmPasswordReset(payload: {
+      email: string
+      code: string
+      password: string
+    }) {
+      const email = (payload.email || '').trim()
+      const code = (payload.code || '').trim()
+      const password = payload.password || ''
+      if (!email || !code || !password) {
+        throw new ApiError(400, '请填写完整信息')
+      }
+      await apiFetch<{ success: boolean }>('/auth/password/confirm', {
+        method: 'POST',
+        body: { email, code, password },
+      })
+      return true
+    },
+    // Authenticated: list email contacts (primary first)
+    async listEmailContacts() {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const result = await apiFetch<{ contacts: EmailContact[] }>(
+        '/auth/me/contacts/email',
+        {
+          token: this.token,
+        },
+      )
+      // Optionally merge into user cache if backend also returns on /me
+      return result.contacts
+    },
+    // Authenticated: add an email contact (will send verification code)
+    async addEmailContact(email: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const trimmed = (email || '').trim()
+      if (!trimmed) {
+        throw new ApiError(400, '请输入邮箱')
+      }
+      const result = await apiFetch<{ contact: EmailContact }>(
+        '/auth/me/contacts/email',
+        {
+          method: 'POST',
+          token: this.token,
+          body: { email: trimmed },
+        },
+      )
+      return result.contact
+    },
+    // Authenticated: resend email verification code for a contact email
+    async resendEmailVerification(email: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const trimmed = (email || '').trim()
+      if (!trimmed) {
+        throw new ApiError(400, '请输入邮箱')
+      }
+      await apiFetch<{ success: boolean }>('/auth/me/contacts/email/resend', {
+        method: 'POST',
+        token: this.token,
+        body: { email: trimmed },
+      })
+      return true
+    },
+    // Authenticated: verify email contact with a code
+    async verifyEmailContact(payload: { email: string; code: string }) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const email = (payload.email || '').trim()
+      const code = (payload.code || '').trim()
+      if (!email || !code) {
+        throw new ApiError(400, '请输入邮箱和验证码')
+      }
+      const result = await apiFetch<{
+        success: boolean
+        updatedUser?: RawUser
+      }>('/auth/me/contacts/email/verify', {
+        method: 'POST',
+        token: this.token,
+        body: { email, code },
+      })
+      // If backend returns updated user, sync
+      if (result.updatedUser) {
+        this.setUser(result.updatedUser)
+      } else {
+        // Else refresh current user to reflect contact verification status
+        try {
+          await this.fetchCurrentUser()
+        } catch {}
+      }
+      return true
+    },
+    // Authenticated: set a contact as primary (by contactId)
+    async setPrimaryEmailContact(contactId: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const endpoint = `/auth/me/contacts/email/${encodeURIComponent(contactId)}/primary`
+      const result = await apiFetch<{ success: boolean; user?: RawUser }>(
+        endpoint,
+        {
+          method: 'PATCH',
+          token: this.token,
+        },
+      )
+      if (result.user) {
+        this.setUser(result.user)
+      } else {
+        try {
+          await this.fetchCurrentUser()
+        } catch {}
+      }
+      return true
+    },
+    // Authenticated: remove an email contact (cannot remove primary; backend enforces)
+    async removeEmailContact(contactId: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const endpoint = `/auth/me/contacts/email/${encodeURIComponent(contactId)}`
+      await apiFetch<{ success: boolean }>(endpoint, {
+        method: 'DELETE',
+        token: this.token,
+      })
+      try {
+        await this.fetchCurrentUser()
+      } catch {}
+      return true
     },
     setRefreshToken(token: string | null) {
       this.refreshToken = token
@@ -227,7 +435,11 @@ export const useAuthStore = defineStore('auth', {
         this.loading = false
       }
     },
-    async signIn(payload: { email: string; password: string; rememberMe?: boolean }) {
+    async signIn(payload: {
+      email: string
+      password: string
+      rememberMe?: boolean
+    }) {
       return this.login({
         mode: 'EMAIL',
         email: payload.email,
@@ -245,7 +457,7 @@ export const useAuthStore = defineStore('auth', {
           method: 'POST',
           token: this.token,
         })
-      } catch (error) {
+      } catch {
         // 忽略 401
       } finally {
         this.clear()
@@ -333,9 +545,12 @@ export const useAuthStore = defineStore('auth', {
       if (!this.token) {
         throw new ApiError(401, '未登录')
       }
-      return apiFetch<{ sessions: Array<Record<string, unknown>> }>('/auth/sessions', {
-        token: this.token,
-      })
+      return apiFetch<{ sessions: Array<Record<string, unknown>> }>(
+        '/auth/sessions',
+        {
+          token: this.token,
+        },
+      )
     },
     async revokeSession(sessionId: string) {
       if (!this.token) {

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { UsersService } from './users.service';
@@ -19,9 +19,12 @@ import { PlayersController } from './players.controller';
 import { PlayersService } from './players.service';
 import { RbacSelfController } from './rbac-self.controller';
 import { AdminAuditService } from './admin-audit.service';
+import { AuthSecurityController } from './security.controller';
+import { ConfigModule } from '../config/config.module';
+import { VerificationAdminController } from './verification-admin.controller';
 
 @Module({
-  imports: [Ip2RegionModule, MailModule],
+  imports: [Ip2RegionModule, MailModule, forwardRef(() => ConfigModule)],
   controllers: [
     AuthController,
     ApiAuthController,
@@ -31,6 +34,8 @@ import { AdminAuditService } from './admin-audit.service';
     ContactChannelsController,
     PlayersController,
     RbacSelfController,
+    AuthSecurityController,
+    VerificationAdminController,
   ],
   providers: [
     AuthService,

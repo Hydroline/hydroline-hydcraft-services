@@ -73,6 +73,9 @@ export class AuthService {
   ) {}
 
   private readonly passwordCodeTtlMs = 10 * 60 * 1000;
+  private readonly publicPasswordCodeIdentifierPrefix = 'password:';
+  private readonly emailVerificationIdentifierPrefix = 'email-verify:';
+  private readonly maxPublicPasswordRequestsPerHour = 5; // 可后续从 config 读取
 
   async initializeDefaults() {
     await this.rolesService.ensureDefaultRolesAndPermissions();
@@ -356,6 +359,124 @@ export class AuthService {
     return { user: userPayload };
   }
 
+  // ================= 未登录场景：找回密码（统一 success 防止枚举） =================
+  async requestPublicPasswordCode(
+    emailRaw: string,
+    context: RequestContext = {},
+  ) {
+    const email = this.normalizeEmail(emailRaw);
+    if (!email) {
+      // 统一返回成功，防止枚举邮箱
+      return { success: true } as const;
+    }
+
+    const user = await this.findUserByAnyEmail(email);
+    if (!user) {
+      return { success: true } as const; // 不泄露是否存在
+    }
+
+    // 简单频控：近一小时内生成次数
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const identifier = this.buildPasswordCodeIdentifier(email);
+    const recentCount = await this.prisma.verification.count({
+      where: { identifier, createdAt: { gt: oneHourAgo } },
+    });
+    if (recentCount >= this.maxPublicPasswordRequestsPerHour) {
+      // 仍返回 success，但不再发送邮件，可在日志中记录
+      return { success: true } as const;
+    }
+
+    const code = generateRandomString(6, '0-9');
+    const hashed = await bcryptHash(code, 10);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.verification.deleteMany({ where: { identifier } });
+      await tx.verification.create({
+        data: {
+          identifier,
+          value: hashed,
+          expiresAt: new Date(Date.now() + this.passwordCodeTtlMs),
+        },
+      });
+    });
+
+    const displayName = user.name ?? email;
+    const ipHint = context.ip ? `（IP：${context.ip}）` : '';
+    const subject = 'Hydroline 密码重置验证码';
+    const plainText = `您好 ${displayName}，\n\n您的密码重置验证码为 ${code}，有效期 10 分钟${ipHint}。如非本人操作，请忽略。\n\nHydroline 安全中心`;
+    const htmlContent = `\n      <p>您好 ${displayName}：</p>\n      <p>您的密码重置验证码为 <strong>${code}</strong>，有效期 10 分钟${ipHint ? `，${ipHint}` : ''}。</p>\n      <p>如非本人操作，请忽略本邮件。</p>\n      <p>Hydroline 安全中心</p>\n    `;
+    try {
+      await this.mailService.sendMail({
+        to: email,
+        subject,
+        text: plainText,
+        html: htmlContent,
+      });
+    } catch {
+      // 发送失败不影响统一返回 success
+    }
+    return { success: true } as const;
+  }
+
+  async confirmPublicPasswordReset(dto: {
+    email: string;
+    code: string;
+    password: string;
+  }) {
+    const email = this.normalizeEmail(dto.email);
+    if (!email) {
+      return { success: false, error: 'INVALID_EMAIL' } as const;
+    }
+    if (dto.password.length < 8) {
+      return { success: false, error: 'PASSWORD_TOO_SHORT' } as const;
+    }
+    const user = await this.findUserByAnyEmail(email);
+    if (!user) {
+      return { success: false, error: 'INVALID_CODE_OR_EMAIL' } as const;
+    }
+    const identifier = this.buildPasswordCodeIdentifier(email);
+    const record = await this.prisma.verification.findFirst({
+      where: { identifier, expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    if (!record) {
+      return { success: false, error: 'INVALID_CODE_OR_EMAIL' } as const;
+    }
+    const isMatch = await bcryptCompare(dto.code, record.value);
+    if (!isMatch) {
+      return { success: false, error: 'INVALID_CODE_OR_EMAIL' } as const;
+    }
+    await this.prisma.verification
+      .delete({ where: { id: record.id } })
+      .catch(() => undefined);
+    await this.usersService.updateOwnPassword(user.id, dto.password);
+    return { success: true } as const;
+  }
+
+  // ================= 多邮箱查找支持（主 + 副） =================
+  private async findUserByAnyEmail(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, name: true },
+    });
+    if (user) return user;
+    const contact = await this.prisma.userContact.findFirst({
+      where: { value: email, channel: { key: 'email' } },
+      select: {
+        userId: true,
+        value: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (contact && contact.user) {
+      return {
+        id: contact.user.id,
+        email: contact.user.email ?? email,
+        name: contact.user.name,
+      };
+    }
+    return null;
+  }
+
   private async registerWithEmail(
     dto: AuthRegisterDto,
     context: RequestContext,
@@ -402,18 +523,20 @@ export class AuthService {
     if (!dto.authmeId) {
       throw new BadRequestException('缺少 AuthMe 账号');
     }
+    const authmeId = dto.authmeId.trim();
+    if (!authmeId) {
+      throw new BadRequestException('缺少 AuthMe 账号');
+    }
     const authmeAccount = await this.authmeService.verifyCredentials(
-      dto.authmeId,
+      authmeId,
       dto.password,
     );
-    const providedEmail = this.normalizeEmail(dto.email);
-    const authmeEmail = this.normalizeEmail(authmeAccount.email);
-    const email = providedEmail ?? authmeEmail;
+    const email = this.normalizeEmail(dto.email);
     if (!email) {
       throw businessError({
         type: 'BUSINESS_VALIDATION_FAILED',
         code: 'AUTHME_EMAIL_REQUIRED',
-        safeMessage: '请填写有效的邮箱地址以完成注册',
+        safeMessage: '请填写邮箱地址',
       });
     }
     const usernameLower = authmeAccount.username.toLowerCase();

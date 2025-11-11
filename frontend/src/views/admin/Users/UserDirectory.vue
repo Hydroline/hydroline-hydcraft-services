@@ -6,6 +6,8 @@ import { useUiStore } from '@/stores/ui'
 import type { AdminUserListItem } from '@/types/admin'
 import UserDetailDialog from '@/views/admin/components/UserDetailDialog.vue'
 import PlayerDetailDialog from '@/views/admin/components/PlayerDetailDialog.vue'
+import { apiFetch } from '@/utils/api'
+import { useAuthStore } from '@/stores/auth'
 
 type SortOrder = 'asc' | 'desc'
 type RefreshOptions = {
@@ -421,6 +423,70 @@ onMounted(async () => {
     await rbacStore.fetchLabels()
   }
 })
+
+type SimpleEmailContact = {
+  id: string
+  value: string
+  isPrimary?: boolean
+  verification?: string | null
+  verifiedAt?: string | null
+}
+
+function getEmailContacts(user: AdminUserListItem): SimpleEmailContact[] {
+  const maybe = (user as unknown as { contacts?: SimpleEmailContact[] })
+    .contacts
+  return Array.isArray(maybe) ? maybe : []
+}
+
+function extraEmails(user: AdminUserListItem) {
+  const list = getEmailContacts(user)
+  return list.filter(
+    (c) => c && c.value && !c.isPrimary && c.value !== user.email,
+  )
+}
+
+const addEmailOpen = ref(false)
+const addEmailUser = ref<AdminUserListItem | null>(null)
+const addEmailValue = ref('')
+const addEmailSubmitting = ref(false)
+
+function openAddEmail(user: AdminUserListItem) {
+  addEmailUser.value = user
+  addEmailValue.value = ''
+  addEmailOpen.value = true
+}
+
+function closeAddEmail() {
+  addEmailOpen.value = false
+  addEmailUser.value = null
+  addEmailValue.value = ''
+}
+
+async function submitAddEmail() {
+  if (!addEmailUser.value) return
+  const email = addEmailValue.value.trim()
+  if (!email) return
+  const auth = useAuthStore()
+  if (!auth.token) throw new Error('未登录，无法添加邮箱')
+  addEmailSubmitting.value = true
+  uiStore.startLoading()
+  try {
+    await apiFetch(`/auth/users/${addEmailUser.value.id}/contacts`, {
+      method: 'POST',
+      token: auth.token,
+      body: { channelKey: 'email', value: email, isPrimary: false },
+    })
+    toast.add({ title: '已添加邮箱（未验证）', color: 'primary' })
+    closeAddEmail()
+    await refresh({ page: pagination.value.page })
+  } catch (error) {
+    console.warn('[admin] add email failed', error)
+    toast.add({ title: '添加邮箱失败', color: 'error' })
+  } finally {
+    addEmailSubmitting.value = false
+    uiStore.stopLoading()
+  }
+}
 </script>
 
 <template>
@@ -547,9 +613,22 @@ onMounted(async () => {
                     {{ item.statusSnapshot.status }}
                   </UBadge>
                 </div>
-                <span class="text-xs text-slate-500 dark:text-slate-400">
-                  {{ item.email }}
-                </span>
+                <div
+                  class="flex flex-wrap items-center gap-1 text-xs text-slate-600 dark:text-slate-300"
+                >
+                  <span class="font-mono">{{ item.email }}</span>
+                  <UBadge
+                    v-for="mail in extraEmails(item)"
+                    :key="mail.id"
+                    :color="
+                      mail.verification === 'VERIFIED' ? 'success' : 'warning'
+                    "
+                    size="xs"
+                    variant="soft"
+                    class="ml-1"
+                    >{{ mail.value }}</UBadge
+                  >
+                </div>
               </div>
             </td>
             <td class="px-4 py-4 text-sm">
@@ -618,8 +697,12 @@ onMounted(async () => {
                       role="button"
                       tabindex="0"
                       @click="openPlayerDialog(bind.username ?? bind.realname)"
-                      @keydown.enter.prevent="openPlayerDialog(bind.username ?? bind.realname)"
-                      @keydown.space.prevent="openPlayerDialog(bind.username ?? bind.realname)"
+                      @keydown.enter.prevent="
+                        openPlayerDialog(bind.username ?? bind.realname)
+                      "
+                      @keydown.space.prevent="
+                        openPlayerDialog(bind.username ?? bind.realname)
+                      "
                     >
                       <img
                         :src="mcAvatarUrl(bind.username)"
@@ -667,6 +750,15 @@ onMounted(async () => {
                 @click="openDetailDialog(item)"
               >
                 查看
+              </UButton>
+              <UButton
+                class="ml-2"
+                color="neutral"
+                size="xs"
+                variant="ghost"
+                @click="openAddEmail(item)"
+              >
+                添加邮箱
               </UButton>
             </td>
           </tr>
@@ -757,13 +849,15 @@ onMounted(async () => {
       :open="detailDialogOpen"
       :user-id="detailDialogUserId"
       :user-summary="detailDialogSummary"
-      @update:open="(value) => {
-        detailDialogOpen = value
-        if (!value) {
-          detailDialogUserId = null
-          detailDialogSummary = null
+      @update:open="
+        (value) => {
+          detailDialogOpen = value
+          if (!value) {
+            detailDialogUserId = null
+            detailDialogSummary = null
+          }
         }
-      }"
+      "
       @deleted="handleUserDeleted"
     />
 
@@ -886,13 +980,62 @@ onMounted(async () => {
     <PlayerDetailDialog
       :open="playerDialogOpen"
       :username="playerDialogUsername"
-      @update:open="(value) => {
-        playerDialogOpen = value
-        if (!value) {
-          playerDialogUsername = null
+      @update:open="
+        (value) => {
+          playerDialogOpen = value
+          if (!value) {
+            playerDialogUsername = null
+          }
         }
-      }"
+      "
       @open-user="openUserDetailFromPlayer"
     />
+
+    <UModal
+      :open="addEmailOpen"
+      @update:open="
+        (v) => {
+          addEmailOpen = v
+          if (!v) closeAddEmail()
+        }
+      "
+      :ui="{ content: 'w-full max-w-sm' }"
+    >
+      <template #content>
+        <div class="p-5 space-y-4 text-sm">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold">添加辅助邮箱</h3>
+            <UButton
+              icon="i-lucide-x"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              @click="closeAddEmail"
+            />
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            新增邮箱不会自动发送验证码，用户需在个人中心自行验证。
+          </p>
+          <UInput v-model="addEmailValue" placeholder="辅助邮箱" type="email" />
+          <div class="flex justify-end gap-2">
+            <UButton
+              size="sm"
+              variant="ghost"
+              color="neutral"
+              @click="closeAddEmail"
+              >取消</UButton
+            >
+            <UButton
+              size="sm"
+              color="primary"
+              :loading="addEmailSubmitting"
+              :disabled="!addEmailValue.trim()"
+              @click="submitAddEmail"
+              >添加</UButton
+            >
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

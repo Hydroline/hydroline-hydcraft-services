@@ -23,6 +23,37 @@ import { AuthGuard } from './auth.guard';
 import { buildRequestContext } from './helpers/request-context.helper';
 import { IpLocationService } from '../lib/ip2region/ip-location.service';
 import { ChangePasswordWithCodeDto } from './dto/change-password-with-code.dto';
+import { IsEmail, IsString, MinLength } from 'class-validator';
+
+class PublicForgotPasswordDto {
+  @IsEmail()
+  email!: string;
+}
+
+class PublicConfirmPasswordDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  code!: string;
+
+  @IsString()
+  @MinLength(8)
+  password!: string;
+}
+
+class AddEmailContactDto {
+  @IsEmail()
+  email!: string;
+}
+
+class VerifyEmailContactDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  code!: string;
+}
 
 @ApiTags('认证')
 @Controller('auth')
@@ -122,6 +153,125 @@ export class AuthController {
       dto,
     );
     return result;
+  }
+
+  // 未登录：请求重置密码验证码（统一 success，不暴露账户存在性）
+  @Post('password/forgot')
+  @ApiOperation({ summary: '未登录找回密码：请求验证码（统一返回成功）' })
+  async publicForgotPassword(
+    @Body() dto: PublicForgotPasswordDto,
+    @Req() req: Request,
+  ) {
+    const ctx = buildRequestContext(req);
+    const result = await this.authService.requestPublicPasswordCode(
+      dto.email,
+      ctx,
+    );
+    return result;
+  }
+
+  // 未登录：提交验证码重置密码
+  @Post('password/confirm')
+  @ApiOperation({ summary: '未登录找回密码：提交验证码重置密码' })
+  async publicConfirmPassword(@Body() dto: PublicConfirmPasswordDto) {
+    const result = await this.authService.confirmPublicPasswordReset(dto);
+    if (!result.success) {
+      throw new UnauthorizedException('验证码无效或已过期');
+    }
+    return { success: true } as const;
+  }
+
+  // ================= 自助邮箱联系人管理（需登录） =================
+  @Get('me/contacts/email')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '列出我的邮箱联系人（主在前）' })
+  async listMyEmailContacts(@Req() req: Request) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    const items = await this.usersService.listEmailContacts(userId);
+    return { items };
+  }
+
+  @Post('me/contacts/email')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '添加邮箱联系人（自动发送验证码）' })
+  async addMyEmailContact(
+    @Req() req: Request,
+    @Body() dto: AddEmailContactDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    // 直接复用 addContact，channelKey 固定 email
+    const contact = await this.usersService.addContact(userId, {
+      channelKey: 'email',
+      value: dto.email,
+      isPrimary: false,
+    });
+    return { contact };
+  }
+
+  @Post('me/contacts/email/resend')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '重发邮箱验证验证码' })
+  async resendEmailVerification(
+    @Req() req: Request,
+    @Body() dto: AddEmailContactDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    const result = await this.usersService.sendEmailVerificationCode(
+      userId,
+      dto.email,
+    );
+    return result;
+  }
+
+  @Post('me/contacts/email/verify')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '验证邮箱联系人' })
+  async verifyEmailContact(
+    @Req() req: Request,
+    @Body() dto: VerifyEmailContactDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    const result = await this.usersService.verifyEmailContact(
+      userId,
+      dto.email,
+      dto.code,
+    );
+    return result;
+  }
+
+  @Patch('me/contacts/email/:contactId/primary')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '设置主邮箱（需已验证）' })
+  async setPrimaryEmail(
+    @Req() req: Request,
+    @Param('contactId') contactId: string,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    return this.usersService.setPrimaryEmailContact(userId, contactId);
+  }
+
+  @Delete('me/contacts/email/:contactId')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '删除邮箱联系人（不可删除主邮箱）' })
+  async deleteEmailContact(
+    @Req() req: Request,
+    @Param('contactId') contactId: string,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    await this.usersService.removeContact(userId, contactId);
+    return { success: true };
   }
 
   @Get('session')

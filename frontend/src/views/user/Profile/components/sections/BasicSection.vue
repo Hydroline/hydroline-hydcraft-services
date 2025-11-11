@@ -281,10 +281,14 @@ defineExpose({ forceEdit })
             class="w-full"
             @update:model-value="(v: any) => update('displayName', v)"
           />
-          <p 
-            v-else 
+          <p
+            v-else
             class="text-sm"
-            :class="props.modelValue.displayName ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.displayName
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.modelValue.displayName || '未填写' }}
           </p>
@@ -318,10 +322,14 @@ defineExpose({ forceEdit })
             class="w-full"
             @update:model-value="(v: any) => update('name', v)"
           />
-          <p 
-            v-else 
+          <p
+            v-else
             class="text-sm"
-            :class="props.modelValue.name ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.name
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.modelValue.name || '未填写' }}
           </p>
@@ -365,17 +373,13 @@ defineExpose({ forceEdit })
           邮箱
         </div>
         <div class="flex-1">
-          <UInput
-            v-if="editingBasic"
-            :model-value="props.modelValue.email"
-            type="email"
-            class="w-full"
-            @update:model-value="(v: any) => update('email', v)"
-          />
-          <p 
-            v-else 
+          <p
             class="text-sm"
-            :class="props.modelValue.email ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.email
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.modelValue.email || '未填写' }}
           </p>
@@ -400,10 +404,14 @@ defineExpose({ forceEdit })
             class="w-full"
             @update:model-value="(v: any) => update('gender', v)"
           />
-          <p 
-            v-else 
+          <p
+            v-else
             class="text-sm"
-            :class="props.modelValue.gender !== 'UNSPECIFIED' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.gender !== 'UNSPECIFIED'
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ genderLabel }}
           </p>
@@ -426,10 +434,14 @@ defineExpose({ forceEdit })
             class="w-full"
             @update:model-value="(v: string) => update('birthday', v)"
           />
-          <p 
-            v-else 
+          <p
+            v-else
             class="text-sm"
-            :class="props.modelValue.birthday ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.birthday
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.modelValue.birthday || '未填写' }}
           </p>
@@ -455,10 +467,14 @@ defineExpose({ forceEdit })
             :filter-fields="['label', 'value']"
             @update:model-value="(v: any) => update('timezone', v)"
           />
-          <p 
-            v-else 
+          <p
+            v-else
             class="text-sm"
-            :class="props.modelValue.timezone ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.timezone
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.modelValue.timezone || '未填写' }}
           </p>
@@ -486,7 +502,11 @@ defineExpose({ forceEdit })
           <p
             v-else
             class="flex items-center text-sm"
-            :class="props.modelValue.locale ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.locale
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ languageLabel }}
             <UBadge
@@ -520,7 +540,11 @@ defineExpose({ forceEdit })
           <p
             v-else
             class="text-sm whitespace-pre-line"
-            :class="props.modelValue.motto ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.motto
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.modelValue.motto || '未填写' }}
           </p>
@@ -570,37 +594,20 @@ defineExpose({ forceEdit })
           手机号
         </div>
         <div class="flex-1 flex gap-2">
-          <USelect
-            v-if="editingRegion"
-            :model-value="props.modelValue.phoneCountry"
-            :items="[...phoneRegions]"
-            value-key="code"
-            label-key="name"
-            class="w-40"
-            @update:model-value="(v: any) => update('phoneCountry', v)"
-          />
-          <template v-else>
-            <p class="text-sm text-slate-900 dark:text-slate-100">
-              {{
-                phoneRegions.find(
-                  (r) => r.code === props.modelValue.phoneCountry,
-                )?.dial || ''
-              }}
-            </p>
-          </template>
+          <p class="text-sm text-slate-900 dark:text-slate-100">
+            {{
+              phoneRegions.find((r) => r.code === props.modelValue.phoneCountry)
+                ?.dial || ''
+            }}
+          </p>
           <div class="flex-1">
-            <UInput
-              v-if="editingRegion"
-              :model-value="props.modelValue.phone"
-              type="tel"
-              placeholder="请输入手机号"
-              class="w-full"
-              @update:model-value="(v: any) => update('phone', v)"
-            />
-            <p 
-              v-else 
+            <p
               class="text-sm"
-              :class="props.modelValue.phone ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+              :class="
+                props.modelValue.phone
+                  ? 'text-slate-900 dark:text-slate-100'
+                  : 'text-slate-400 dark:text-slate-500'
+              "
             >
               {{ props.modelValue.phone || '未填写' }}
             </p>
@@ -627,27 +634,41 @@ defineExpose({ forceEdit })
           </div>
           <div class="flex-1">
             <div class="text-sm space-x-2">
-              <span 
-                :class="countryName !== '未填写' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
-              >{{ countryName }}</span>
-              <span 
+              <span
+                :class="
+                  countryName !== '未填写'
+                    ? 'text-slate-900 dark:text-slate-100'
+                    : 'text-slate-400 dark:text-slate-500'
+                "
+                >{{ countryName }}</span
+              >
+              <span
                 v-if="props.modelValue.region?.province"
-                :class="props.modelValue.region?.province !== '未填写' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
-              >{{
-                props.modelValue.region?.province || '未填写'
-              }}</span>
-              <span 
+                :class="
+                  props.modelValue.region?.province !== '未填写'
+                    ? 'text-slate-900 dark:text-slate-100'
+                    : 'text-slate-400 dark:text-slate-500'
+                "
+                >{{ props.modelValue.region?.province || '未填写' }}</span
+              >
+              <span
                 v-if="props.modelValue.region?.city"
-                :class="props.modelValue.region?.city !== '未填写' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
-              >{{
-                props.modelValue.region?.city || '未填写'
-              }}</span>
-              <span 
+                :class="
+                  props.modelValue.region?.city !== '未填写'
+                    ? 'text-slate-900 dark:text-slate-100'
+                    : 'text-slate-400 dark:text-slate-500'
+                "
+                >{{ props.modelValue.region?.city || '未填写' }}</span
+              >
+              <span
                 v-if="props.modelValue.region?.district"
-                :class="props.modelValue.region?.district !== '未填写' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
-              >{{
-                props.modelValue.region?.district || '未填写'
-              }}</span>
+                :class="
+                  props.modelValue.region?.district !== '未填写'
+                    ? 'text-slate-900 dark:text-slate-100'
+                    : 'text-slate-400 dark:text-slate-500'
+                "
+                >{{ props.modelValue.region?.district || '未填写' }}</span
+              >
             </div>
           </div>
         </div>
@@ -674,10 +695,14 @@ defineExpose({ forceEdit })
               @update:model-value="(v: any) => update('addressLine1', v)"
             />
           </div>
-          <p 
-            v-else 
+          <p
+            v-else
             class="text-sm"
-            :class="props.modelValue.addressLine1 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.addressLine1
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.modelValue.addressLine1 || '未填写' }}
           </p>
@@ -705,10 +730,14 @@ defineExpose({ forceEdit })
               @update:model-value="(v: any) => update('postalCode', v)"
             />
           </div>
-          <p 
-            v-else 
+          <p
+            v-else
             class="text-sm"
-            :class="props.modelValue.postalCode ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.modelValue.postalCode
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.modelValue.postalCode || '未填写' }}
           </p>
@@ -737,9 +766,14 @@ defineExpose({ forceEdit })
           </UTooltip>
         </div>
         <div class="flex-1">
-          <p 
+          <p
             class="text-sm"
-            :class="props.meta?.lastSyncedText && props.meta.lastSyncedText !== '尚未同步' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.meta?.lastSyncedText &&
+              props.meta.lastSyncedText !== '尚未同步'
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.meta?.lastSyncedText || '尚未同步' }}
           </p>
@@ -755,9 +789,13 @@ defineExpose({ forceEdit })
           注册时间
         </div>
         <div class="flex-1">
-          <p 
+          <p
             class="text-sm"
-            :class="props.meta?.registeredText && props.meta.registeredText !== '未知' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.meta?.registeredText && props.meta.registeredText !== '未知'
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.meta?.registeredText || '未知' }}
           </p>
@@ -782,9 +820,13 @@ defineExpose({ forceEdit })
           </UTooltip>
         </div>
         <div class="flex-1">
-          <p 
+          <p
             class="text-sm"
-            :class="props.meta?.joinedText && props.meta.joinedText !== '未知' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.meta?.joinedText && props.meta.joinedText !== '未知'
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.meta?.joinedText || '未知' }}
           </p>
@@ -800,9 +842,13 @@ defineExpose({ forceEdit })
           最近登录
         </div>
         <div class="flex-1">
-          <p 
+          <p
             class="text-sm"
-            :class="props.meta?.lastLoginText && props.meta.lastLoginText !== '未知' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              props.meta?.lastLoginText && props.meta.lastLoginText !== '未知'
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{ props.meta?.lastLoginText || '未知' }}
           </p>
@@ -818,9 +864,15 @@ defineExpose({ forceEdit })
           最近登录 IP
         </div>
         <div class="flex-1">
-          <p 
+          <p
             class="text-sm"
-            :class="(props.meta?.lastLoginIpDisplay || props.meta?.lastLoginIp) && (props.meta?.lastLoginIpDisplay || props.meta?.lastLoginIp) !== '未知' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'"
+            :class="
+              (props.meta?.lastLoginIpDisplay || props.meta?.lastLoginIp) &&
+              (props.meta?.lastLoginIpDisplay || props.meta?.lastLoginIp) !==
+                '未知'
+                ? 'text-slate-900 dark:text-slate-100'
+                : 'text-slate-400 dark:text-slate-500'
+            "
           >
             {{
               props.meta?.lastLoginIpDisplay ||

@@ -29,19 +29,29 @@ export const userRoutes: RouteRecordRaw[] = [
           {
             path: 'basic',
             name: 'profile.info.basic',
-            component: () => import('@/views/user/Profile/ProfileInfoBasicView.vue'),
+            component: () =>
+              import('@/views/user/Profile/ProfileInfoBasicView.vue'),
             meta: { layout: 'user' },
           },
           {
             path: 'minecraft',
             name: 'profile.info.minecraft',
-            component: () => import('@/views/user/Profile/ProfileInfoMinecraftView.vue'),
+            component: () =>
+              import('@/views/user/Profile/ProfileInfoMinecraftView.vue'),
             meta: { layout: 'user' },
           },
           {
             path: 'sessions',
             name: 'profile.info.sessions',
-            component: () => import('@/views/user/Profile/ProfileInfoSessionsView.vue'),
+            component: () =>
+              import('@/views/user/Profile/ProfileInfoSessionsView.vue'),
+            meta: { layout: 'user' },
+          },
+          {
+            path: 'security',
+            name: 'profile.info.security',
+            component: () =>
+              import('@/views/user/Profile/ProfileInfoSecurityView.vue'),
             meta: { layout: 'user' },
           },
         ],
@@ -163,6 +173,18 @@ export const adminRoutes: RouteRecordRaw[] = [
         meta: {
           requiresAuth: true,
           requiresPermissions: ['config.manage'],
+          layout: 'admin',
+        },
+      },
+      {
+        path: 'verification',
+        name: 'admin.verification',
+        component: () =>
+          import('@/views/admin/Verification/VerificationConsole.vue'),
+        meta: {
+          requiresAuth: true,
+          // 允许仅具备用户管理权限的人员访问本页（页面内部根据权限控制是否可编辑开关）
+          requiresPermissions: ['auth.manage.users'],
           layout: 'admin',
         },
       },
