@@ -16,7 +16,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { generateRandomString, hashPassword } from 'better-auth/crypto';
-import { compare as bcryptCompare } from 'bcryptjs';
+import { compare as bcryptCompare, hash as bcryptHash } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthmeBindingService } from '../authme/authme-binding.service';
 import { AuthmeService } from '../authme/authme.service';
@@ -1516,7 +1516,50 @@ export class UsersService {
       }
     }
 
-    if (dto.isPrimary) {
+    const existingCount = await this.prisma.userContact.count({
+      where: { userId, channelId: channel.id },
+    });
+    const shouldBePrimary = existingCount === 0 || Boolean(dto.isPrimary);
+
+    // 如果已存在相同联系信息（userId, channelId, value），避免重复创建导致唯一约束失败
+    const existingSame = await this.prisma.userContact.findFirst({
+      where: { userId, channelId: channel.id, value: dto.value },
+    });
+    if (existingSame) {
+      if (shouldBePrimary) {
+        await this.clearPrimaryContact(userId, channel.id);
+      }
+      if (shouldBePrimary && !existingSame.isPrimary) {
+        await this.prisma.userContact.update({
+          where: { id: existingSame.id },
+          data: { isPrimary: true },
+        });
+      }
+      if (dto.metadata !== undefined) {
+        await this.prisma.userContact.update({
+          where: { id: existingSame.id },
+          data: { metadata: this.toJson(dto.metadata) },
+        });
+      }
+      const refreshed = await this.prisma.userContact.findUnique({
+        where: { id: existingSame.id },
+        include: { channel: true },
+      });
+      if (
+        refreshed &&
+        channel.key === 'email' &&
+        refreshed.verification !== ContactVerificationStatus.VERIFIED
+      ) {
+        try {
+          await this.sendEmailVerificationCode(userId, refreshed.value);
+        } catch {
+          this.logger.warn('发送邮箱验证邮件失败（已忽略）');
+        }
+      }
+      return refreshed;
+    }
+
+    if (shouldBePrimary) {
       await this.clearPrimaryContact(userId, channel.id);
     }
 
@@ -1526,7 +1569,7 @@ export class UsersService {
         userId,
         channelId: channel.id,
         value: dto.value,
-        isPrimary: dto.isPrimary ?? false,
+        isPrimary: shouldBePrimary,
         verification: ContactVerificationStatus.UNVERIFIED,
         verifiedAt: null,
         metadata: this.toJson(dto.metadata),
@@ -1562,15 +1605,47 @@ export class UsersService {
         throw new BadRequestException('Channel does not allow multiple values');
       }
     }
-    if (dto.isPrimary) {
+    const existingCount = await this.prisma.userContact.count({
+      where: { userId, channelId: channel.id },
+    });
+    const shouldBePrimary = existingCount === 0 || Boolean(dto.isPrimary);
+
+    // 如果已存在相同联系信息，避免重复创建
+    const existingSameAdmin = await this.prisma.userContact.findFirst({
+      where: { userId, channelId: channel.id, value: dto.value },
+    });
+    if (existingSameAdmin) {
+      if (shouldBePrimary) {
+        await this.clearPrimaryContact(userId, channel.id);
+      }
+      if (shouldBePrimary && !existingSameAdmin.isPrimary) {
+        await this.prisma.userContact.update({
+          where: { id: existingSameAdmin.id },
+          data: { isPrimary: true },
+        });
+      }
+      if (dto.metadata !== undefined) {
+        await this.prisma.userContact.update({
+          where: { id: existingSameAdmin.id },
+          data: { metadata: this.toJson(dto.metadata) },
+        });
+      }
+      return this.prisma.userContact.findUnique({
+        where: { id: existingSameAdmin.id },
+        include: { channel: true },
+      });
+    }
+
+    if (shouldBePrimary) {
       await this.clearPrimaryContact(userId, channel.id);
     }
+
     const contact = await this.prisma.userContact.create({
       data: {
         userId,
         channelId: channel.id,
         value: dto.value,
-        isPrimary: dto.isPrimary ?? false,
+        isPrimary: shouldBePrimary,
         verification: ContactVerificationStatus.UNVERIFIED,
         verifiedAt: null,
         metadata: this.toJson(dto.metadata),
@@ -1620,14 +1695,55 @@ export class UsersService {
     await this.ensureUser(userId);
     const existing = await this.prisma.userContact.findUnique({
       where: { id: contactId },
+      include: {
+        channel: {
+          select: {
+            id: true,
+            key: true,
+          },
+        },
+      },
     });
     if (!existing || existing.userId !== userId) {
       throw new NotFoundException('Contact not found');
     }
-    if (existing.isPrimary) {
-      throw new BadRequestException('不能删除主联系信息');
-    }
-    await this.prisma.userContact.delete({ where: { id: contactId } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userContact.delete({ where: { id: contactId } });
+
+      const remaining = await tx.userContact.findMany({
+        where: { userId, channelId: existing.channelId },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      });
+
+      let nextPrimary = remaining.find((contact) => contact.isPrimary) ?? null;
+
+      if (!nextPrimary && remaining.length > 0) {
+        const preferred =
+          remaining.find(
+            (contact) =>
+              contact.verification === ContactVerificationStatus.VERIFIED,
+          ) ?? remaining[0];
+        await tx.userContact.update({
+          where: { id: preferred.id },
+          data: { isPrimary: true },
+        });
+        nextPrimary = { ...preferred, isPrimary: true };
+      }
+
+      if (existing.channel?.key === 'email') {
+        const userUpdate: Prisma.UserUpdateInput = {};
+        if (nextPrimary) {
+          userUpdate.email = nextPrimary.value;
+          userUpdate.emailVerified =
+            nextPrimary.verification === ContactVerificationStatus.VERIFIED;
+        } else if (existing.isPrimary) {
+          userUpdate.emailVerified = false;
+        }
+        if (Object.keys(userUpdate).length > 0) {
+          await tx.user.update({ where: { id: userId }, data: userUpdate });
+        }
+      }
+    });
   }
 
   // 发送邮箱验证验证码（副/主均可），identifier 前缀区分作用域
@@ -1636,9 +1752,25 @@ export class UsersService {
     if (!email) {
       throw new BadRequestException('邮箱地址无效');
     }
+    const userInfo = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        email: true,
+        name: true,
+        profile: { select: { displayName: true } },
+      },
+    });
+    const displayName =
+      userInfo?.profile?.displayName?.trim() ??
+      userInfo?.name?.trim() ??
+      userInfo?.email ??
+      email;
+    const now = new Date();
+    const year = now.getFullYear();
+    const datetime = `${year}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日`;
     const identifier = `${this.emailVerificationIdentifierPrefix}${email.toLowerCase()}`;
     const code = generateRandomString(6, '0-9');
-    const hashed = await hashPassword(code);
+    const hashed = await bcryptHash(code, 10);
     await this.prisma.$transaction(async (tx) => {
       await tx.verification.deleteMany({ where: { identifier } });
       await tx.verification.create({
@@ -1655,7 +1787,14 @@ export class UsersService {
         to: email,
         subject: 'Hydroline 邮箱验证',
         text: `验证码: ${code}，10 分钟内有效。`,
-        html: `<p>您的邮箱验证码为 <strong>${code}</strong>，10 分钟内有效。</p>`,
+        template: 'password-code',
+        context: {
+          displayName,
+          code,
+          ipHint: '',
+          datetime,
+          currentYear: String(year),
+        },
       });
     } catch (error) {
       const reason =

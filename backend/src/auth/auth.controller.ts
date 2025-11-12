@@ -263,7 +263,7 @@ export class AuthController {
   @Delete('me/contacts/email/:contactId')
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '删除邮箱联系人（不可删除主邮箱）' })
+  @ApiOperation({ summary: '删除邮箱联系人（自动重新指定主邮箱）' })
   async deleteEmailContact(
     @Req() req: Request,
     @Param('contactId') contactId: string,

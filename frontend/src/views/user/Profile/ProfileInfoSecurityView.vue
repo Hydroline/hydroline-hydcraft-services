@@ -116,7 +116,18 @@ function resendPasswordCode() {
 const emailContacts = ref<any[]>([])
 const loadingContacts = ref(false)
 const contactError = ref('')
-const newEmail = ref('')
+const addEmailDialog = reactive({
+  open: false,
+  email: '',
+  sending: false,
+  error: '',
+})
+const deleteEmailDialog = reactive({
+  open: false,
+  contact: null as any,
+  confirming: false,
+  error: '',
+})
 const verificationDialog = reactive({
   open: false,
   email: '',
@@ -141,29 +152,49 @@ async function loadContacts() {
   }
 }
 
-async function addEmail() {
-  contactError.value = ''
-  const value = newEmail.value.trim()
+function openAddEmailDialog() {
+  addEmailDialog.open = true
+  addEmailDialog.email = ''
+  addEmailDialog.error = ''
+}
+
+function updateAddEmailDialog(value: boolean) {
+  addEmailDialog.open = value
   if (!value) {
-    contactError.value = '请输入邮箱'
+    addEmailDialog.email = ''
+    addEmailDialog.error = ''
+    addEmailDialog.sending = false
+  }
+}
+
+async function submitAddEmail() {
+  addEmailDialog.error = ''
+  const value = addEmailDialog.email.trim()
+  if (!value) {
+    addEmailDialog.error = '请输入邮箱'
     return
   }
+  addEmailDialog.sending = true
   try {
     await auth.addEmailContact(value)
-    newEmail.value = ''
     await loadContacts()
+    updateAddEmailDialog(false)
+    openVerificationDialog(value, { codeAlreadySent: true })
     toast.add({
-      title: '邮箱添加成功',
-      description: '请验证此邮箱地址',
+      title: '验证码已发送',
+      description: '请在弹窗中输入验证码完成验证',
       color: 'success',
     })
   } catch (error) {
-    contactError.value = error instanceof ApiError ? error.message : '添加失败'
+    const message = error instanceof ApiError ? error.message : '添加失败'
+    addEmailDialog.error = message
     toast.add({
       title: '添加失败',
-      description: contactError.value,
+      description: message,
       color: 'error',
     })
+  } finally {
+    addEmailDialog.sending = false
   }
 }
 
@@ -190,16 +221,22 @@ function startVerificationCountdown(seconds = 60) {
   }, 1000)
 }
 
-function openVerificationDialog(email: string) {
+function openVerificationDialog(
+  email: string,
+  options?: { codeAlreadySent?: boolean },
+) {
   verificationDialog.email = email.trim()
   verificationDialog.code = ''
   verificationDialog.open = true
   verificationDialog.sendingCode = false
   verificationDialog.verifying = false
   verificationDialog.countdown = 0
-  verificationDialog.codeRequested = false
+  verificationDialog.codeRequested = Boolean(options?.codeAlreadySent)
   verificationError.value = ''
   stopVerificationCountdown()
+  if (options?.codeAlreadySent) {
+    startVerificationCountdown()
+  }
 }
 
 function closeVerificationDialog() {
@@ -312,8 +349,27 @@ async function setPrimary(contact: any) {
   }
 }
 
-async function removeContact(contact: any) {
-  contactError.value = ''
+function openDeleteEmailDialog(contact: any) {
+  deleteEmailDialog.open = true
+  deleteEmailDialog.contact = contact
+  deleteEmailDialog.error = ''
+  deleteEmailDialog.confirming = false
+}
+
+function updateDeleteEmailDialog(value: boolean) {
+  deleteEmailDialog.open = value
+  if (!value) {
+    deleteEmailDialog.contact = null
+    deleteEmailDialog.error = ''
+    deleteEmailDialog.confirming = false
+  }
+}
+
+async function confirmDeleteEmail() {
+  if (!deleteEmailDialog.contact) return
+  deleteEmailDialog.error = ''
+  deleteEmailDialog.confirming = true
+  const contact = deleteEmailDialog.contact
   try {
     await auth.removeEmailContact(contact.id as string)
     await loadContacts()
@@ -321,13 +377,17 @@ async function removeContact(contact: any) {
       title: '已删除',
       color: 'success',
     })
+    updateDeleteEmailDialog(false)
   } catch (error) {
-    contactError.value = error instanceof ApiError ? error.message : '删除失败'
+    const message = error instanceof ApiError ? error.message : '删除失败'
+    deleteEmailDialog.error = message
     toast.add({
       title: '删除失败',
-      description: contactError.value,
+      description: message,
       color: 'error',
     })
+  } finally {
+    deleteEmailDialog.confirming = false
   }
 }
 
@@ -377,20 +437,10 @@ onBeforeUnmount(() => {
       </h3>
       <div>
         <div class="space-y-3">
-          <div class="flex gap-2">
-            <UInput
-              v-model="newEmail"
-              placeholder="新增邮箱"
-              type="email"
-              class="flex-1"
-            />
-            <UButton
-              color="primary"
-              variant="soft"
-              :disabled="!newEmail.trim()"
-              @click="addEmail"
-              >添加</UButton
-            >
+          <div class="flex justify-end">
+            <UButton color="primary" variant="soft" @click="openAddEmailDialog">
+              添加邮箱
+            </UButton>
           </div>
 
           <div
@@ -431,7 +481,9 @@ onBeforeUnmount(() => {
                     variant="soft"
                     >主邮箱</UBadge
                   >
-                  <UBadge v-else color="neutral" variant="soft">辅助</UBadge>
+                  <UBadge v-else color="neutral" variant="soft"
+                    >辅助</UBadge
+                  >
                   <UBadge
                     :color="isContactVerified(contact) ? 'success' : 'warning'"
                     variant="soft"
@@ -457,11 +509,10 @@ onBeforeUnmount(() => {
                     >设为主邮箱</UButton
                   >
                   <UButton
-                    v-if="!contact.isPrimary"
                     size="xs"
                     variant="ghost"
                     color="error"
-                    @click="removeContact(contact)"
+                    @click="openDeleteEmailDialog(contact)"
                     >删除</UButton
                   >
                 </div>
@@ -471,6 +522,53 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </section>
+
+    <UModal
+      :open="addEmailDialog.open"
+      @update:open="updateAddEmailDialog"
+      :ui="{ content: 'w-full max-w-md' }"
+    >
+      <template #content>
+        <div class="space-y-5 p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-semibold text-slate-900 dark:text-white">
+                添加邮箱
+              </h3>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                输入要绑定的邮箱地址以接收验证码。
+              </p>
+            </div>
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              @click="updateAddEmailDialog(false)"
+            />
+          </div>
+
+          <div class="space-y-4 text-sm">
+            <UInput
+              v-model="addEmailDialog.email"
+              placeholder="you@example.com"
+              type="email"
+            />
+            <p v-if="addEmailDialog.error" class="text-xs text-red-500 dark:text-red-400">
+              {{ addEmailDialog.error }}
+            </p>
+            <UButton
+              color="primary"
+              class="w-full"
+              :loading="addEmailDialog.sending"
+              @click="submitAddEmail"
+            >
+              发送验证码
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
 
     <UModal
       :open="verificationDialog.open"
@@ -504,6 +602,14 @@ onBeforeUnmount(() => {
                 >邮箱</span
               >
               <span class="font-medium">{{ verificationDialog.email }}</span>
+            </div>
+            <div
+              v-if="verificationDialog.codeRequested"
+              class="rounded-lg border border-primary-300/60 bg-primary-50/80 px-3 py-2 text-xs text-primary-600 dark:border-primary-700/50 dark:bg-primary-900/30 dark:text-primary-200"
+            >
+              我们已向
+              <span class="font-semibold">{{ verificationDialog.email }}</span>
+              发送验证码，请查收邮件并输入验证码完成验证。
             </div>
             <div class="flex justify-center items-center gap-2">
               <UButton
@@ -542,6 +648,49 @@ onBeforeUnmount(() => {
                 >确认验证</UButton
               >
             </div>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      :open="deleteEmailDialog.open"
+      @update:open="updateDeleteEmailDialog"
+      :ui="{ content: 'w-full max-w-md' }"
+    >
+      <template #content>
+        <div class="space-y-5 p-6">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white">
+              确认删除邮箱
+            </h3>
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              @click="updateDeleteEmailDialog(false)"
+            />
+          </div>
+          <p class="text-sm text-slate-600 dark:text-slate-300">
+            确认要移除邮箱
+            <span class="font-medium">{{ deleteEmailDialog.contact?.value }}</span>
+            吗？删除后需要重新添加并验证才能使用。
+          </p>
+          <p v-if="deleteEmailDialog.error" class="text-xs text-red-500 dark:text-red-400">
+            {{ deleteEmailDialog.error }}
+          </p>
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" @click="updateDeleteEmailDialog(false)">
+              取消
+            </UButton>
+            <UButton
+              color="error"
+              :loading="deleteEmailDialog.confirming"
+              @click="confirmDeleteEmail"
+            >
+              确认删除
+            </UButton>
           </div>
         </div>
       </template>
