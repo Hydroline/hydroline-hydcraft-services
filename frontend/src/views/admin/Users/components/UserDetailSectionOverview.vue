@@ -175,21 +175,6 @@ const emailContacts = computed<EmailContactDisplay[]>(() => {
     return a.value.localeCompare(b.value)
   })
 })
-
-function emailChipClasses(clickable: boolean, enabled: boolean) {
-  return [
-    'inline-flex items-center gap-2 rounded-xl border px-2 py-1 text-xs font-medium transition',
-    'bg-white/80 dark:bg-slate-900/50 border-slate-200/70 dark:border-slate-800/60',
-    clickable && enabled
-      ? 'cursor-pointer hover:border-primary-400 hover:text-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500'
-      : 'cursor-default',
-    !enabled ? 'opacity-60 cursor-not-allowed' : '',
-  ]
-}
-
-function handleEmailChipClick() {
-  emit('openEmails')
-}
 </script>
 
 <template>
@@ -260,21 +245,21 @@ function handleEmailChipClick() {
     <div class="mt-6 grid gap-4 sm:grid-cols-3">
       <div>
         <div
-          class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-500"
+          class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
         >
-          <span>邮箱</span>
+          邮箱
           <UButton
             v-if="!isLoading && detail"
-            color="primary"
-            variant="ghost"
             size="xs"
-            class="px-2"
+            class="p-0 font-medium"
+            color="primary"
+            variant="link"
             @click="emit('openEmails')"
             >管理</UButton
           >
         </div>
         <div
-          class="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-300"
+          class="flex items-center gap-1 text-base font-semibold text-slate-800 dark:text-slate-300"
         >
           <template v-if="isLoading">
             <UIcon
@@ -284,36 +269,30 @@ function handleEmailChipClick() {
           </template>
           <template v-else-if="emailContacts.length === 0"> — </template>
           <template v-else>
-            <button
-              v-for="contact in emailContacts"
-              :key="contact.id + contact.value"
-              type="button"
-              :class="emailChipClasses(emailContacts.length > 1, !!detail)"
-              :disabled="!detail"
-              @click="detail && handleEmailChipClick()"
+            <span class="line-clamp-1 truncate">
+              {{ emailContacts[0].value }}
+            </span>
+
+            <UBadge
+              :color="emailContacts[0].isPrimary ? 'primary' : 'neutral'"
+              size="sm"
+              variant="soft"
             >
-              <span class="line-clamp-1 truncate text-sm">{{
-                contact.value
-              }}</span>
-              <UBadge
-                :color="contact.isPrimary ? 'primary' : 'neutral'"
-                size="sm"
-                variant="soft"
-              >
-                {{ contact.isPrimary ? '主' : '辅' }}
-              </UBadge>
-              <UIcon
-                :name="
-                  contact.verified
-                    ? 'i-lucide-check-circle-2'
-                    : 'i-lucide-alert-triangle'
-                "
-                :class="
-                  contact.verified ? 'text-emerald-500' : 'text-amber-500'
-                "
-                class="h-4 w-4"
-              />
-            </button>
+              {{ emailContacts[0].isPrimary ? '主' : '辅' }}
+            </UBadge>
+            <UIcon
+              :name="
+                emailContacts[0].verified
+                  ? 'i-lucide-check-circle-2'
+                  : 'i-lucide-alert-triangle'
+              "
+              :class="
+                emailContacts[0].verified
+                  ? 'text-emerald-500'
+                  : 'text-amber-500'
+              "
+              class="h-5 w-5"
+            />
           </template>
         </div>
       </div>
@@ -469,7 +448,7 @@ function handleEmailChipClick() {
           <span>
             <UButton
               size="xs"
-              class="p-0 leading-none font-medium"
+              class="p-0 font-medium"
               color="primary"
               variant="link"
               :disabled="!detail"
