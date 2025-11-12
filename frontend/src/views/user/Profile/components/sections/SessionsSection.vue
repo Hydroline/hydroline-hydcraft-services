@@ -90,7 +90,6 @@ function deviceIcon(value: string | null | undefined) {
       <UButton
         size="sm"
         variant="ghost"
-        :loading="props.loading"
         @click="emit('refresh')"
         >刷新</UButton
       >

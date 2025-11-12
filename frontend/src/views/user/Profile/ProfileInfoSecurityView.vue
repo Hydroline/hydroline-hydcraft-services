@@ -425,24 +425,25 @@ onBeforeUnmount(() => {
 <template>
   <div class="space-y-8">
     <!-- Email Contacts Section -->
-    <section v-if="emailVerificationEnabled" class="space-y-4">
-      <h3
-        class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300"
-      >
-        电子邮箱
+    <section v-if="emailVerificationEnabled" class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h3
+          class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300"
+        >
+          电子邮箱
 
-        <span v-if="loadingContacts" class="block">
-          <UIcon name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-        </span>
-      </h3>
+          <span v-if="loadingContacts" class="block">
+            <UIcon name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+          </span>
+        </h3>
+
+        <UButton size="sm" variant="ghost" @click="openAddEmailDialog">
+          添加邮箱
+        </UButton>
+      </div>
+
       <div>
         <div class="space-y-3">
-          <div class="flex justify-end">
-            <UButton color="primary" variant="soft" @click="openAddEmailDialog">
-              添加邮箱
-            </UButton>
-          </div>
-
           <div
             v-if="showEmailVerifyBanner"
             class="mb-3 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-sm text-amber-700 dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-200 flex items-start gap-2"
@@ -481,9 +482,7 @@ onBeforeUnmount(() => {
                     variant="soft"
                     >主邮箱</UBadge
                   >
-                  <UBadge v-else color="neutral" variant="soft"
-                    >辅助</UBadge
-                  >
+                  <UBadge v-else color="neutral" variant="soft">辅助</UBadge>
                   <UBadge
                     :color="isContactVerified(contact) ? 'success' : 'warning'"
                     variant="soft"
@@ -532,7 +531,9 @@ onBeforeUnmount(() => {
         <div class="space-y-5 p-6">
           <div class="flex items-center justify-between">
             <div>
-              <h3 class="text-base font-semibold text-slate-900 dark:text-white">
+              <h3
+                class="text-base font-semibold text-slate-900 dark:text-white"
+              >
                 添加邮箱
               </h3>
               <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -548,13 +549,16 @@ onBeforeUnmount(() => {
             />
           </div>
 
-          <div class="space-y-4 text-sm">
+          <div class="space-y-3 text-sm">
             <UInput
               v-model="addEmailDialog.email"
               placeholder="you@example.com"
               type="email"
             />
-            <p v-if="addEmailDialog.error" class="text-xs text-red-500 dark:text-red-400">
+            <p
+              v-if="addEmailDialog.error"
+              class="text-xs text-red-500 dark:text-red-400"
+            >
               {{ addEmailDialog.error }}
             </p>
             <UButton
@@ -594,7 +598,7 @@ onBeforeUnmount(() => {
             />
           </div>
 
-          <div class="space-y-4 text-sm">
+          <div class="space-y-3 text-sm">
             <div
               class="flex items-center justify-between rounded-lg bg-slate-100/70 px-3 py-2 text-slate-700 dark:bg-slate-800/40 dark:text-slate-200"
             >
@@ -674,10 +678,15 @@ onBeforeUnmount(() => {
           </div>
           <p class="text-sm text-slate-600 dark:text-slate-300">
             确认要移除邮箱
-            <span class="font-medium">{{ deleteEmailDialog.contact?.value }}</span>
+            <span class="font-medium">{{
+              deleteEmailDialog.contact?.value
+            }}</span>
             吗？删除后需要重新添加并验证才能使用。
           </p>
-          <p v-if="deleteEmailDialog.error" class="text-xs text-red-500 dark:text-red-400">
+          <p
+            v-if="deleteEmailDialog.error"
+            class="text-xs text-red-500 dark:text-red-400"
+          >
             {{ deleteEmailDialog.error }}
           </p>
           <div class="flex justify-end gap-2">
@@ -749,7 +758,7 @@ onBeforeUnmount(() => {
               />
             </div>
 
-            <div class="space-y-4 text-sm">
+            <div class="space-y-3 text-sm">
               <template v-if="resetStep === 'INPUT'">
                 <label
                   class="flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-200"

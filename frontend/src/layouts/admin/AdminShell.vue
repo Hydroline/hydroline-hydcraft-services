@@ -157,6 +157,19 @@ async function fetchSystemStats() {
   }
 }
 
+const footerRegisterItems = [
+  {
+    type: 'miit',
+    label: '闽ICP备2023007345号-1',
+    link: 'https://beian.miit.gov.cn/',
+  },
+  {
+    type: 'mps',
+    label: '闽公网安备35010202001677号',
+    link: 'https://www.beian.gov.cn/portal/registersysteminfo?recordcode=35010202001677',
+  },
+]
+
 onMounted(() => {
   if (!admin.value && authStore.token) {
     void portalStore.fetchAdminOverview().catch(() => {
@@ -318,22 +331,51 @@ onMounted(() => {
           </nav>
 
           <div
-            class="pointer-events-none absolute inset-x-0 bottom-0 px-4 pb-4"
+            class="pointer-events-none absolute inset-x-0 bottom-0 p-4 px-6 bg-white/70 dark:bg-slate-950/70 backdrop-blur-2xl"
           >
             <div
-              class="pointer-events-auto space-y-3 rounded-xl border border-slate-200/70 bg-white/70 p-4 text-xs text-slate-500 dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300"
+              class="pointer-events-auto space-y-3 text-xs text-slate-500 dark:text-slate-300"
             >
-              <p class="font-medium text-slate-700 dark:text-slate-200">
-                系统运行情况
-              </p>
-              <p>运行时长：{{ systemUptimeText }}</p>
-              <p>
-                上次刷新：{{
-                  systemStats?.timestamp
-                    ? new Date(systemStats.timestamp).toLocaleString()
-                    : '未知'
-                }}
-              </p>
+              <div
+                class="border-b border-slate-200/70 dark:border-slate-800/60 pb-3 flex flex-col gap-1 text-center text-xs text-slate-400 dark:text-slate-400"
+              >
+                <span class="font-semibold text-slate-500 dark:text-slate-500"
+                  >© 2025 Team Hyrlab</span
+                >
+                <span :key="item.type" v-for="item in footerRegisterItems">
+                  <a
+                    :href="item.link"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    class="hover:underline"
+                    >{{ item.label }}</a
+                  >
+                </span>
+              </div>
+              <div>
+                <div class="text-xs text-slate-500 dark:text-slate-500">
+                  系统运行时长
+                </div>
+                <div
+                  class="line-clamp-1 truncate text-base font-semibold text-slate-800 dark:text-slate-300"
+                >
+                  {{ systemUptimeText }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-500 dark:text-slate-500">
+                  上次刷新
+                </div>
+                <div
+                  class="line-clamp-1 truncate text-base font-semibold text-slate-800 dark:text-slate-300"
+                >
+                  {{
+                    systemStats?.timestamp
+                      ? new Date(systemStats.timestamp).toLocaleString()
+                      : '未知'
+                  }}
+                </div>
+              </div>
             </div>
           </div>
         </div>
