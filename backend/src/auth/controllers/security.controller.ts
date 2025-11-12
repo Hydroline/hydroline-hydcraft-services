@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ConfigService } from '../config/config.service';
+import { ConfigService } from '../../config/config.service';
 
 @ApiTags('认证')
 @Controller('auth/security')

@@ -11,17 +11,17 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
-import { AuthGuard } from './auth.guard';
-import { PermissionsGuard } from './permissions.guard';
-import { RequirePermissions } from './permissions.decorator';
-import { DEFAULT_PERMISSIONS, RolesService } from './roles.service';
-import { CreateRoleDto } from './dto/create-role.dto';
-import { UpdateRoleDto } from './dto/update-role.dto';
-import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
-import { CreatePermissionDto } from './dto/create-permission.dto';
-import { UpdatePermissionDto } from './dto/update-permission.dto';
-import { CreatePermissionLabelDto } from './dto/create-permission-label.dto';
-import { UpdatePermissionLabelDto } from './dto/update-permission-label.dto';
+import { AuthGuard } from '../auth.guard';
+import { PermissionsGuard } from '../permissions.guard';
+import { RequirePermissions } from '../permissions.decorator';
+import { DEFAULT_PERMISSIONS, RolesService } from '../services/roles.service';
+import { CreateRoleDto } from '../dto/create-role.dto';
+import { UpdateRoleDto } from '../dto/update-role.dto';
+import { UpdateRolePermissionsDto } from '../dto/update-role-permissions.dto';
+import { CreatePermissionDto } from '../dto/create-permission.dto';
+import { UpdatePermissionDto } from '../dto/update-permission.dto';
+import { CreatePermissionLabelDto } from '../dto/create-permission-label.dto';
+import { UpdatePermissionLabelDto } from '../dto/update-permission-label.dto';
 
 @ApiTags('角色与权限')
 @ApiBearerAuth()

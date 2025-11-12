@@ -13,16 +13,16 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response, Request } from 'express';
-import { AuthService } from './auth.service';
-import { UsersService } from './users.service';
-import { UpdateCurrentUserDto } from './dto/update-current-user.dto';
-import { SignUpDto } from './dto/sign-up.dto';
-import { SignInDto } from './dto/sign-in.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { AuthGuard } from './auth.guard';
-import { buildRequestContext } from './helpers/request-context.helper';
-import { IpLocationService } from '../lib/ip2region/ip-location.service';
-import { ChangePasswordWithCodeDto } from './dto/change-password-with-code.dto';
+import { AuthService } from '../services/auth.service';
+import { UsersService } from '../services/users/users.service';
+import { UpdateCurrentUserDto } from '../dto/update-current-user.dto';
+import { SignUpDto } from '../dto/sign-up.dto';
+import { SignInDto } from '../dto/sign-in.dto';
+import { RefreshTokenDto } from '../dto/refresh-token.dto';
+import { AuthGuard } from '../auth.guard';
+import { buildRequestContext } from '../helpers/request-context.helper';
+import { IpLocationService } from '../../lib/ip2region/ip-location.service';
+import { ChangePasswordWithCodeDto } from '../dto/change-password-with-code.dto';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 
 class PublicForgotPasswordDto {

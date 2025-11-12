@@ -1,12 +1,12 @@
 import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
-import { AuthService } from './auth.service';
-import { AuthRegisterDto } from './dto/auth-register.dto';
-import { AuthLoginDto } from './dto/auth-login.dto';
-import { rethrowAuthmeError } from './helpers/authme-error.helper';
+import { AuthService } from '../services/auth.service';
+import { AuthRegisterDto } from '../dto/auth-register.dto';
+import { AuthLoginDto } from '../dto/auth-login.dto';
+import { rethrowAuthmeError } from '../helpers/authme-error.helper';
 import { AuthmeService } from '../authme/authme.service';
-import { buildRequestContext } from './helpers/request-context.helper';
+import { buildRequestContext } from '../helpers/request-context.helper';
 
 @ApiTags('认证')
 @Controller('auth')

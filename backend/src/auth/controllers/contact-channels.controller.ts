@@ -9,13 +9,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AuthGuard } from './auth.guard';
-import { PermissionsGuard } from './permissions.guard';
-import { RequirePermissions } from './permissions.decorator';
-import { DEFAULT_PERMISSIONS } from './roles.service';
-import { ContactChannelsService } from './contact-channels.service';
-import { CreateContactChannelDto } from './dto/create-contact-channel.dto';
-import { UpdateContactChannelDto } from './dto/update-contact-channel.dto';
+import { AuthGuard } from '../auth.guard';
+import { PermissionsGuard } from '../permissions.guard';
+import { RequirePermissions } from '../permissions.decorator';
+import { DEFAULT_PERMISSIONS } from '../services/roles.service';
+import { ContactChannelsService } from '../services/contact-channels.service';
+import { CreateContactChannelDto } from '../dto/create-contact-channel.dto';
+import { UpdateContactChannelDto } from '../dto/update-contact-channel.dto';
 
 @ApiTags('联系渠道')
 @ApiBearerAuth()

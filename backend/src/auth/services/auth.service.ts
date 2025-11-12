@@ -6,19 +6,19 @@ import {
 } from '@nestjs/common';
 import { compare as bcryptCompare, hash as bcryptHash } from 'bcryptjs';
 import { Prisma } from '@prisma/client';
-import { auth } from '../lib/shared/auth';
-import { PrismaService } from '../prisma/prisma.service';
+import { auth } from '../../lib/shared/auth';
+import { PrismaService } from '../../prisma/prisma.service';
 import { RolesService, DEFAULT_ROLES } from './roles.service';
-import { SignInDto } from './dto/sign-in.dto';
-import { SignUpDto } from './dto/sign-up.dto';
-import { UsersService } from './users.service';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { SignInDto } from '../dto/sign-in.dto';
+import { SignUpDto } from '../dto/sign-up.dto';
+import { UsersService } from './users/users.service';
+import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { generateRandomString } from 'better-auth/crypto';
 import { hashPassword } from 'better-auth/crypto';
-import { AuthRegisterDto } from './dto/auth-register.dto';
-import { AuthLoginDto } from './dto/auth-login.dto';
-import { AuthmeBindDto } from './dto/authme-bind.dto';
-import { AuthmeUnbindDto } from './dto/authme-unbind.dto';
+import { AuthRegisterDto } from '../dto/auth-register.dto';
+import { AuthLoginDto } from '../dto/auth-login.dto';
+import { AuthmeBindDto } from '../dto/authme-bind.dto';
+import { AuthmeUnbindDto } from '../dto/authme-unbind.dto';
 import { AuthmeService } from '../authme/authme.service';
 import { AuthmeBindingService } from '../authme/authme-binding.service';
 import {
@@ -26,8 +26,8 @@ import {
   AuthFeatureFlags,
 } from '../authme/auth-feature.service';
 import { businessError } from '../authme/authme.errors';
-import { MailService } from '../mail/mail.service';
-import { ChangePasswordWithCodeDto } from './dto/change-password-with-code.dto';
+import { MailService } from '../../mail/mail.service';
+import { ChangePasswordWithCodeDto } from '../dto/change-password-with-code.dto';
 
 interface AuthResponse {
   token: string | null;
