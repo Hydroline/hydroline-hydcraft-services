@@ -224,6 +224,14 @@ export async function removeContact(
   if (!existing || existing.userId !== userId) {
     throw new NotFoundException('Contact not found');
   }
+  if (existing.channel.key === 'email') {
+    const remainingCount = await ctx.prisma.userContact.count({
+      where: { userId, channelId: existing.channelId },
+    });
+    if (remainingCount <= 1) {
+      throw new BadRequestException('至少需要保留一个邮箱联系方式');
+    }
+  }
   await ctx.prisma.$transaction(async (tx) => {
     await tx.userContact.delete({ where: { id: contactId } });
 

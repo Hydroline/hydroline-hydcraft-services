@@ -210,11 +210,11 @@ const emailEntries = computed<EmailDialogEntry[]>(() => {
   })
 })
 
-const emailChannelId = computed(
-  () => contactChannels.value.find((c) => c.key === 'email')?.id ?? null,
+const emailChannel = computed(
+  () => contactChannels.value.find((c) => c.key === 'email') ?? null,
 )
-
-const emailChannelMissing = computed(() => !emailChannelId.value)
+const emailChannelId = computed(() => emailChannel.value?.id ?? null)
+const emailChannelMissing = computed(() => !emailChannel.value)
 
 function openEmailDialog() {
   if (!detail.value) return
@@ -235,8 +235,13 @@ watch(emailDialogOpen, (value) => {
   }
 })
 
+const manageableEmailCount = computed(
+  () => emailEntries.value.filter((entry) => entry.manageable).length,
+)
+
 function canDeleteEmail(entry: EmailDialogEntry) {
-  return entry.manageable && Boolean(entry.id)
+  if (!entry.manageable || !entry.id) return false
+  return manageableEmailCount.value > 1
 }
 
 function canSetPrimaryEmail(entry: EmailDialogEntry) {
@@ -251,13 +256,13 @@ async function submitAddEmail() {
     return
   }
 
-  let channelId = emailChannelId.value
-  if (!channelId) {
+  let channel = emailChannel.value
+  if (!channel) {
     await ensureContactChannels()
-    channelId = emailChannelId.value
+    channel = emailChannel.value
   }
 
-  if (!channelId) {
+  if (!channel) {
     toast.add({ title: '未配置邮箱渠道，无法添加', color: 'error' })
     return
   }
@@ -268,7 +273,7 @@ async function submitAddEmail() {
       method: 'POST',
       token: auth.token,
       body: {
-        channelId,
+        channelKey: channel.key,
         value: email,
         isPrimary: false,
       },
@@ -286,6 +291,10 @@ async function submitAddEmail() {
 
 async function handleDeleteEmail(entry: EmailDialogEntry) {
   if (!entry.manageable || !entry.id) return
+  if (manageableEmailCount.value <= 1) {
+    toast.add({ title: '至少需要保留一个邮箱，无法删除', color: 'warning' })
+    return
+  }
   await deleteContact(entry.id)
 }
 
@@ -344,19 +353,33 @@ function closeContactDialog() {
 
 async function submitContact() {
   if (!auth.token || !detail.value) return
-  if (!contactChannelId.value || !contactValue.value.trim()) {
+  const trimmedValue = contactValue.value.trim()
+  if (!contactChannelId.value || !trimmedValue) {
     toast.add({ title: '请填写必要信息', color: 'warning' })
     return
   }
   contactSubmitting.value = true
   try {
     if (!contactEditingId.value) {
+      let channel = contactChannels.value.find(
+        (entry) => entry.id === contactChannelId.value,
+      )
+      if (!channel) {
+        await ensureContactChannels()
+        channel = contactChannels.value.find(
+          (entry) => entry.id === contactChannelId.value,
+        )
+      }
+      if (!channel) {
+        toast.add({ title: '无法确定联系方式渠道，请刷新后重试', color: 'error' })
+        return
+      }
       await apiFetch(`/auth/users/${detail.value.id}/contacts`, {
         method: 'POST',
         token: auth.token,
         body: {
-          channelId: contactChannelId.value,
-          value: contactValue.value.trim(),
+          channelKey: channel.key,
+          value: trimmedValue,
           isPrimary: contactIsPrimary.value,
         },
       })
@@ -367,8 +390,7 @@ async function submitContact() {
           method: 'PATCH',
           token: auth.token,
           body: {
-            channelId: contactChannelId.value,
-            value: contactValue.value.trim(),
+            value: trimmedValue,
             isPrimary: contactIsPrimary.value,
           },
         },
@@ -1587,7 +1609,7 @@ async function confirmDelete() {
                 }))
               "
               placeholder="选择渠道"
-              :disabled="contactSubmitting"
+              :disabled="contactSubmitting || Boolean(contactEditingId)"
             />
           </label>
           <label class="flex flex-col gap-1">
