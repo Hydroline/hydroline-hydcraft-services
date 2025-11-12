@@ -4,9 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateContactChannelDto } from './dto/create-contact-channel.dto';
-import { UpdateContactChannelDto } from './dto/update-contact-channel.dto';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateContactChannelDto } from '../dto/create-contact-channel.dto';
+import { UpdateContactChannelDto } from '../dto/update-contact-channel.dto';
 
 @Injectable()
 export class ContactChannelsService {
@@ -60,7 +60,7 @@ export class ContactChannelsService {
         metadata:
           dto.metadata !== undefined
             ? this.toJson(dto.metadata)
-            : (channel.metadata as Prisma.InputJsonValue | undefined),
+            : channel.metadata,
       },
     });
   }

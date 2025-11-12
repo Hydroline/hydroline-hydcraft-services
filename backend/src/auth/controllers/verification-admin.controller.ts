@@ -9,15 +9,15 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
-import { AuthGuard } from './auth.guard';
-import { PermissionsGuard } from './permissions.guard';
-import { RequirePermissions } from './permissions.decorator';
-import { DEFAULT_PERMISSIONS } from './roles.service';
-import { ConfigService } from '../config/config.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { AuthGuard } from '../auth.guard';
+import { PermissionsGuard } from '../permissions.guard';
+import { RequirePermissions } from '../permissions.decorator';
+import { DEFAULT_PERMISSIONS } from '../services/roles.service';
+import { ConfigService } from '../../config/config.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { ContactVerificationStatus, Prisma } from '@prisma/client';
-import { UsersService } from './users.service';
-import { AdminAuditService } from './admin-audit.service';
+import { UsersService } from '../services/users/users.service';
+import { AdminAuditService } from '../services/admin-audit.service';
 
 @ApiTags('验证管理')
 @ApiBearerAuth()

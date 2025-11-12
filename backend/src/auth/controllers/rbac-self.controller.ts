@@ -8,9 +8,9 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
-import { AuthGuard } from './auth.guard';
-import { RolesService, DEFAULT_ROLES } from './roles.service';
-import { SelfAssignPermissionsDto } from './dto/self-assign-permissions.dto';
+import { AuthGuard } from '../auth.guard';
+import { RolesService, DEFAULT_ROLES } from '../services/roles.service';
+import { SelfAssignPermissionsDto } from '../dto/self-assign-permissions.dto';
 
 @ApiTags('RBAC 自助')
 @ApiBearerAuth()

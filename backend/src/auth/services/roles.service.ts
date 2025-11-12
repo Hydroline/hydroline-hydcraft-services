@@ -6,14 +6,14 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Counter } from 'prom-client';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreatePermissionDto } from './dto/create-permission.dto';
-import { CreateRoleDto } from './dto/create-role.dto';
-import { UpdatePermissionDto } from './dto/update-permission.dto';
-import { UpdateRoleDto } from './dto/update-role.dto';
-import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
-import { CreatePermissionLabelDto } from './dto/create-permission-label.dto';
-import { UpdatePermissionLabelDto } from './dto/update-permission-label.dto';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreatePermissionDto } from '../dto/create-permission.dto';
+import { CreateRoleDto } from '../dto/create-role.dto';
+import { UpdatePermissionDto } from '../dto/update-permission.dto';
+import { UpdateRoleDto } from '../dto/update-role.dto';
+import { UpdateRolePermissionsDto } from '../dto/update-role-permissions.dto';
+import { CreatePermissionLabelDto } from '../dto/create-permission-label.dto';
+import { UpdatePermissionLabelDto } from '../dto/update-permission-label.dto';
 import { AdminAuditService } from './admin-audit.service';
 
 const rbacOperationCounter = new Counter({
@@ -117,7 +117,7 @@ export class RolesService {
         metadata:
           dto.metadata !== undefined
             ? this.toJson(dto.metadata)
-            : (role.metadata as Prisma.InputJsonValue | undefined),
+            : role.metadata,
       },
     });
 
@@ -256,7 +256,7 @@ export class RolesService {
         metadata:
           dto.metadata !== undefined
             ? this.toJson(dto.metadata)
-            : (permission.metadata as Prisma.InputJsonValue | undefined),
+            : permission.metadata,
       },
     });
 
@@ -475,7 +475,7 @@ export class RolesService {
           metadata:
             dto.metadata !== undefined
               ? this.toJson(dto.metadata)
-              : (label.metadata as Prisma.InputJsonValue | undefined),
+              : label.metadata,
         },
       });
       if (dto.permissionKeys) {

@@ -10,11 +10,11 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
-import { PlayersService } from './players.service';
-import { AuthGuard } from './auth.guard';
-import { PermissionsGuard } from './permissions.guard';
-import { RequirePermissions } from './permissions.decorator';
-import { DEFAULT_PERMISSIONS } from './roles.service';
+import { PlayersService } from '../services/players.service';
+import { AuthGuard } from '../auth.guard';
+import { PermissionsGuard } from '../permissions.guard';
+import { RequirePermissions } from '../permissions.decorator';
+import { DEFAULT_PERMISSIONS } from '../services/roles.service';
 import { CreateAuthmeHistoryEntryDto } from '../authme/dto/create-authme-history-entry.dto';
 // 使用内联 DTO 以降低耦合
 
