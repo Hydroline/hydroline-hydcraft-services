@@ -1,0 +1,8 @@
+[
+  {
+    "key": "password-code",
+    "label": "邮箱验证码",
+    "description": "向用户发送 6 位数字验证码的模板",
+    "defaultSubject": "Hydroline 邮箱验证码提醒"
+  }
+]

@@ -23,6 +23,23 @@ interface VerificationFlags {
   supportedPhoneRegions: string[]
 }
 
+interface MailTemplateInfo {
+  key: string
+  label: string
+  description: string | null
+  defaultSubject: string | null
+}
+
+type TestMailLogStatus = 'pending' | 'active' | 'success' | 'error'
+
+interface TestMailLogEntry {
+  id: string
+  label: string
+  status: TestMailLogStatus
+  detail?: string
+  timestamp: string
+}
+
 const flags = reactive<VerificationFlags>({
   enableEmailVerification: true,
   enablePhoneVerification: false,
@@ -35,6 +52,18 @@ const flags = reactive<VerificationFlags>({
 const flagsLoading = ref(false)
 const flagsSaving = ref(false)
 const configDialogOpen = ref(false)
+const mailTemplates = ref<MailTemplateInfo[]>([])
+const mailTemplatesLoading = ref(false)
+const testMailDialogOpen = ref(false)
+const testMailSending = ref(false)
+const testMailSubjectEdited = ref(false)
+const testMailContextJson = ref('')
+const testMailLogs = ref<TestMailLogEntry[]>([])
+const testMailForm = reactive({
+  email: '',
+  template: '',
+  subject: '',
+})
 
 const statusSummaries = computed(() => [
   {
@@ -52,6 +81,28 @@ const statusSummaries = computed(() => [
       : '暂未开启手机号验证',
   },
 ])
+
+const mailTemplateOptions = computed(() =>
+  mailTemplates.value.map((tpl) => ({ label: tpl.label, value: tpl.key })),
+)
+
+const selectedMailTemplate = computed(() =>
+  mailTemplates.value.find((tpl) => tpl.key === testMailForm.template) ?? null,
+)
+
+const logIconByStatus: Record<TestMailLogStatus, string> = {
+  pending: 'i-lucide-clock-3',
+  active: 'i-lucide-loader',
+  success: 'i-lucide-check-circle-2',
+  error: 'i-lucide-x-circle',
+}
+
+const logColorByStatus: Record<TestMailLogStatus, string> = {
+  pending: 'text-slate-400',
+  active: 'text-primary-500',
+  success: 'text-emerald-500',
+  error: 'text-rose-500',
+}
 
 async function fetchFlags() {
   if (!auth.token) return
@@ -79,6 +130,179 @@ async function fetchFlags() {
 
 function updateConfigDialog(value: boolean) {
   configDialogOpen.value = value
+}
+
+async function fetchMailTemplates() {
+  if (!auth.token) return
+  mailTemplatesLoading.value = true
+  try {
+    const data = await apiFetch<{ templates: MailTemplateInfo[] }>(
+      '/auth/admin/verification/templates',
+      { token: auth.token },
+    )
+    mailTemplates.value = data.templates
+    ensureTestMailDefaults()
+  } catch (error) {
+    console.warn('[admin] load mail templates failed', error)
+    toast.add({ title: '读取邮件模板失败', color: 'error' })
+  } finally {
+    mailTemplatesLoading.value = false
+  }
+}
+
+function ensureTestMailDefaults() {
+  if (!testMailForm.template && mailTemplates.value.length > 0) {
+    testMailForm.template = mailTemplates.value[0].key
+  }
+  applyTemplateSubject(true)
+}
+
+function applyTemplateSubject(force = false) {
+  if (!force && testMailSubjectEdited.value) return
+  const template = selectedMailTemplate.value
+  if (template) {
+    testMailForm.subject =
+      template.defaultSubject ?? `Hydroline 测试：${template.label}`
+  } else if (!testMailForm.subject || force) {
+    testMailForm.subject = 'Hydroline 测试邮件'
+  }
+}
+
+function resetTestMailState() {
+  testMailForm.email = ''
+  testMailForm.subject = ''
+  testMailForm.template = mailTemplates.value[0]?.key ?? ''
+  testMailContextJson.value = ''
+  testMailSubjectEdited.value = false
+  testMailLogs.value = []
+  applyTemplateSubject(true)
+}
+
+function updateTestMailDialog(value: boolean) {
+  testMailDialogOpen.value = value
+  if (value) {
+    if (!mailTemplates.value.length && !mailTemplatesLoading.value) {
+      void fetchMailTemplates()
+    }
+    applyTemplateSubject(true)
+  } else {
+    resetTestMailState()
+  }
+}
+
+function handleTestMailSubjectInput() {
+  testMailSubjectEdited.value = true
+}
+
+function createLogEntry(
+  label: string,
+  status: TestMailLogStatus,
+  detail?: string,
+) {
+  const id =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  const entry: TestMailLogEntry = {
+    id,
+    label,
+    status,
+    detail,
+    timestamp: new Date().toLocaleTimeString(),
+  }
+  testMailLogs.value.push(entry)
+  return entry
+}
+
+function updateLogEntry(
+  entry: TestMailLogEntry,
+  status: TestMailLogStatus,
+  detail?: string,
+) {
+  entry.status = status
+  entry.detail = detail ?? entry.detail
+  entry.timestamp = new Date().toLocaleTimeString()
+}
+
+function parseContextPayload(raw: string) {
+  const trimmed = raw.trim()
+  if (!trimmed) return undefined
+  const parsed: unknown = JSON.parse(trimmed)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('模板变量必须是一个对象')
+  }
+  const normalized: Record<string, string | number | boolean | null> = {}
+  for (const [key, value] of Object.entries(parsed)) {
+    if (
+      value === null ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      normalized[key] = value
+    } else if (value === undefined) {
+      normalized[key] = null
+    } else {
+      normalized[key] = JSON.stringify(value)
+    }
+  }
+  return normalized
+}
+
+async function sendTestMail() {
+  if (!auth.token || testMailSending.value) return
+  const email = testMailForm.email.trim()
+  testMailSending.value = true
+  testMailLogs.value = []
+  const validationLog = createLogEntry('验证邮箱输入', 'active')
+  if (!email) {
+    updateLogEntry(validationLog, 'error', '请输入有效的邮箱地址')
+    toast.add({ title: '请输入邮箱地址', color: 'error' })
+    testMailSending.value = false
+    return
+  }
+  updateLogEntry(validationLog, 'success', email)
+
+  let contextPayload: Record<string, string | number | boolean | null> | undefined
+  if (testMailContextJson.value.trim()) {
+    const contextLog = createLogEntry('解析模板变量 JSON', 'active')
+    try {
+      contextPayload = parseContextPayload(testMailContextJson.value)
+      updateLogEntry(contextLog, 'success', '模板变量已解析')
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '模板变量格式错误'
+      updateLogEntry(contextLog, 'error', msg)
+      toast.add({ title: msg, color: 'error' })
+      testMailSending.value = false
+      return
+    }
+  }
+
+  const requestLog = createLogEntry('请求后端接口', 'active')
+  try {
+    await apiFetch('/auth/admin/verification/test-email', {
+      method: 'POST',
+      token: auth.token,
+      body: {
+        email,
+        template: testMailForm.template || undefined,
+        subject: testMailForm.subject.trim()
+          ? testMailForm.subject.trim()
+          : undefined,
+        ...(contextPayload ? { context: contextPayload } : {}),
+      },
+    })
+    updateLogEntry(requestLog, 'success', '后端已接受请求')
+    createLogEntry('SMTP 发送', 'success', `系统已尝试投递至 ${email}`)
+    toast.add({ title: `测试邮件已发送至 ${email}`, color: 'primary' })
+  } catch (error) {
+    console.warn('[admin] send test mail failed', error)
+    const msg = error instanceof ApiError ? error.message : '发送测试邮件失败'
+    updateLogEntry(requestLog, 'error', msg)
+    toast.add({ title: msg, color: 'error' })
+  } finally {
+    testMailSending.value = false
+  }
 }
 
 async function saveFlags() {
@@ -206,6 +430,7 @@ const phoneRegionOptions = [
 onMounted(async () => {
   await fetchFlags()
   await fetchUnverified(1)
+  await fetchMailTemplates()
 })
 
 watch(
@@ -214,7 +439,15 @@ watch(
     if (t) {
       await fetchFlags()
       await fetchUnverified(page.value)
+      await fetchMailTemplates()
     }
+  },
+)
+
+watch(
+  () => testMailForm.template,
+  () => {
+    applyTemplateSubject()
   },
 )
 </script>
@@ -251,17 +484,30 @@ watch(
             </div>
           </div>
         </div>
-        <UButton
-          color="primary"
-          variant="link"
-          :loading="flagsLoading"
-          @click="configDialogOpen = true"
-        >
-          <template #leading>
-            <UIcon name="i-lucide-sliders-horizontal" class="h-4 w-4" />
-          </template>
-          配置开关
-        </UButton>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <UButton
+            color="primary"
+            variant="link"
+            :loading="flagsLoading"
+            @click="configDialogOpen = true"
+          >
+            <template #leading>
+              <UIcon name="i-lucide-sliders-horizontal" class="h-4 w-4" />
+            </template>
+            配置开关
+          </UButton>
+          <UButton
+            color="primary"
+            variant="soft"
+            :loading="mailTemplatesLoading && !mailTemplates.length"
+            @click="updateTestMailDialog(true)"
+          >
+            <template #leading>
+              <UIcon name="i-lucide-mail-plus" class="h-4 w-4" />
+            </template>
+            测试邮件
+          </UButton>
+        </div>
       </div>
     </section>
 
@@ -386,6 +632,151 @@ watch(
                 />
               </label>
             </div>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      :open="testMailDialogOpen"
+      @update:open="updateTestMailDialog"
+      :ui="{ content: 'w-full max-w-2xl' }"
+    >
+      <template #content>
+        <div class="space-y-5 p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 class="text-base font-semibold text-slate-900 dark:text-white">
+                发送测试邮件
+              </h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                输入邮箱并选择模板，方便调试邮件样式
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                :disabled="testMailSending"
+                @click="resetTestMailState"
+              >
+                重置
+              </UButton>
+              <UButton
+                color="primary"
+                :loading="testMailSending"
+                :disabled="!testMailForm.email"
+                @click="sendTestMail"
+              >
+                <template #leading>
+                  <UIcon name="i-lucide-send" class="h-4 w-4" />
+                </template>
+                发送
+              </UButton>
+            </div>
+          </div>
+
+          <div class="grid gap-4">
+            <label class="flex flex-col gap-2 text-sm">
+              <span class="font-medium">收件邮箱</span>
+              <UInput
+                v-model="testMailForm.email"
+                type="email"
+                placeholder="user@example.com"
+              />
+            </label>
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <label class="flex flex-col gap-2 text-sm">
+                <span class="font-medium">模板</span>
+                <USelect
+                  v-model="testMailForm.template"
+                  :items="mailTemplateOptions"
+                  value-key="value"
+                  label-key="label"
+                  :loading="mailTemplatesLoading"
+                  :disabled="mailTemplatesLoading || mailTemplateOptions.length === 0"
+                  placeholder="选择邮件模板"
+                />
+                <p
+                  v-if="selectedMailTemplate?.description"
+                  class="text-xs text-slate-500 dark:text-slate-400"
+                >
+                  {{ selectedMailTemplate.description }}
+                </p>
+              </label>
+              <label class="flex flex-col gap-2 text-sm">
+                <span class="font-medium">邮件主题</span>
+                <UInput
+                  v-model="testMailForm.subject"
+                  placeholder="Hydroline 测试邮件"
+                  @input="handleTestMailSubjectInput"
+                />
+              </label>
+            </div>
+
+            <label class="flex flex-col gap-2 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="font-medium">模板变量 JSON（可选）</span>
+                <span class="text-xs text-slate-400">对象格式</span>
+              </div>
+              <UTextarea
+                v-model="testMailContextJson"
+                :rows="4"
+                placeholder='{"displayName":"氢气"}'
+              />
+            </label>
+          </div>
+
+          <div
+            class="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 text-sm dark:border-slate-800/70 dark:bg-slate-900/40"
+          >
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-slate-700 dark:text-slate-200">发送进度</span>
+              <UBadge
+                v-if="testMailSending"
+                size="xs"
+                color="primary"
+                variant="soft"
+              >
+                发送中
+              </UBadge>
+            </div>
+            <div v-if="testMailLogs.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
+              发送记录会显示在这里
+            </div>
+            <ul v-else class="space-y-2 text-xs">
+              <li
+                v-for="log in testMailLogs"
+                :key="log.id"
+                class="flex items-start gap-3"
+              >
+                <UIcon
+                  :name="logIconByStatus[log.status]"
+                  class="mt-0.5 h-4 w-4"
+                  :class="[
+                    logColorByStatus[log.status],
+                    log.status === 'active' ? 'animate-spin' : '',
+                  ]"
+                />
+                <div class="space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-slate-700 dark:text-slate-200">
+                      {{ log.label }}
+                    </span>
+                    <span class="text-[10px] text-slate-400 dark:text-slate-500">
+                      {{ log.timestamp }}
+                    </span>
+                  </div>
+                  <p
+                    v-if="log.detail"
+                    class="text-[11px] text-slate-500 dark:text-slate-400"
+                  >
+                    {{ log.detail }}
+                  </p>
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
       </template>

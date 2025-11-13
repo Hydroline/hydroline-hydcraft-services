@@ -3,13 +3,29 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { readFile } from 'fs/promises';
+import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 type TemplateValue = string | number | boolean | null | undefined;
+
+type TemplateManifestEntry = {
+  key: string;
+  label?: string;
+  description?: string;
+  filename?: string;
+  defaultSubject?: string;
+};
+
+export type MailTemplateDefinition = {
+  key: string;
+  label: string;
+  filename: string;
+  description?: string;
+  defaultSubject?: string;
+};
 
 type SendMailOptions = {
   to: string;
@@ -27,6 +43,8 @@ export class MailService {
   private readonly fromAddress: string;
   private readonly templateCache = new Map<string, string>();
   private readonly templateRoot: string;
+  private templateManifestLoaded = false;
+  private templateManifest: TemplateManifestEntry[] = [];
 
   constructor() {
     const host = process.env.SMTP_HOST;
@@ -95,6 +113,46 @@ export class MailService {
     await this.transporter.sendMail(message);
   }
 
+  async listTemplates(): Promise<MailTemplateDefinition[]> {
+    try {
+      const [manifestEntries, dirEntries] = await Promise.all([
+        this.loadTemplateManifest(),
+        readdir(this.templateRoot, { withFileTypes: true }),
+      ]);
+      const manifestByFilename = new Map(
+        manifestEntries.map((entry) => [
+          (entry.filename ?? `${entry.key}.html`).toLowerCase(),
+          entry,
+        ]),
+      );
+      const manifestByKey = new Map(
+        manifestEntries.map((entry) => [entry.key, entry]),
+      );
+      const templates: MailTemplateDefinition[] = [];
+      for (const file of dirEntries) {
+        if (!file.isFile() || !file.name.endsWith('.html')) continue;
+        const key = file.name.replace(/\.html$/, '');
+        const manifestEntry =
+          manifestByFilename.get(file.name.toLowerCase()) ??
+          manifestByKey.get(key);
+        const label = manifestEntry?.label ?? this.formatTemplateLabel(key);
+        templates.push({
+          key,
+          filename: file.name,
+          label,
+          description: manifestEntry?.description,
+          defaultSubject: manifestEntry?.defaultSubject,
+        });
+      }
+      return templates.sort((a, b) =>
+        a.label.localeCompare(b.label, 'zh-CN'),
+      );
+    } catch (error) {
+      this.logger.error(`列出邮件模板失败: ${String(error)}`);
+      return [];
+    }
+  }
+
   private async renderTemplate(
     name: string,
     context: Record<string, TemplateValue>,
@@ -123,5 +181,49 @@ export class MailService {
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private async loadTemplateManifest() {
+    if (this.templateManifestLoaded) {
+      return this.templateManifest;
+    }
+    this.templateManifestLoaded = true;
+    try {
+      const manifestPath = join(this.templateRoot, 'manifest.json');
+      const content = await readFile(manifestPath, 'utf8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        this.templateManifest = parsed
+          .filter((entry): entry is TemplateManifestEntry =>
+            Boolean(entry && typeof entry.key === 'string'),
+          )
+          .map((entry) => ({
+            key: entry.key,
+            label: entry.label,
+            description: entry.description,
+            filename: entry.filename,
+            defaultSubject: entry.defaultSubject ?? entry['subject'],
+          }));
+      } else {
+        this.templateManifest = [];
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        this.logger.warn(`读取邮件模板 manifest 失败: ${String(error)}`);
+      }
+      this.templateManifest = [];
+    }
+    return this.templateManifest;
+  }
+
+  private formatTemplateLabel(key: string) {
+    return key
+      .split(/[-_\s]+/g)
+      .filter(Boolean)
+      .map(
+        (segment) =>
+          segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase(),
+      )
+      .join(' ');
   }
 }

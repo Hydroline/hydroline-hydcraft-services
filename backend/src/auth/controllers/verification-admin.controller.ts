@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -15,9 +16,11 @@ import { RequirePermissions } from '../permissions.decorator';
 import { DEFAULT_PERMISSIONS } from '../services/roles.service';
 import { ConfigService } from '../../config/config.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ContactVerificationStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { UsersService } from '../services/users/users.service';
 import { AdminAuditService } from '../services/admin-audit.service';
+import { MailService } from '../../mail/mail.service';
+import { SendTestMailDto } from '../dto/send-test-mail.dto';
 
 @ApiTags('验证管理')
 @ApiBearerAuth()
@@ -29,6 +32,7 @@ export class VerificationAdminController {
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly audit: AdminAuditService,
+    private readonly mailService: MailService,
   ) {}
 
   @Get('flags')
@@ -114,6 +118,60 @@ export class VerificationAdminController {
       targetId: 'security.verification',
       payload: body,
     });
+    return { success: true } as const;
+  }
+
+  @Get('templates')
+  @RequirePermissions(DEFAULT_PERMISSIONS.MANAGE_CONFIG)
+  @ApiOperation({ summary: '列出可用的邮件模板' })
+  async listMailTemplates() {
+    const templates = await this.mailService.listTemplates();
+    return {
+      templates: templates.map((tpl) => ({
+        key: tpl.key,
+        label: tpl.label,
+        description: tpl.description ?? null,
+        defaultSubject: tpl.defaultSubject ?? null,
+      })),
+    } as const;
+  }
+
+  @Post('test-email')
+  @RequirePermissions(DEFAULT_PERMISSIONS.MANAGE_CONFIG)
+  @ApiOperation({ summary: '发送测试邮件到指定邮箱' })
+  async sendTestEmail(@Body() body: SendTestMailDto, @Req() req: Request) {
+    const templates = await this.mailService.listTemplates();
+    const targetTemplate = body.template
+      ? templates.find((tpl) => tpl.key === body.template)
+      : null;
+    if (body.template && !targetTemplate) {
+      throw new BadRequestException('未知的邮件模板');
+    }
+    const subject = body.subject?.trim()
+      ? body.subject.trim()
+      : (targetTemplate?.defaultSubject ??
+        `[测试] ${targetTemplate?.label ?? 'Hydroline 邮件'}`);
+
+    await this.mailService.sendMail({
+      to: body.email,
+      subject,
+      ...(targetTemplate
+        ? { template: targetTemplate.key, context: body.context }
+        : { text: 'Hydroline 测试邮件' }),
+    });
+
+    await this.audit.record({
+      actorId: req.user?.id,
+      action: 'send_test_mail',
+      targetType: 'mail',
+      targetId: targetTemplate?.key ?? 'custom',
+      payload: {
+        email: body.email,
+        template: targetTemplate?.key ?? null,
+        subject,
+      },
+    });
+
     return { success: true } as const;
   }
 
