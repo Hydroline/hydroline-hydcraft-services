@@ -60,17 +60,17 @@ const emit = defineEmits<{
     <div class="mt-2 flex flex-row gap-6 md:grid md:grid-cols-2">
       <!-- MC ID -->
       <div>
-        <div class="text-xs text-slate-500 dark:text-slate-500">
+        <div class="text-xs text-slate-500 dark:text-slate-500 mb-2">
           Minecraft ID
         </div>
         <ul class="space-y-2">
           <li
             v-for="binding in detail?.authmeBindings ?? []"
             :key="binding.id"
-            class="rounded-lg bg-slate-50/80 px-4 py-3 text-slate-600 dark:bg-slate-900/40 dark:text-slate-300"
+            class="rounded-lg bg-slate-100/60 px-4 py-2 text-xs text-slate-600 dark:bg-slate-900/40 dark:text-slate-300"
           >
-            <div class="flex items-center justify-between gap-2">
-              <div>
+            <div class="flex justify-between gap-2">
+              <div class="flex items-center gap-2">
                 <span class="font-medium text-slate-900 dark:text-white">{{
                   binding.authmeRealname ?? binding.authmeUsername ?? '未知'
                 }}</span>
@@ -80,8 +80,7 @@ const emit = defineEmits<{
                     binding.id === detail?.profile?.primaryAuthmeBindingId
                   "
                   variant="soft"
-                  class="ml-2"
-                  size="sm"
+                  size="xs"
                   >主绑定</UBadge
                 >
               </div>
@@ -107,7 +106,7 @@ const emit = defineEmits<{
                 >
               </div>
             </div>
-            <div class="mt-2">
+            <div>
               <span class="text-xs font-semibold" v-if="binding.authmeUuid">{{
                 binding.authmeUuid
               }}</span>
@@ -130,19 +129,19 @@ const emit = defineEmits<{
 
       <!-- Minecraft 昵称列表 -->
       <div>
-        <div class="text-xs text-slate-500 dark:text-slate-500">昵称</div>
+        <div class="text-xs text-slate-500 dark:text-slate-500 mb-2">昵称</div>
         <ul class="space-y-2">
           <li
             v-for="p in minecraftProfiles"
             :key="p.id"
-            class="rounded-lg bg-slate-100/60 px-4 py-2 text-[11px] text-slate-600 dark:bg-slate-900/40 dark:text-slate-300"
+            class="rounded-lg bg-slate-100/60 px-4 py-2 text-xs text-slate-600 dark:bg-slate-900/40 dark:text-slate-300"
           >
-            <div class="flex items-center justify-between gap-2">
-              <div>
+            <div class="flex justify-between gap-2">
+              <div class="flex items-center gap-2">
                 <span class="font-medium text-slate-900 dark:text-white">{{
                   p.nickname || '未命名'
                 }}</span>
-                <UBadge v-if="p.isPrimary" variant="soft" class="ml-2" size="sm"
+                <UBadge v-if="p.isPrimary" variant="soft" size="xs"
                   >主称呼</UBadge
                 >
               </div>

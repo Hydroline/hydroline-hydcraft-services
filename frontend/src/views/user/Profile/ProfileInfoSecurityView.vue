@@ -116,6 +116,7 @@ function resendPasswordCode() {
 const emailContacts = ref<any[]>([])
 const loadingContacts = ref(false)
 const contactError = ref('')
+const contactLoading = ref<string | null>(null)
 const addEmailDialog = reactive({
   open: false,
   email: '',
@@ -332,6 +333,7 @@ async function submitVerification() {
 
 async function setPrimary(contact: any) {
   contactError.value = ''
+  contactLoading.value = contact.id
   try {
     await auth.setPrimaryEmailContact(contact.id as string)
     await loadContacts()
@@ -346,6 +348,8 @@ async function setPrimary(contact: any) {
       description: contactError.value,
       color: 'error',
     })
+  } finally {
+    contactLoading.value = null
   }
 }
 
@@ -482,7 +486,9 @@ onBeforeUnmount(() => {
                     variant="soft"
                     >主邮箱</UBadge
                   >
-                  <UBadge v-else color="neutral" variant="soft">辅助</UBadge>
+                  <UBadge v-else color="neutral" variant="soft" size="sm"
+                    >辅助</UBadge
+                  >
                   <UBadge
                     :color="isContactVerified(contact) ? 'success' : 'warning'"
                     variant="soft"
@@ -504,6 +510,7 @@ onBeforeUnmount(() => {
                     v-if="!contact.isPrimary && isContactVerified(contact)"
                     size="xs"
                     variant="ghost"
+                    :loading="contactLoading === contact.id"
                     @click="setPrimary(contact)"
                     >设为主邮箱</UButton
                   >
@@ -549,21 +556,16 @@ onBeforeUnmount(() => {
             />
           </div>
 
-          <div class="space-y-3 text-sm">
+          <div class="flex flex-col gap-3 text-sm">
             <UInput
               v-model="addEmailDialog.email"
               placeholder="you@example.com"
               type="email"
-            />
-            <p
-              v-if="addEmailDialog.error"
-              class="text-xs text-red-500 dark:text-red-400"
-            >
-              {{ addEmailDialog.error }}
-            </p>
-            <UButton
-              color="primary"
               class="w-full"
+            />
+            <UButton
+              class="ml-auto"
+              color="primary"
               :loading="addEmailDialog.sending"
               @click="submitAddEmail"
             >
@@ -600,14 +602,6 @@ onBeforeUnmount(() => {
 
           <div class="space-y-3 text-sm">
             <div
-              class="flex items-center justify-between rounded-lg bg-slate-100/70 px-3 py-2 text-slate-700 dark:bg-slate-800/40 dark:text-slate-200"
-            >
-              <span class="text-xs text-slate-500 dark:text-slate-400"
-                >邮箱</span
-              >
-              <span class="font-medium">{{ verificationDialog.email }}</span>
-            </div>
-            <div
               v-if="verificationDialog.codeRequested"
               class="rounded-lg border border-primary-300/60 bg-primary-50/80 px-3 py-2 text-xs text-primary-600 dark:border-primary-700/50 dark:bg-primary-900/30 dark:text-primary-200"
             >
@@ -615,9 +609,26 @@ onBeforeUnmount(() => {
               <span class="font-semibold">{{ verificationDialog.email }}</span>
               发送验证码，请查收邮件并输入验证码完成验证。
             </div>
-            <div class="flex justify-center items-center gap-2">
+            <div
+              class="flex items-center justify-between rounded-lg bg-slate-100/70 px-3 py-2 text-slate-700 dark:bg-slate-800/40 dark:text-slate-200"
+            >
+              <span class="text-xs text-slate-500 dark:text-slate-400"
+                >邮箱</span
+              >
+              <span class="font-medium">{{ verificationDialog.email }}</span>
+            </div>
+            <div v-if="verificationDialog.codeRequested" class="space-y-3">
+              <UInput
+                v-model="verificationDialog.code"
+                placeholder="请输入验证码"
+                autocomplete="one-time-code"
+                class="w-full"
+              />
+            </div>
+            <div class="flex justify-end items-center gap-2">
               <UButton
                 color="primary"
+                variant="soft"
                 :loading="verificationDialog.sendingCode"
                 :disabled="verificationDialog.countdown > 0"
                 @click="sendVerificationCode"
@@ -629,24 +640,7 @@ onBeforeUnmount(() => {
                 }}
               </UButton>
               <UButton
-                v-if="verificationDialog.countdown > 0"
-                size="xs"
-                variant="ghost"
-                class="text-xs text-slate-500 dark:text-slate-400"
-                disabled
-              >
-                等待邮件…
-              </UButton>
-            </div>
-            <div v-if="verificationDialog.codeRequested" class="space-y-3">
-              <UInput
-                v-model="verificationDialog.code"
-                placeholder="请输入验证码"
-                autocomplete="one-time-code"
-              />
-              <UButton
                 color="primary"
-                class="w-full"
                 :loading="verificationDialog.verifying"
                 @click="submitVerification"
                 >确认验证</UButton
@@ -682,12 +676,6 @@ onBeforeUnmount(() => {
               deleteEmailDialog.contact?.value
             }}</span>
             吗？删除后需要重新添加并验证才能使用。
-          </p>
-          <p
-            v-if="deleteEmailDialog.error"
-            class="text-xs text-red-500 dark:text-red-400"
-          >
-            {{ deleteEmailDialog.error }}
           </p>
           <div class="flex justify-end gap-2">
             <UButton variant="ghost" @click="updateDeleteEmailDialog(false)">

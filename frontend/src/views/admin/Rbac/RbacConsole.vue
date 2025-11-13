@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAdminRbacStore } from '@/stores/adminRbac'
 import { useUiStore } from '@/stores/ui'
 
@@ -8,6 +8,56 @@ const rbacStore = useAdminRbacStore()
 
 const activeTab = ref<'roles' | 'permissions' | 'labels' | 'catalog' | 'self'>(
   'roles',
+)
+
+const pageSize = 10
+
+// 角色分页
+const rolesPageInput = ref(1)
+const rolesCurrentPage = ref(1)
+const rolesPaginatedItems = computed(() => {
+  const start = (rolesCurrentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return rbacStore.roles.slice(start, end)
+})
+const rolesPageCount = computed(
+  () => Math.ceil(rbacStore.roles.length / pageSize) || 1,
+)
+const rolesIsFirstPage = computed(() => rolesCurrentPage.value <= 1)
+const rolesIsLastPage = computed(
+  () => rolesCurrentPage.value >= rolesPageCount.value,
+)
+
+// 权限分页
+const permissionsPageInput = ref(1)
+const permissionsCurrentPage = ref(1)
+const permissionsPaginatedItems = computed(() => {
+  const start = (permissionsCurrentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return rbacStore.permissions.slice(start, end)
+})
+const permissionsPageCount = computed(
+  () => Math.ceil(rbacStore.permissions.length / pageSize) || 1,
+)
+const permissionsIsFirstPage = computed(() => permissionsCurrentPage.value <= 1)
+const permissionsIsLastPage = computed(
+  () => permissionsCurrentPage.value >= permissionsPageCount.value,
+)
+
+// 标签分页
+const labelsPageInput = ref(1)
+const labelsCurrentPage = ref(1)
+const labelsPaginatedItems = computed(() => {
+  const start = (labelsCurrentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return rbacStore.labels.slice(start, end)
+})
+const labelsPageCount = computed(
+  () => Math.ceil(rbacStore.labels.length / pageSize) || 1,
+)
+const labelsIsFirstPage = computed(() => labelsCurrentPage.value <= 1)
+const labelsIsLastPage = computed(
+  () => labelsCurrentPage.value >= labelsPageCount.value,
 )
 
 const roles = computed(() => rbacStore.roles)
@@ -55,7 +105,6 @@ const tabs = [
   { key: 'permissions', label: '权限列表' },
   { key: 'labels', label: '权限标签' },
   { key: 'catalog', label: '权限目录' },
-  { key: 'self', label: '自助申请' },
 ] as const
 
 onMounted(async () => {
@@ -81,6 +130,8 @@ function permissionCount(role: (typeof roles.value)[number]) {
   return role.rolePermissions?.length ?? 0
 }
 
+// ==== 自助申请 ====
+const selfModalOpen = ref(false)
 const selfKeys = ref('')
 const selfSubmitting = ref(false)
 
@@ -95,9 +146,15 @@ async function submitSelfAssign() {
     if (keys.length === 0) return
     await rbacStore.selfAssignPermissions(keys)
     selfKeys.value = ''
+    selfModalOpen.value = false
   } finally {
     selfSubmitting.value = false
   }
+}
+
+function openSelfModal() {
+  selfKeys.value = ''
+  selfModalOpen.value = true
 }
 
 // ==== 角色编辑 ====
@@ -230,48 +287,141 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
   if (!confirm(`确定删除标签「${label.name}」吗？`)) return
   await rbacStore.deleteLabel(label.id)
 }
+
+// ==== 分页函数 ====
+function goToPage(page: number, type: 'roles' | 'permissions' | 'labels') {
+  const pageCount =
+    type === 'roles'
+      ? rolesPageCount.value
+      : type === 'permissions'
+        ? permissionsPageCount.value
+        : labelsPageCount.value
+  const target = Math.max(1, Math.min(page, pageCount))
+
+  if (type === 'roles') {
+    rolesCurrentPage.value = target
+    rolesPageInput.value = target
+  } else if (type === 'permissions') {
+    permissionsCurrentPage.value = target
+    permissionsPageInput.value = target
+  } else {
+    labelsCurrentPage.value = target
+    labelsPageInput.value = target
+  }
+}
+
+function handlePageInput(type: 'roles' | 'permissions' | 'labels') {
+  const pageInput =
+    type === 'roles'
+      ? rolesPageInput
+      : type === 'permissions'
+        ? permissionsPageInput
+        : labelsPageInput
+
+  if (pageInput.value === null || Number.isNaN(pageInput.value)) {
+    const currentPage =
+      type === 'roles'
+        ? rolesCurrentPage.value
+        : type === 'permissions'
+          ? permissionsCurrentPage.value
+          : labelsCurrentPage.value
+    pageInput.value = currentPage
+    return
+  }
+
+  const pageCount =
+    type === 'roles'
+      ? rolesPageCount.value
+      : type === 'permissions'
+        ? permissionsPageCount.value
+        : labelsPageCount.value
+  const normalized = Math.max(
+    1,
+    Math.min(Math.trunc(pageInput.value), pageCount),
+  )
+  pageInput.value = normalized
+  goToPage(normalized, type)
+}
+
+watch(
+  () => rbacStore.roles.length,
+  () => {
+    if (rolesCurrentPage.value > rolesPageCount.value) {
+      rolesCurrentPage.value = rolesPageCount.value || 1
+    }
+  },
+)
+
+watch(
+  () => rbacStore.permissions.length,
+  () => {
+    if (permissionsCurrentPage.value > permissionsPageCount.value) {
+      permissionsCurrentPage.value = permissionsPageCount.value || 1
+    }
+  },
+)
+
+watch(
+  () => rbacStore.labels.length,
+  () => {
+    if (labelsCurrentPage.value > labelsPageCount.value) {
+      labelsCurrentPage.value = labelsPageCount.value || 1
+    }
+  },
+)
 </script>
 
 <template>
   <div class="space-y-6">
-    <header class="flex flex-col gap-2">
-      <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-        RBAC 权限控制
-      </h1>
-      <p class="text-sm text-slate-600 dark:text-slate-300">
-        维护 Hydroline
-        管理后台的角色、权限以及组织结构，确保资源访问满足最小权限原则。
-      </p>
-    </header>
-
-    <div class="flex flex-wrap items-center gap-2">
-      <UButton
-        v-for="tab in tabs"
-        :key="tab.key"
-        size="sm"
-        :color="activeTab === tab.key ? 'primary' : 'neutral'"
-        :variant="activeTab === tab.key ? 'solid' : 'ghost'"
-        @click="switchTab(tab.key)"
-      >
-        {{ tab.label }}
-      </UButton>
-      <div class="ml-auto flex gap-2" v-if="activeTab === 'roles'">
+    <div class="flex flex-wrap justify-between items-start gap-2">
+      <div class="flex items-center gap-2">
         <UButton
-          size="sm"
-          color="primary"
+          v-for="tab in tabs"
           variant="soft"
-          @click="openCreateRole"
+          :key="tab.key"
+          :color="activeTab === tab.key ? 'primary' : 'neutral'"
+          @click="switchTab(tab.key)"
+        >
+          {{ tab.label }}
+        </UButton>
+
+        <UButton color="neutral" variant="soft" @click="openSelfModal"
+          >自助申请</UButton
+        >
+      </div>
+      <div class="flex gap-2" v-if="activeTab === 'roles'">
+        <UButton color="primary" variant="link" @click="openCreateRole"
           >新建角色</UButton
         >
       </div>
-      <div class="ml-auto flex gap-2" v-else-if="activeTab === 'labels'">
-        <UButton
-          size="sm"
-          color="primary"
-          variant="soft"
-          @click="openCreateLabel"
+      <div class="flex gap-2" v-else-if="activeTab === 'labels'">
+        <UButton color="primary" variant="link" @click="openCreateLabel"
           >新建标签</UButton
         >
+      </div>
+      <div class="flex items-center gap-2" v-else-if="activeTab === 'catalog'">
+        <div class="flex flex-col gap-0.5">
+          <div class="flex items-center gap-0.5">
+            <UButton color="neutral" variant="link" @click="catalogKeyword = ''"
+              >清空</UButton
+            >
+            <UButton color="neutral" variant="link" @click="expandAll"
+              >全部展开</UButton
+            >
+            <UButton color="neutral" variant="link" @click="collapseAll"
+              >全部折叠</UButton
+            >
+            <UInput
+              v-model="catalogKeyword"
+              placeholder="搜索权限点或描述"
+              class="max-w-lg"
+            />
+          </div>
+          <span class="ml-auto px-2 text-xs text-slate-500 dark:text-slate-400"
+            >共 {{ filteredCatalog.length }} 个权限点，
+            {{ catalogGroups.length }} 个模块</span
+          >
+        </div>
       </div>
     </div>
 
@@ -295,7 +445,7 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
             <tr
-              v-for="role in roles"
+              v-for="role in rolesPaginatedItems"
               :key="role.id"
               class="transition hover:bg-slate-50/80 dark:hover:bg-slate-900/60"
             >
@@ -344,7 +494,7 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
                 </div>
               </td>
             </tr>
-            <tr v-if="roles.length === 0">
+            <tr v-if="rolesPaginatedItems.length === 0">
               <td
                 colspan="5"
                 class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
@@ -355,118 +505,326 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
           </tbody>
         </table>
       </div>
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 text-sm text-slate-600 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300"
+      >
+        <span
+          >第 {{ rolesCurrentPage }} / {{ rolesPageCount }} 页，共
+          {{ roles.length }} 个角色</span
+        >
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="rolesIsFirstPage"
+            @click="goToPage(1, 'roles')"
+          >
+            首页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="rolesIsFirstPage"
+            @click="goToPage(rolesCurrentPage - 1, 'roles')"
+          >
+            上一页
+          </UButton>
+          <div class="flex items-center gap-1">
+            <UInput
+              v-model.number="rolesPageInput"
+              type="number"
+              size="xs"
+              class="w-16 text-center"
+              min="1"
+              :max="rolesPageCount"
+              @keydown.enter.prevent="handlePageInput('roles')"
+            />
+            <span class="text-xs text-slate-500 dark:text-slate-400">
+              / {{ rolesPageCount }}
+            </span>
+          </div>
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="xs"
+            @click="handlePageInput('roles')"
+          >
+            跳转
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="rolesIsLastPage"
+            @click="goToPage(rolesCurrentPage + 1, 'roles')"
+          >
+            下一页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="rolesIsLastPage"
+            @click="goToPage(rolesPageCount, 'roles')"
+          >
+            末页
+          </UButton>
+        </div>
+      </div>
     </div>
 
     <div v-else-if="activeTab === 'permissions'" class="space-y-4">
       <div
-        class="rounded-3xl border border-slate-200/70 bg-white/80 p-6 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+        class="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
       >
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
-          权限列表
-        </h2>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          当前系统共记录 {{ permissions.length }} 项权限点。
-        </p>
-        <ul class="mt-4 grid gap-3 md:grid-cols-2">
-          <li
-            v-for="permission in permissions"
-            :key="permission.id"
-            class="rounded-2xl border border-slate-200/70 bg-white/60 p-4 text-sm dark:border-slate-800/60 dark:bg-slate-900/60"
+        <table
+          class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800"
+        >
+          <thead class="bg-slate-50/60 dark:bg-slate-900/60">
+            <tr
+              class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            >
+              <th class="px-4 py-3">权限点</th>
+              <th class="px-4 py-3">描述</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+            <tr
+              v-for="permission in permissionsPaginatedItems"
+              :key="permission.id"
+              class="transition hover:bg-slate-50/80 dark:hover:bg-slate-900/60"
+            >
+              <td class="px-4 py-3 font-mono text-slate-900 dark:text-white">
+                {{ permission.key }}
+              </td>
+              <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                {{ permission.description ?? '—' }}
+              </td>
+            </tr>
+            <tr v-if="permissionsPaginatedItems.length === 0">
+              <td
+                colspan="2"
+                class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
+              >
+                尚未记录任何权限点。
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 text-sm text-slate-600 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300"
+      >
+        <span
+          >第 {{ permissionsCurrentPage }} / {{ permissionsPageCount }} 页，共
+          {{ permissions.length }} 个权限</span
+        >
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="permissionsIsFirstPage"
+            @click="goToPage(1, 'permissions')"
           >
-            <p class="font-medium text-slate-900 dark:text-white">
-              {{ permission.key }}
-            </p>
-            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {{ permission.description ?? '暂无描述' }}
-            </p>
-          </li>
-        </ul>
+            首页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="permissionsIsFirstPage"
+            @click="goToPage(permissionsCurrentPage - 1, 'permissions')"
+          >
+            上一页
+          </UButton>
+          <div class="flex items-center gap-1">
+            <UInput
+              v-model.number="permissionsPageInput"
+              type="number"
+              size="xs"
+              class="w-16 text-center"
+              min="1"
+              :max="permissionsPageCount"
+              @keydown.enter.prevent="handlePageInput('permissions')"
+            />
+            <span class="text-xs text-slate-500 dark:text-slate-400">
+              / {{ permissionsPageCount }}
+            </span>
+          </div>
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="xs"
+            @click="handlePageInput('permissions')"
+          >
+            跳转
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="permissionsIsLastPage"
+            @click="goToPage(permissionsCurrentPage + 1, 'permissions')"
+          >
+            下一页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="permissionsIsLastPage"
+            @click="goToPage(permissionsPageCount, 'permissions')"
+          >
+            末页
+          </UButton>
+        </div>
       </div>
     </div>
 
     <div v-else-if="activeTab === 'labels'" class="space-y-4">
       <div
-        class="rounded-3xl border border-slate-200/70 bg-white/80 p-6 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+        class="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
       >
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
-          权限标签
-        </h2>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          标签可用于为玩家/用户打标，并附带一组权限点，支持叠加及空标签。
-        </p>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          <div
-            v-for="label in labels"
-            :key="label.id"
-            class="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-sm dark:border-slate-800/60 dark:bg-slate-900/60"
+        <table
+          class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800"
+        >
+          <thead class="bg-slate-50/60 dark:bg-slate-900/60">
+            <tr
+              class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            >
+              <th class="px-4 py-3">标签</th>
+              <th class="px-4 py-3">权限数量</th>
+              <th class="px-4 py-3">描述</th>
+              <th class="px-4 py-3 text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+            <tr
+              v-for="label in labelsPaginatedItems"
+              :key="label.id"
+              class="transition hover:bg-slate-50/80 dark:hover:bg-slate-900/60"
+            >
+              <td class="px-4 py-3">
+                <div class="flex flex-col">
+                  <span class="font-medium text-slate-900 dark:text-white">{{
+                    label.name
+                  }}</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400">{{
+                    label.key
+                  }}</span>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                {{ label.permissions.length }}
+              </td>
+              <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                {{ label.description ?? '—' }}
+              </td>
+              <td class="px-4 py-3 text-right">
+                <div class="flex justify-end gap-2">
+                  <UButton
+                    size="xs"
+                    color="neutral"
+                    variant="outline"
+                    @click="openEditLabel(label)"
+                    >编辑</UButton
+                  >
+                  <UButton
+                    size="xs"
+                    color="error"
+                    variant="soft"
+                    @click="deleteLabel(label)"
+                  >
+                    删除
+                  </UButton>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="labelsPaginatedItems.length === 0">
+              <td
+                colspan="4"
+                class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
+              >
+                尚未创建任何标签。
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 text-sm text-slate-600 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300"
+      >
+        <span
+          >第 {{ labelsCurrentPage }} / {{ labelsPageCount }} 页，共
+          {{ labels.length }} 个标签</span
+        >
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="labelsIsFirstPage"
+            @click="goToPage(1, 'labels')"
           >
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="font-semibold text-slate-900 dark:text-white">
-                  {{ label.name }}
-                </p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  {{ label.key }}
-                </p>
-              </div>
-              <UBadge color="primary" variant="soft"
-                >{{ label.permissions.length }} 项权限</UBadge
-              >
-            </div>
-            <ul class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              <li v-for="perm in label.permissions" :key="perm.id">
-                {{ perm.permission.key }}
-              </li>
-              <li v-if="label.permissions.length === 0">
-                该标签未附加任何权限，可用于纯标签标识。
-              </li>
-            </ul>
-            <div class="mt-3 flex justify-end gap-2">
-              <UButton
-                size="xs"
-                color="neutral"
-                variant="outline"
-                @click="openEditLabel(label)"
-                >编辑</UButton
-              >
-              <UButton
-                size="xs"
-                color="error"
-                variant="soft"
-                @click="deleteLabel(label)"
-                >删除</UButton
-              >
-            </div>
+            首页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="labelsIsFirstPage"
+            @click="goToPage(labelsCurrentPage - 1, 'labels')"
+          >
+            上一页
+          </UButton>
+          <div class="flex items-center gap-1">
+            <UInput
+              v-model.number="labelsPageInput"
+              type="number"
+              size="xs"
+              class="w-16 text-center"
+              min="1"
+              :max="labelsPageCount"
+              @keydown.enter.prevent="handlePageInput('labels')"
+            />
+            <span class="text-xs text-slate-500 dark:text-slate-400">
+              / {{ labelsPageCount }}
+            </span>
           </div>
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="xs"
+            @click="handlePageInput('labels')"
+          >
+            跳转
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="labelsIsLastPage"
+            @click="goToPage(labelsCurrentPage + 1, 'labels')"
+          >
+            下一页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="labelsIsLastPage"
+            @click="goToPage(labelsPageCount, 'labels')"
+          >
+            末页
+          </UButton>
         </div>
       </div>
     </div>
 
     <div v-else-if="activeTab === 'catalog'" class="space-y-4">
-      <div class="flex flex-wrap items-center gap-2">
-        <UInput
-          v-model="catalogKeyword"
-          placeholder="搜索权限点或描述"
-          class="max-w-md"
-        />
-        <UButton
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          @click="catalogKeyword = ''"
-          >清空</UButton
-        >
-        <UButton color="neutral" variant="ghost" size="xs" @click="expandAll"
-          >全部展开</UButton
-        >
-        <UButton color="neutral" variant="ghost" size="xs" @click="collapseAll"
-          >全部折叠</UButton
-        >
-        <span class="ml-auto text-xs text-slate-500 dark:text-slate-400"
-          >共 {{ filteredCatalog.length }} 项，模块
-          {{ catalogGroups.length }}</span
-        >
-      </div>
       <div class="space-y-3">
         <div
           v-for="group in catalogGroups"
@@ -511,9 +869,9 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
                   <tr
                     class="text-left uppercase tracking-wide text-slate-500 dark:text-slate-400"
                   >
-                    <th class="px-4 py-2">权限点</th>
-                    <th class="px-4 py-2">角色来源</th>
-                    <th class="px-4 py-2">标签来源</th>
+                    <th class="w-1/3 px-4 py-2">权限点</th>
+                    <th class="w-1/3 px-4 py-2">角色来源</th>
+                    <th class="w-1/3 px-4 py-2">标签来源</th>
                   </tr>
                 </thead>
                 <tbody
@@ -539,7 +897,7 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
                     <td
                       class="px-4 py-2 text-[11px] text-slate-500 dark:text-slate-400"
                     >
-                      <div class="flex flex-wrap gap-1">
+                      <div class="flex gap-1">
                         <UBadge
                           v-for="role in entry.roles"
                           :key="role.id"
@@ -554,7 +912,7 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
                     <td
                       class="px-4 py-2 text-[11px] text-slate-500 dark:text-slate-400"
                     >
-                      <div class="flex flex-wrap gap-1">
+                      <div class="flex flex-col gap-1">
                         <UBadge
                           v-for="label in entry.labels"
                           :key="label.id"
@@ -581,31 +939,8 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
       </div>
     </div>
 
-    <div v-else class="space-y-4">
-      <div
-        class="rounded-3xl border border-slate-200/70 bg-white/80 p-6 text-sm text-slate-600 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70 dark:text-slate-300"
-      >
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
-          管理员自助申请
-        </h2>
-        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-          当新增模块尚未授权时，可在此输入权限键（用逗号分隔）并立即获取。
-        </p>
-        <div class="mt-4 flex gap-2">
-          <UInput
-            v-model="selfKeys"
-            placeholder="例如 auth.manage.users, assets.manage.attachments"
-            class="flex-1"
-          />
-          <UButton
-            :loading="selfSubmitting"
-            color="primary"
-            @click="submitSelfAssign"
-          >
-            申请
-          </UButton>
-        </div>
-      </div>
+    <div v-else class="text-center py-10">
+      <p class="text-slate-500 dark:text-slate-400">选择一个标签页查看内容</p>
     </div>
   </div>
 
@@ -782,6 +1117,45 @@ async function deleteLabel(label: (typeof labels.value)[number]) {
           >
           <UButton type="submit" color="primary" :loading="rbacStore.submitting"
             >保存</UButton
+          >
+        </div>
+      </form>
+    </template>
+  </UModal>
+
+  <!-- 自助申请弹窗 -->
+  <UModal v-model:open="selfModalOpen" :ui="{ content: 'w-full max-w-2xl' }">
+    <template #content>
+      <form class="space-y-4 p-6 text-sm" @submit.prevent="submitSelfAssign">
+        <header class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+            管理员自助申请
+          </h3>
+        </header>
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+          当新增模块尚未授权时，可在此输入权限键（用逗号分隔）并立即获取。
+        </p>
+        <label class="flex flex-col gap-1">
+          <span
+            class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            >权限键</span
+          >
+          <UInput
+            v-model="selfKeys"
+            placeholder="例如 auth.manage.users, assets.manage.attachments"
+            required
+          />
+        </label>
+        <div class="flex justify-end gap-2">
+          <UButton
+            type="button"
+            color="neutral"
+            variant="ghost"
+            @click="selfModalOpen = false"
+            >取消</UButton
+          >
+          <UButton type="submit" color="primary" :loading="selfSubmitting"
+            >申请</UButton
           >
         </div>
       </form>

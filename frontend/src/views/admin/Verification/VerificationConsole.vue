@@ -222,14 +222,11 @@ watch(
 <template>
   <div class="space-y-6">
     <!-- 验证管理入口 -->
-    <section
-      class="rounded-3xl border border-slate-200/70 bg-white/80 p-5 text-sm dark:border-slate-800/60 dark:bg-slate-900/70"
-    >
+    <section class="text-sm">
       <div
         class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div class="space-y-3">
-          <h2 class="text-base font-semibold">验证管理</h2>
           <div class="flex flex-wrap gap-3">
             <div
               v-for="item in statusSummaries"
@@ -256,7 +253,7 @@ watch(
         </div>
         <UButton
           color="primary"
-          size="sm"
+          variant="link"
           :loading="flagsLoading"
           @click="configDialogOpen = true"
         >
