@@ -23,7 +23,14 @@ import { AuthGuard } from '../auth.guard';
 import { buildRequestContext } from '../helpers/request-context.helper';
 import { IpLocationService } from '../../lib/ip2region/ip-location.service';
 import { ChangePasswordWithCodeDto } from '../dto/change-password-with-code.dto';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 
 class PublicForgotPasswordDto {
   @IsEmail()
@@ -50,6 +57,49 @@ class AddEmailContactDto {
 class VerifyEmailContactDto {
   @IsEmail()
   email!: string;
+
+  @IsString()
+  code!: string;
+}
+
+class AddPhoneContactDto {
+  @IsString()
+  @Matches(/^\+\d{2,6}$/)
+  dialCode!: string;
+
+  @IsString()
+  @Matches(/^[0-9\s-]{5,20}$/)
+  phone!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPrimary?: boolean;
+}
+
+class UpdatePhoneContactDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+\d{2,6}$/)
+  dialCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[0-9\s-]{5,20}$/)
+  phone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPrimary?: boolean;
+}
+
+class SendPhoneVerificationDto {
+  @IsString()
+  phone!: string;
+}
+
+class VerifyPhoneContactDto {
+  @IsString()
+  phone!: string;
 
   @IsString()
   code!: string;
@@ -265,6 +315,108 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: '删除邮箱联系人（自动重新指定主邮箱）' })
   async deleteEmailContact(
+    @Req() req: Request,
+    @Param('contactId') contactId: string,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    await this.usersService.removeContact(userId, contactId);
+    return { success: true };
+  }
+
+  // ================= 自助手机号联系人管理（需登录） =================
+  @Get('me/contacts/phone')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '列出我的手机号联系人（主在前）' })
+  async listMyPhoneContacts(@Req() req: Request) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    const items = await this.usersService.listPhoneContacts(userId);
+    return { items, contacts: items };
+  }
+
+  @Post('me/contacts/phone')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '新增手机号联系人（按需发送验证码）' })
+  async addMyPhoneContact(
+    @Req() req: Request,
+    @Body() dto: AddPhoneContactDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    const contact = await this.usersService.addPhoneContact(userId, {
+      dialCode: dto.dialCode,
+      phone: dto.phone,
+      isPrimary: dto.isPrimary,
+    });
+    return { contact };
+  }
+
+  @Patch('me/contacts/phone/:contactId')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '更新手机号联系人（修改号码或主副状态）' })
+  async updateMyPhoneContact(
+    @Req() req: Request,
+    @Param('contactId') contactId: string,
+    @Body() dto: UpdatePhoneContactDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    const contact = await this.usersService.updatePhoneContact(
+      userId,
+      contactId,
+      dto,
+    );
+    return { contact };
+  }
+
+  @Post('me/contacts/phone/resend')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '发送或重发手机号验证码' })
+  async resendPhoneVerification(
+    @Req() req: Request,
+    @Body() dto: SendPhoneVerificationDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    return this.usersService.sendPhoneVerificationCode(userId, dto.phone);
+  }
+
+  @Post('me/contacts/phone/verify')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '验证手机号联系人' })
+  async verifyPhoneContact(
+    @Req() req: Request,
+    @Body() dto: VerifyPhoneContactDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    return this.usersService.verifyPhoneContact(userId, dto.phone, dto.code);
+  }
+
+  @Patch('me/contacts/phone/:contactId/primary')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '设置主手机号（按需需已验证）' })
+  async setPrimaryPhone(
+    @Req() req: Request,
+    @Param('contactId') contactId: string,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new UnauthorizedException('Invalid session');
+    return this.usersService.setPrimaryPhoneContact(userId, contactId);
+  }
+
+  @Delete('me/contacts/phone/:contactId')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '删除手机号联系人' })
+  async deletePhoneContact(
     @Req() req: Request,
     @Param('contactId') contactId: string,
   ) {

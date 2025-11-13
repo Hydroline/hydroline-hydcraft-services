@@ -13,6 +13,7 @@ import {
   type UpdateCurrentUserPayload,
 } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { useFeatureStore } from '@/stores/feature'
 import { ApiError } from '@/utils/api'
 
 type FormState = {
@@ -36,7 +37,97 @@ type FormState = {
 
 const auth = useAuthStore()
 const ui = useUiStore()
+const feature = useFeatureStore()
 const toast = useToast()
+
+const phoneVerificationEnabled = computed(
+  () => feature.phoneVerificationEnabled,
+)
+
+function isContactVerified(contact: any) {
+  if (!contact || typeof contact !== 'object') return false
+  if (contact.verification === 'VERIFIED') return true
+  return Boolean(contact.verifiedAt)
+}
+
+function extractDialCode(contact: any) {
+  if (!contact || typeof contact !== 'object') return null
+  const metadata = contact.metadata
+  if (metadata && typeof metadata === 'object') {
+    const dial = (metadata as Record<string, unknown>).dialCode
+    if (typeof dial === 'string' && dial.startsWith('+')) {
+      return dial
+    }
+  }
+  const value = typeof contact.value === 'string' ? contact.value : ''
+  const match = value.match(/^\+\d{2,6}/)
+  return match ? match[0] : null
+}
+
+function buildPhoneSummary(contact: any) {
+  if (!contact || typeof contact !== 'object') return null
+  const rawValue = typeof contact.value === 'string' ? contact.value.trim() : ''
+  if (!rawValue) {
+    return {
+      value: '',
+      dialCode: '',
+      number: '',
+      display: '',
+      isPrimary: Boolean(contact?.isPrimary),
+      verified: isContactVerified(contact),
+    }
+  }
+  const dial = extractDialCode(contact) ?? ''
+  const number = dial && rawValue.startsWith(dial)
+    ? rawValue.slice(dial.length)
+    : rawValue
+  const normalizedNumber = number.replace(/\s+/g, '')
+  return {
+    value: rawValue,
+    dialCode: dial,
+    number: normalizedNumber,
+    display: dial
+      ? `${dial} ${normalizedNumber}`.trim()
+      : normalizedNumber,
+    isPrimary: Boolean(contact?.isPrimary),
+    verified: isContactVerified(contact),
+  }
+}
+
+const contactSummary = computed(() => {
+  const user = auth.user as Record<string, any> | null
+  const contactsRaw = Array.isArray((user as any)?.contacts)
+    ? ((user as any).contacts as any[])
+    : []
+
+  const emailContacts = contactsRaw.filter(
+    (entry) => entry?.channel?.key === 'email',
+  )
+  const phoneContacts = contactsRaw.filter(
+    (entry) => entry?.channel?.key === 'phone',
+  )
+
+  const pickPrimary = (list: any[]) =>
+    list.find((item: any) => item?.isPrimary) ?? list[0] ?? null
+
+  const primaryEmail = pickPrimary(emailContacts)
+  const primaryPhone = pickPrimary(phoneContacts)
+
+  const emailInfo = primaryEmail
+    ? {
+        value: String(primaryEmail.value ?? ''),
+        isPrimary: Boolean(primaryEmail.isPrimary),
+        verified: isContactVerified(primaryEmail),
+      }
+    : null
+
+  const phoneInfo = primaryPhone ? buildPhoneSummary(primaryPhone) : null
+
+  return {
+    email: emailInfo,
+    phone: phoneInfo,
+  }
+})
 
 const isAuthenticated = computed(() => auth.isAuthenticated)
 const loading = ref(false)
@@ -431,6 +522,8 @@ watch(
       @editing-change="(v: boolean) => (isEditingAny = v)"
       @request-save="handleSave"
       @request-reset="handleReset"
+      :contact-summary="contactSummary"
+      :phone-verification-enabled="phoneVerificationEnabled"
       @update:model-value="
         (v: any) => {
           form.name = v.name

@@ -8,6 +8,7 @@ const USER_CACHE_KEY = 'hydroline.cachedUser'
 
 type RawUser = Record<string, unknown>
 type EmailContact = Record<string, unknown>
+type PhoneContact = Record<string, unknown>
 
 type GenderType = 'UNSPECIFIED' | 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER'
 
@@ -271,6 +272,9 @@ export const useAuthStore = defineStore('auth', {
           body: { email: trimmed },
         },
       )
+      try {
+        await this.fetchCurrentUser()
+      } catch {}
       return result.contact
     },
     // Authenticated: resend email verification code for a contact email
@@ -346,6 +350,129 @@ export const useAuthStore = defineStore('auth', {
         throw new ApiError(401, '未登录')
       }
       const endpoint = `/auth/me/contacts/email/${encodeURIComponent(contactId)}`
+      await apiFetch<{ success: boolean }>(endpoint, {
+        method: 'DELETE',
+        token: this.token,
+      })
+      try {
+        await this.fetchCurrentUser()
+      } catch {}
+      return true
+    },
+    async listPhoneContacts() {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const result = await apiFetch<{
+        items?: PhoneContact[]
+        contacts?: PhoneContact[]
+      }>('/auth/me/contacts/phone', {
+        token: this.token,
+      })
+      const contacts = Array.isArray(result.items)
+        ? result.items
+        : Array.isArray(result.contacts)
+          ? result.contacts
+          : []
+      return contacts
+    },
+    async addPhoneContact(payload: {
+      dialCode: string
+      phone: string
+      isPrimary?: boolean
+    }) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const { dialCode, phone, isPrimary } = payload
+      const result = await apiFetch<{ contact: PhoneContact }>(
+        '/auth/me/contacts/phone',
+        {
+          method: 'POST',
+          token: this.token,
+          body: {
+            dialCode,
+            phone,
+            isPrimary,
+          },
+        },
+      )
+      try {
+        await this.fetchCurrentUser()
+      } catch {}
+      return result.contact
+    },
+    async updatePhoneContact(
+      contactId: string,
+      payload: { dialCode?: string; phone?: string; isPrimary?: boolean },
+    ) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const endpoint = `/auth/me/contacts/phone/${encodeURIComponent(contactId)}`
+      const result = await apiFetch<{ contact: PhoneContact }>(endpoint, {
+        method: 'PATCH',
+        token: this.token,
+        body: payload,
+      })
+      try {
+        await this.fetchCurrentUser()
+      } catch {}
+      return result.contact
+    },
+    async resendPhoneVerification(phone: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const trimmed = (phone || '').trim()
+      if (!trimmed) {
+        throw new ApiError(400, '请输入手机号')
+      }
+      await apiFetch<{ success: boolean }>('/auth/me/contacts/phone/resend', {
+        method: 'POST',
+        token: this.token,
+        body: { phone: trimmed },
+      })
+      return true
+    },
+    async verifyPhoneContact(payload: { phone: string; code: string }) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const phone = (payload.phone || '').trim()
+      const code = (payload.code || '').trim()
+      if (!phone || !code) {
+        throw new ApiError(400, '请输入手机号和验证码')
+      }
+      await apiFetch<{ success: boolean }>('/auth/me/contacts/phone/verify', {
+        method: 'POST',
+        token: this.token,
+        body: { phone, code },
+      })
+      try {
+        await this.fetchCurrentUser()
+      } catch {}
+      return true
+    },
+    async setPrimaryPhoneContact(contactId: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const endpoint = `/auth/me/contacts/phone/${encodeURIComponent(contactId)}/primary`
+      await apiFetch<{ success: boolean }>(endpoint, {
+        method: 'PATCH',
+        token: this.token,
+      })
+      try {
+        await this.fetchCurrentUser()
+      } catch {}
+      return true
+    },
+    async removePhoneContact(contactId: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const endpoint = `/auth/me/contacts/phone/${encodeURIComponent(contactId)}`
       await apiFetch<{ success: boolean }>(endpoint, {
         method: 'DELETE',
         token: this.token,

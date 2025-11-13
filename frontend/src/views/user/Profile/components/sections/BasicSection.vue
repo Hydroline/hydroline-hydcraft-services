@@ -51,6 +51,22 @@ const props = defineProps<{
     lastLoginIpDisplay?: string | null
     roleNames?: string[]
   }
+  contactSummary?: {
+    email?: {
+      value: string
+      isPrimary: boolean
+      verified: boolean
+    } | null
+    phone?: {
+      value: string
+      dialCode: string
+      number: string
+      display: string
+      isPrimary: boolean
+      verified: boolean
+    } | null
+  }
+  phoneVerificationEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -66,6 +82,10 @@ function update<K extends keyof typeof props.modelValue>(
   value: (typeof props.modelValue)[K],
 ) {
   emit('update:modelValue', { ...props.modelValue, [key]: value })
+}
+
+function normalizeString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
 }
 
 const genderLabel = computed(
@@ -88,6 +108,35 @@ const languageLabel = computed(() => {
     '未填写'
   )
 })
+
+const emailContact = computed(() => props.contactSummary?.email ?? null)
+const emailDisplay = computed(() => {
+  const preferred = normalizeString(emailContact.value?.value)
+  if (preferred) return preferred
+  return normalizeString(props.modelValue.email)
+})
+
+const phoneContact = computed(() => props.contactSummary?.phone ?? null)
+const fallbackDial = computed(() => {
+  const entry = phoneRegions.find(
+    (region) => region.code === props.modelValue.phoneCountry,
+  )
+  return entry?.dial ?? ''
+})
+const fallbackPhoneDisplay = computed(() => {
+  const dial = fallbackDial.value
+  const number = normalizeString(props.modelValue.phone)
+  if (!dial) return number
+  return number ? `${dial} ${number}` : dial
+})
+const phoneDisplay = computed(() => {
+  const preferred = normalizeString(phoneContact.value?.display)
+  if (preferred) return preferred
+  return fallbackPhoneDisplay.value
+})
+const phoneVerificationActive = computed(
+  () => Boolean(props.phoneVerificationEnabled),
+)
 
 const editingBasic = ref(false)
 const editingRegion = ref(false)
@@ -396,16 +445,33 @@ defineExpose({ forceEdit })
           邮箱
         </div>
         <div class="flex-1">
-          <p
-            class="text-sm"
-            :class="
-              props.modelValue.email
-                ? 'text-slate-900 dark:text-slate-100'
-                : 'text-slate-400 dark:text-slate-500'
-            "
-          >
-            {{ props.modelValue.email || '未填写' }}
-          </p>
+          <div class="flex flex-wrap items-center gap-2 text-sm">
+            <span
+              :class="
+                emailDisplay
+                  ? 'text-slate-900 dark:text-slate-100'
+                  : 'text-slate-400 dark:text-slate-500'
+              "
+            >
+              {{ emailDisplay || '未填写' }}
+            </span>
+            <template v-if="emailContact">
+              <UBadge
+                size="sm"
+                variant="soft"
+                :color="emailContact.isPrimary ? 'primary' : 'neutral'"
+              >
+                {{ emailContact.isPrimary ? '主邮箱' : '辅助' }}
+              </UBadge>
+              <UBadge
+                size="sm"
+                variant="soft"
+                :color="emailContact.verified ? 'success' : 'warning'"
+              >
+                {{ emailContact.verified ? '已验证' : '未验证' }}
+              </UBadge>
+            </template>
+          </div>
         </div>
       </div>
 
@@ -616,24 +682,34 @@ defineExpose({ forceEdit })
         >
           手机号
         </div>
-        <div class="flex-1 flex gap-2">
-          <p class="text-sm text-slate-900 dark:text-slate-100">
-            {{
-              phoneRegions.find((r) => r.code === props.modelValue.phoneCountry)
-                ?.dial || ''
-            }}
-          </p>
-          <div class="flex-1">
-            <p
-              class="text-sm"
+        <div class="flex-1">
+          <div class="flex flex-wrap items-center gap-2 text-sm">
+            <span
               :class="
-                props.modelValue.phone
+                phoneDisplay
                   ? 'text-slate-900 dark:text-slate-100'
                   : 'text-slate-400 dark:text-slate-500'
               "
             >
-              {{ props.modelValue.phone || '未填写' }}
-            </p>
+              {{ phoneDisplay || '未填写' }}
+            </span>
+            <template v-if="phoneContact">
+              <UBadge
+                size="sm"
+                variant="soft"
+                :color="phoneContact.isPrimary ? 'primary' : 'neutral'"
+              >
+                {{ phoneContact.isPrimary ? '主手机号' : '辅助' }}
+              </UBadge>
+              <UBadge
+                v-if="phoneVerificationActive"
+                size="sm"
+                variant="soft"
+                :color="phoneContact.verified ? 'success' : 'warning'"
+              >
+                {{ phoneContact.verified ? '已验证' : '未验证' }}
+              </UBadge>
+            </template>
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { IpLocationService } from '../../../lib/ip2region/ip-location.service';
 import { AdminAuditService } from '../admin-audit.service';
 import { MailService } from '../../../mail/mail.service';
 import { UsersServiceContext } from './users.context';
+import { ConfigService } from '../../../config/config.service';
 import {
   initializeUserRecords,
   listUsers,
@@ -29,6 +30,12 @@ import {
   verifyEmailContact,
   listEmailContacts,
   setPrimaryEmailContact,
+  listPhoneContacts,
+  addPhoneContact,
+  updatePhoneContact,
+  sendPhoneVerificationCode,
+  verifyPhoneContact,
+  setPrimaryPhoneContact,
 } from './users-contacts.manager';
 import {
   updateAuthmeBinding,
@@ -64,6 +71,7 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private readonly piicPrefix = 'H';
   private readonly emailVerificationIdentifierPrefix = 'email-verify:';
+  private readonly phoneVerificationIdentifierPrefix = 'phone-verify:';
   private readonly verificationTtlMs = 10 * 60 * 1000;
   private readonly ctx: UsersServiceContext;
 
@@ -75,6 +83,7 @@ export class UsersService {
     private readonly ipLocationService: IpLocationService,
     private readonly adminAuditService: AdminAuditService,
     private readonly mailService: MailService,
+    private readonly configService: ConfigService,
   ) {
     this.ctx = {
       prisma: this.prisma,
@@ -84,10 +93,12 @@ export class UsersService {
       ipLocationService: this.ipLocationService,
       adminAuditService: this.adminAuditService,
       mailService: this.mailService,
+      configService: this.configService,
       logger: this.logger,
       piicPrefix: this.piicPrefix,
       verificationTtlMs: this.verificationTtlMs,
       emailVerificationIdentifierPrefix: this.emailVerificationIdentifierPrefix,
+      phoneVerificationIdentifierPrefix: this.phoneVerificationIdentifierPrefix,
     };
   }
 
@@ -236,6 +247,37 @@ export class UsersService {
 
   async setPrimaryEmailContact(userId: string, contactId: string) {
     return setPrimaryEmailContact(this.ctx, userId, contactId);
+  }
+
+  async listPhoneContacts(userId: string) {
+    return listPhoneContacts(this.ctx, userId);
+  }
+
+  async addPhoneContact(
+    userId: string,
+    payload: Parameters<typeof addPhoneContact>[2],
+  ) {
+    return addPhoneContact(this.ctx, userId, payload);
+  }
+
+  async updatePhoneContact(
+    userId: string,
+    contactId: string,
+    payload: Parameters<typeof updatePhoneContact>[3],
+  ) {
+    return updatePhoneContact(this.ctx, userId, contactId, payload);
+  }
+
+  async sendPhoneVerificationCode(userId: string, phoneRaw: string) {
+    return sendPhoneVerificationCode(this.ctx, userId, phoneRaw);
+  }
+
+  async verifyPhoneContact(userId: string, phoneRaw: string, code: string) {
+    return verifyPhoneContact(this.ctx, userId, phoneRaw, code);
+  }
+
+  async setPrimaryPhoneContact(userId: string, contactId: string) {
+    return setPrimaryPhoneContact(this.ctx, userId, contactId);
   }
 
   async regeneratePiic(

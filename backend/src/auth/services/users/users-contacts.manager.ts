@@ -198,7 +198,7 @@ export async function updateContact(
       metadata:
         dto.metadata !== undefined
           ? toJson(dto.metadata)
-          : existing.metadata ?? Prisma.JsonNull,
+          : (existing.metadata ?? Prisma.JsonNull),
     },
     include: { channel: true },
   });
@@ -530,5 +530,628 @@ export async function setPrimaryEmailContact(
       data: { email: contact.value, emailVerified: true },
     });
   });
+  return { success: true } as const;
+}
+
+type PhoneContactPayload = {
+  dialCode: string;
+  phone: string;
+  isPrimary?: boolean;
+};
+
+type PhoneContactUpdatePayload = {
+  dialCode?: string;
+  phone?: string;
+  isPrimary?: boolean;
+};
+
+const DEFAULT_PHONE_DIAL_CODES = ['+86', '+852', '+853', '+886'] as const;
+
+const KNOWN_DIAL_REGIONS: Record<string, string> = {
+  '+86': 'CN',
+  '+852': 'HK',
+  '+853': 'MO',
+  '+886': 'TW',
+};
+
+const COUNTRY_TO_DIAL_CODE: Record<string, string> = {
+  CN: '+86',
+  HK: '+852',
+  MO: '+853',
+  TW: '+886',
+};
+
+function normalizeDialCode(dialRaw: string, allowed: string[]) {
+  const dial = normalizeOptionalString(dialRaw) ?? '';
+  if (!/^\+\d{2,6}$/.test(dial)) {
+    throw new BadRequestException('区号无效');
+  }
+  if (!allowed.includes(dial)) {
+    throw new BadRequestException('不支持的区号');
+  }
+  return dial;
+}
+
+function normalizePhoneNumber(input: string) {
+  const digits = (input || '').replace(/\D/g, '');
+  if (digits.length < 5 || digits.length > 16) {
+    throw new BadRequestException('手机号长度超出范围');
+  }
+  return digits;
+}
+
+function composePhoneValue(dialCode: string, number: string) {
+  return `${dialCode}${number}`;
+}
+
+function deriveRegionByDial(dialCode: string) {
+  return KNOWN_DIAL_REGIONS[dialCode] ?? null;
+}
+
+function resolveDialCodeByCountry(
+  country: string | null | undefined,
+  allowed: string[],
+) {
+  const normalized =
+    typeof country === 'string' && country.trim().length > 0
+      ? country.trim().toUpperCase()
+      : '';
+  const preferred = normalized ? COUNTRY_TO_DIAL_CODE[normalized] : undefined;
+  if (preferred && allowed.includes(preferred)) {
+    return preferred;
+  }
+  const fallback = allowed.length > 0 ? allowed : [...DEFAULT_PHONE_DIAL_CODES];
+  if (preferred && fallback.includes(preferred)) {
+    return preferred;
+  }
+  return fallback[0] ?? '+86';
+}
+
+async function ensurePhoneChannel(ctx: UsersServiceContext) {
+  return ctx.prisma.contactChannel.upsert({
+    where: { key: 'phone' },
+    update: {},
+    create: {
+      key: 'phone',
+      displayName: '手机号码',
+      description: '账号安全手机号',
+      allowMultiple: true,
+      isRequired: false,
+      isVerifiable: true,
+    },
+  });
+}
+
+async function isPhoneVerificationEnabled(ctx: UsersServiceContext) {
+  const entry = await ctx.configService.getEntry(
+    'security.verification',
+    'enablePhoneVerification',
+  );
+  const value = entry?.value;
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+    if (!Number.isNaN(Number(normalized))) {
+      return Number(normalized) !== 0;
+    }
+  }
+  return false;
+}
+
+async function getSupportedPhoneDialCodes(ctx: UsersServiceContext) {
+  const entry = await ctx.configService.getEntry(
+    'security.verification',
+    'supportedPhoneRegions',
+  );
+  const value = entry?.value;
+  if (Array.isArray(value)) {
+    const list = value
+      .map((item) => (typeof item === 'string' ? item.trim() : null))
+      .filter((item): item is string => Boolean(item));
+    if (list.length > 0) {
+      return list;
+    }
+  }
+  return [...DEFAULT_PHONE_DIAL_CODES];
+}
+
+async function migrateLegacyProfilePhoneContact(
+  ctx: UsersServiceContext,
+  userId: string,
+) {
+  const profile = await ctx.prisma.userProfile.findUnique({
+    where: { userId },
+    select: { extra: true },
+  });
+  if (!profile?.extra || typeof profile.extra !== 'object') {
+    return;
+  }
+
+  const extra = profile.extra as Record<string, unknown>;
+  const rawPhone =
+    typeof extra.phone === 'string' ? extra.phone.trim() : '';
+  const rawCountry =
+    typeof extra.phoneCountry === 'string'
+      ? extra.phoneCountry.trim().toUpperCase()
+      : '';
+
+  if (!rawPhone && !('phone' in extra || 'phoneCountry' in extra)) {
+    return;
+  }
+
+  const allowedDialCodes = await getSupportedPhoneDialCodes(ctx);
+  const dialCode = resolveDialCodeByCountry(rawCountry, allowedDialCodes);
+
+  let normalizedValue: string | null = null;
+  if (rawPhone) {
+    try {
+      const normalizedNumber = normalizePhoneNumber(rawPhone);
+      normalizedValue = composePhoneValue(dialCode, normalizedNumber);
+    } catch (error) {
+      const reason =
+        error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      ctx.logger.warn(`跳过迁移历史手机号 ${rawPhone}: ${reason}`);
+    }
+  }
+
+  const channel = await ensurePhoneChannel(ctx);
+
+  if (normalizedValue) {
+    const existing = await ctx.prisma.userContact.findFirst({
+      where: { userId, channel: { key: 'phone' }, value: normalizedValue },
+    });
+
+    if (!existing) {
+      const existingCount = await ctx.prisma.userContact.count({
+        where: { userId, channelId: channel.id },
+      });
+      const shouldBePrimary = existingCount === 0;
+      if (shouldBePrimary) {
+        await clearPrimaryContact(ctx, userId, channel.id);
+      }
+
+      const verificationEnabled = await isPhoneVerificationEnabled(ctx);
+      const metadata = {
+        dialCode,
+        region: deriveRegionByDial(dialCode),
+        legacySource: 'profile.extra.phone',
+      } as Record<string, unknown>;
+
+      await ctx.prisma.userContact.create({
+        data: {
+          userId,
+          channelId: channel.id,
+          value: normalizedValue,
+          isPrimary: shouldBePrimary,
+          verification: verificationEnabled
+            ? ContactVerificationStatus.PENDING
+            : ContactVerificationStatus.VERIFIED,
+          verifiedAt: verificationEnabled ? null : new Date(),
+          metadata: toJson(metadata),
+        },
+      });
+    }
+  }
+
+  if ('phone' in extra || 'phoneCountry' in extra) {
+    const updatedExtra = { ...extra };
+    delete updatedExtra.phone;
+    delete updatedExtra.phoneCountry;
+
+    const cleanedExtra = Object.fromEntries(
+      Object.entries(updatedExtra).filter(([, value]) => value !== undefined),
+    );
+
+    await ctx.prisma.userProfile.update({
+      where: { userId },
+      data: {
+        extra:
+          Object.keys(cleanedExtra).length > 0
+            ? toJson(cleanedExtra)
+            : Prisma.JsonNull,
+      },
+    });
+  }
+}
+
+function extractDialFromMetadata(
+  metadata: Prisma.JsonValue | null | undefined,
+) {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+  const dial = (metadata as Record<string, unknown>)['dialCode'];
+  return typeof dial === 'string' ? dial : null;
+}
+
+async function deliverPhoneVerificationCode(
+  ctx: UsersServiceContext,
+  userId: string,
+  phoneValue: string,
+  code: string,
+) {
+  const userInfo = await ctx.prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      name: true,
+      profile: { select: { displayName: true } },
+    },
+  });
+  const email = userInfo?.email?.trim();
+  if (!email) {
+    throw new BadRequestException('无法发送验证码，请先绑定邮箱');
+  }
+  const displayName =
+    userInfo?.profile?.displayName?.trim() ?? userInfo?.name?.trim() ?? email;
+  const now = new Date();
+  const year = now.getFullYear();
+  const datetime = `${year}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(
+    now.getDate(),
+  ).padStart(2, '0')}日`;
+  const text = `用于验证手机号 ${phoneValue} 的验证码为 ${code}，10 分钟内有效。`;
+  try {
+    await ctx.mailService.sendMail({
+      to: email,
+      subject: 'Hydroline 手机验证',
+      text: `${displayName}，您好：\n${text}\n如非本人操作，请忽略本邮件。`,
+    });
+  } catch (error) {
+    const reason =
+      error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error);
+    ctx.logger.warn(`发送手机验证邮件失败: ${reason}`);
+    throw new BadRequestException('验证码发送失败，请稍后重试');
+  }
+  return { success: true, datetime, currentYear: String(year) } as const;
+}
+
+export async function listPhoneContacts(
+  ctx: UsersServiceContext,
+  userId: string,
+) {
+  await ensureUser(ctx, userId);
+  await ensurePhoneChannel(ctx);
+  await migrateLegacyProfilePhoneContact(ctx, userId);
+  return ctx.prisma.userContact.findMany({
+    where: { userId, channel: { key: 'phone' } },
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+    select: {
+      id: true,
+      value: true,
+      isPrimary: true,
+      verification: true,
+      verifiedAt: true,
+      metadata: true,
+    },
+  });
+}
+
+export async function addPhoneContact(
+  ctx: UsersServiceContext,
+  userId: string,
+  payload: PhoneContactPayload,
+) {
+  await ensureUser(ctx, userId);
+  const channel = await ensurePhoneChannel(ctx);
+  const allowedDialCodes = await getSupportedPhoneDialCodes(ctx);
+  const dialCode = normalizeDialCode(payload.dialCode, allowedDialCodes);
+  const number = normalizePhoneNumber(payload.phone);
+  const normalizedValue = composePhoneValue(dialCode, number);
+
+  const existingCount = await ctx.prisma.userContact.count({
+    where: { userId, channelId: channel.id },
+  });
+  const shouldBePrimary = existingCount === 0 || Boolean(payload.isPrimary);
+
+  const existingSame = await ctx.prisma.userContact.findFirst({
+    where: { userId, channelId: channel.id, value: normalizedValue },
+  });
+
+  const metadata = {
+    dialCode,
+    region: deriveRegionByDial(dialCode),
+  } as Record<string, unknown>;
+
+  const verificationEnabled = await isPhoneVerificationEnabled(ctx);
+  const targetVerification = verificationEnabled
+    ? ContactVerificationStatus.PENDING
+    : ContactVerificationStatus.VERIFIED;
+
+  if (existingSame) {
+    if (shouldBePrimary) {
+      await clearPrimaryContact(ctx, userId, channel.id);
+    }
+    const updated = await ctx.prisma.userContact.update({
+      where: { id: existingSame.id },
+      data: {
+        isPrimary: shouldBePrimary ? true : existingSame.isPrimary,
+        metadata: toJson(metadata),
+        verification: targetVerification,
+        verifiedAt:
+          targetVerification === ContactVerificationStatus.VERIFIED
+            ? (existingSame.verifiedAt ?? new Date())
+            : null,
+      },
+      include: { channel: true },
+    });
+    if (verificationEnabled) {
+      try {
+        await sendPhoneVerificationCode(ctx, userId, normalizedValue);
+      } catch (error) {
+        ctx.logger.warn(`发送手机验证码失败（已忽略）: ${String(error)}`);
+      }
+    }
+    return updated;
+  }
+
+  if (shouldBePrimary) {
+    await clearPrimaryContact(ctx, userId, channel.id);
+  }
+
+  const contact = await ctx.prisma.userContact.create({
+    data: {
+      userId,
+      channelId: channel.id,
+      value: normalizedValue,
+      isPrimary: shouldBePrimary,
+      verification: targetVerification,
+      verifiedAt:
+        targetVerification === ContactVerificationStatus.VERIFIED
+          ? new Date()
+          : null,
+      metadata: toJson(metadata),
+    },
+    include: { channel: true },
+  });
+
+  if (verificationEnabled) {
+    try {
+      await sendPhoneVerificationCode(ctx, userId, normalizedValue);
+    } catch (error) {
+      ctx.logger.warn(`发送手机验证码失败（已忽略）: ${String(error)}`);
+    }
+  }
+
+  return contact;
+}
+
+export async function updatePhoneContact(
+  ctx: UsersServiceContext,
+  userId: string,
+  contactId: string,
+  payload: PhoneContactUpdatePayload,
+) {
+  await ensureUser(ctx, userId);
+  const contact = await ctx.prisma.userContact.findUnique({
+    where: { id: contactId },
+    include: { channel: true },
+  });
+  if (!contact || contact.userId !== userId) {
+    throw new NotFoundException('Contact not found');
+  }
+  if (contact.channel.key !== 'phone') {
+    throw new BadRequestException('仅支持更新手机号联系人');
+  }
+
+  const verificationEnabled = await isPhoneVerificationEnabled(ctx);
+  const allowedDialCodes = await getSupportedPhoneDialCodes(ctx);
+
+  const currentDial =
+    extractDialFromMetadata(contact.metadata) ?? allowedDialCodes[0] ?? '+86';
+  const currentNumber = contact.value.startsWith(currentDial)
+    ? contact.value.slice(currentDial.length)
+    : contact.value;
+
+  const nextDial = payload.dialCode
+    ? normalizeDialCode(payload.dialCode, allowedDialCodes)
+    : currentDial;
+  const nextNumber = payload.phone
+    ? normalizePhoneNumber(payload.phone)
+    : currentNumber;
+  const nextValue = composePhoneValue(nextDial, nextNumber);
+  const valueChanged = nextValue !== contact.value;
+
+  if (valueChanged) {
+    const duplicate = await ctx.prisma.userContact.findFirst({
+      where: {
+        userId,
+        channel: { key: 'phone' },
+        value: nextValue,
+        id: { not: contactId },
+      },
+    });
+    if (duplicate) {
+      throw new BadRequestException('该手机号已存在');
+    }
+  }
+
+  if (payload.isPrimary) {
+    await clearPrimaryContact(ctx, userId, contact.channelId);
+  }
+
+  const metadata = {
+    dialCode: nextDial,
+    region: deriveRegionByDial(nextDial),
+  } as Record<string, unknown>;
+
+  const updated = await ctx.prisma.userContact.update({
+    where: { id: contactId },
+    data: {
+      value: nextValue,
+      isPrimary: payload.isPrimary ?? contact.isPrimary,
+      metadata: toJson(metadata),
+      verification: valueChanged
+        ? verificationEnabled
+          ? ContactVerificationStatus.PENDING
+          : ContactVerificationStatus.VERIFIED
+        : verificationEnabled
+          ? contact.verification
+          : ContactVerificationStatus.VERIFIED,
+      verifiedAt: valueChanged
+        ? verificationEnabled
+          ? null
+          : new Date()
+        : verificationEnabled
+          ? contact.verifiedAt
+          : (contact.verifiedAt ?? new Date()),
+    },
+    include: { channel: true },
+  });
+
+  if (valueChanged && verificationEnabled) {
+    try {
+      await sendPhoneVerificationCode(ctx, userId, nextValue);
+    } catch (error) {
+      ctx.logger.warn(`发送手机验证码失败（已忽略）: ${String(error)}`);
+    }
+  }
+
+  return updated;
+}
+
+export async function sendPhoneVerificationCode(
+  ctx: UsersServiceContext,
+  userId: string,
+  phoneRaw: string,
+) {
+  const normalized = normalizeOptionalString(phoneRaw);
+  if (!normalized) {
+    throw new BadRequestException('手机号无效');
+  }
+  const verificationEnabled = await isPhoneVerificationEnabled(ctx);
+  const identifier = `${ctx.phoneVerificationIdentifierPrefix}${normalized}`;
+  const contacts = await ctx.prisma.userContact.findMany({
+    where: { userId, value: normalized, channel: { key: 'phone' } },
+  });
+  if (contacts.length === 0) {
+    throw new NotFoundException('未找到对应的手机号');
+  }
+
+  if (!verificationEnabled) {
+    await ctx.prisma.userContact.updateMany({
+      where: { userId, value: normalized, channel: { key: 'phone' } },
+      data: {
+        verification: ContactVerificationStatus.VERIFIED,
+        verifiedAt: new Date(),
+      },
+    });
+    return { success: true, disabled: true } as const;
+  }
+
+  const code = generateRandomString(6, '0-9');
+  const hashed = await bcryptHash(code, 10);
+  await ctx.prisma.$transaction(async (tx) => {
+    await tx.verification.deleteMany({ where: { identifier } });
+    await tx.verification.create({
+      data: {
+        identifier,
+        value: hashed,
+        expiresAt: new Date(Date.now() + ctx.verificationTtlMs),
+      },
+    });
+    await tx.userContact.updateMany({
+      where: { userId, value: normalized, channel: { key: 'phone' } },
+      data: {
+        verification: ContactVerificationStatus.PENDING,
+        verifiedAt: null,
+      },
+    });
+  });
+
+  await deliverPhoneVerificationCode(ctx, userId, normalized, code);
+  return { success: true } as const;
+}
+
+export async function verifyPhoneContact(
+  ctx: UsersServiceContext,
+  userId: string,
+  phoneRaw: string,
+  code: string,
+) {
+  const normalizedPhone = normalizeOptionalString(phoneRaw);
+  if (!normalizedPhone) {
+    throw new BadRequestException('手机号无效');
+  }
+  const identifier = `${ctx.phoneVerificationIdentifierPrefix}${normalizedPhone}`;
+  const record = await ctx.prisma.verification.findFirst({
+    where: { identifier, expiresAt: { gt: new Date() } },
+    orderBy: { expiresAt: 'desc' },
+  });
+  if (!record) {
+    throw new BadRequestException('验证码无效或已过期');
+  }
+  const isMatch = await bcryptCompare(code, record.value);
+  if (!isMatch) {
+    throw new BadRequestException('验证码错误');
+  }
+
+  const contacts = await ctx.prisma.userContact.findMany({
+    where: { userId, value: normalizedPhone, channel: { key: 'phone' } },
+  });
+  if (contacts.length === 0) {
+    throw new NotFoundException('未找到对应的手机号联系人');
+  }
+
+  await ctx.prisma.$transaction(async (tx) => {
+    await tx.verification
+      .delete({ where: { id: record.id } })
+      .catch(() => undefined);
+    await tx.userContact.updateMany({
+      where: { userId, value: normalizedPhone, channel: { key: 'phone' } },
+      data: {
+        verification: ContactVerificationStatus.VERIFIED,
+        verifiedAt: new Date(),
+      },
+    });
+  });
+
+  return { success: true } as const;
+}
+
+export async function setPrimaryPhoneContact(
+  ctx: UsersServiceContext,
+  userId: string,
+  contactId: string,
+) {
+  await ensureUser(ctx, userId);
+  const contact = await ctx.prisma.userContact.findUnique({
+    where: { id: contactId },
+    include: { channel: true },
+  });
+  if (!contact || contact.userId !== userId) {
+    throw new NotFoundException('Contact not found');
+  }
+  if (contact.channel.key !== 'phone') {
+    throw new BadRequestException('只能设置手机号为主联系方式');
+  }
+
+  const verificationEnabled = await isPhoneVerificationEnabled(ctx);
+  if (
+    verificationEnabled &&
+    contact.verification !== ContactVerificationStatus.VERIFIED
+  ) {
+    throw new BadRequestException('请先完成手机号验证后再设为主手机号');
+  }
+
+  await ctx.prisma.$transaction(async (tx) => {
+    await tx.userContact.updateMany({
+      where: { userId, channelId: contact.channelId, isPrimary: true },
+      data: { isPrimary: false },
+    });
+    await tx.userContact.update({
+      where: { id: contactId },
+      data: { isPrimary: true },
+    });
+  });
+
   return { success: true } as const;
 }

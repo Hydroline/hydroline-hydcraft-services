@@ -87,12 +87,7 @@ function deviceIcon(value: string | null | undefined) {
           <UIcon name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
         </span>
       </h3>
-      <UButton
-        size="sm"
-        variant="ghost"
-        @click="emit('refresh')"
-        >刷新</UButton
-      >
+      <UButton size="sm" variant="ghost" @click="emit('refresh')">刷新</UButton>
     </div>
 
     <div
@@ -104,9 +99,9 @@ function deviceIcon(value: string | null | undefined) {
 
     <div
       v-if="props.sessions.length === 0"
-      class="rounded-xl border border-dashed border-slate-200/70 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-800/70 dark:text-slate-400"
+      class="rounded-xl flex justify-center items-center border border-slate-200/60 bg-white p-4 text-xs dark:border-slate-800/60 dark:bg-slate-700/60"
     >
-      暂无活跃会话。
+      暂无活跃会话
     </div>
 
     <div v-else class="space-y-3">
