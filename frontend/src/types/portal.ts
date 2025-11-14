@@ -1,93 +1,121 @@
 export interface PortalHeroBackground {
-  imageUrl: string;
-  description: string | null;
+  imageUrl: string
+  description: string | null
 }
 
 export interface PortalHeroData {
-  subtitle: string;
-  background: PortalHeroBackground[];
+  subtitle: string
+  background: PortalHeroBackground[]
 }
 
 export interface PortalNavigationLink {
-  id: string;
-  label: string;
-  tooltip: string | null;
-  url: string | null;
-  available: boolean;
-  icon: string | null;
+  id: string
+  label: string
+  tooltip: string | null
+  url: string | null
+  available: boolean
+  icon: string | null
 }
 
-export type PortalCardId = string;
+export type PortalCardId = string
 
 export interface PortalHomeData {
-  hero: PortalHeroData;
-  navigation: PortalNavigationLink[];
-  cards: PortalCardId[];
+  hero: PortalHeroData
+  navigation: PortalNavigationLink[]
+  cards: PortalCardId[]
 }
 
 export interface PortalMinecraftProfile {
-  id: string;
-  nickname?: string | null;
-  authmeUuid?: string | null;
+  id: string
+  nickname?: string | null
+  authmeUuid?: string | null
   authmeBinding?: {
-    id: string;
-    username: string;
-    realname: string | null;
-    uuid: string | null;
-  } | null;
+    id: string
+    username: string
+    realname: string | null
+    uuid: string | null
+  } | null
 }
 
 export interface PortalRole {
-  id: string;
-  key: string;
-  name: string;
+  id: string
+  key: string
+  name: string
 }
 
 export interface PortalAttachmentTag {
-  id: string;
-  key: string;
-  name: string;
+  id: string
+  key: string
+  name: string
 }
 
-export interface AdminOverviewUser {
-  id: string;
-  email: string;
-  name: string | null | undefined;
-  createdAt: string;
-  profile: {
-    displayName: string | null;
-    piic: string | null;
-    primaryAuthmeBindingId?: string | null;
-    primaryMinecraft: PortalMinecraftProfile | null;
-  } | null;
-  minecraftProfiles: Array<PortalMinecraftProfile & { isPrimary: boolean }>;
-  roles: PortalRole[];
+export type AdminHealthStatus = 'normal' | 'warning' | 'critical'
+
+export interface AdminOverviewHighlight {
+  label: string
+  value: string
+  trend: 'up' | 'down' | 'flat'
+  trendLabel?: string
+}
+
+export interface AdminOverviewTrendPoint {
+  date: string
+  registrations: number
+  attachments: number
+}
+
+export interface AdminSystemMetric {
+  id: string
+  label: string
+  value: string
+  hint?: string
+}
+
+export interface AdminIntegrationMetric {
+  label: string
+  value: string
+}
+
+export interface AdminIntegrationStatus {
+  id: string
+  name: string
+  status: AdminHealthStatus
+  lastSync: string
+  metrics: AdminIntegrationMetric[]
+}
+
+export interface AdminOverviewQuickAction {
+  id: string
+  title: string
+  description: string
+  to: string
+  badge?: string
 }
 
 export interface AdminOverviewData {
-  users: AdminOverviewUser[];
-  attachments: {
-    total: number;
-    recent: Array<{
-      id: string;
-      name: string;
-      isPublic: boolean;
-      size: number;
-      createdAt: string;
-      owner: {
-        id: string | null;
-        name: string | null | undefined;
-        email: string | null;
-        deleted?: boolean;
-      };
-      folder: {
-        id: string;
-        name: string;
-        path: string;
-      } | null;
-      tags: PortalAttachmentTag[];
-      publicUrl: string | null;
-    }>;
-  };
-  unlinkedPlayers: PortalMinecraftProfile[];
+  greeting: {
+    operator: string
+    periodLabel: string
+    message: string
+    subtext: string
+    highlights: AdminOverviewHighlight[]
+  }
+  summary: {
+    totalUsers: number
+    totalAttachments: number
+    pendingBindings: number
+    recentActivity: string
+  }
+  activity: {
+    rangeLabel: string
+    registrationsThisWeek: number
+    attachmentsThisWeek: number
+    points: AdminOverviewTrendPoint[]
+  }
+  system: {
+    updatedAt: string
+    metrics: AdminSystemMetric[]
+  }
+  integrations: AdminIntegrationStatus[]
+  quickActions: AdminOverviewQuickAction[]
 }

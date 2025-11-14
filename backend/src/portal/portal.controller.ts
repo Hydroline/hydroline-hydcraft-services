@@ -30,8 +30,8 @@ export class PortalController {
   @RequirePermissions(DEFAULT_PERMISSIONS.MANAGE_USERS)
   @ApiBearerAuth()
   @ApiOperation({ summary: '获取后台门户总览数据' })
-  async adminOverview() {
-    return this.portalService.getAdminOverview();
+  async adminOverview(@Req() req: Request) {
+    return this.portalService.getAdminOverview(req.user?.id ?? null);
   }
 
   @Get('attachments/search')
