@@ -573,25 +573,27 @@ model AttachmentFolder {
 }
 
 model Attachment {
-  id           String    @id @default(uuid())
-  folderId     String?
-  ownerId      String
-  name         String
-  originalName String
-  fileName     String
-  mimeType     String?
-  size         Int
-  storageKey   String
-  hash         String?
-  isPublic     Boolean   @default(false)
-  externalUrl  String?
-  metadata     Json?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id                    String    @id @default(uuid())
+  folderId              String?
+  ownerId               String?
+  uploaderNameSnapshot  String?
+  uploaderEmailSnapshot String?
+  name                  String
+  originalName          String
+  fileName              String
+  mimeType              String?
+  size                  Int
+  storageKey            String
+  hash                  String?
+  isPublic              Boolean   @default(false)
+  externalUrl           String?
+  metadata              Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
 
   folder      AttachmentFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  owner       User                   @relation("AttachmentUploader", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User?                  @relation("AttachmentUploader", fields: [ownerId], references: [id], onDelete: SetNull)
   tags        AttachmentTagging[]
   shareTokens AttachmentShareToken[]
 

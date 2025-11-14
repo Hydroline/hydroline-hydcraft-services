@@ -75,9 +75,10 @@ export interface AdminOverviewData {
       size: number;
       createdAt: string;
       owner: {
-        id: string;
+        id: string | null;
         name: string | null | undefined;
-        email: string;
+        email: string | null;
+        deleted?: boolean;
       };
       folder: {
         id: string;

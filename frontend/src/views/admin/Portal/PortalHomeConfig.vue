@@ -85,7 +85,7 @@ const cardsForm = reactive<Record<string, EditableCardForm>>({})
 
 const editingHeroBackgroundId = ref<string | null>(null)
 const editingNavigationId = ref<string | null>(null)
-const showNewBackgroundForm = ref(false)
+const newBackgroundDialogOpen = ref(false)
 const showNewNavigationForm = ref(false)
 
 const activeTab = ref<'hero' | 'navigation' | 'cards'>('hero')
@@ -121,6 +121,13 @@ function openCardDialog(cardId: string) {
 function updateCardsDialog(open: boolean) {
   cardsDialogOpen.value = open
 }
+
+function updateNewBackgroundDialog(open: boolean) {
+  newBackgroundDialogOpen.value = open
+  if (!open) {
+    resetHeroBackgroundForm()
+  }
+}
 const selectedCardEntry = computed(() => {
   const id = selectedCardId.value
   if (!id) return null
@@ -129,6 +136,24 @@ const selectedCardEntry = computed(() => {
   if (!registry || !form) return null
   return { registry, form }
 })
+
+const modalUi = {
+  detail: {
+    content: 'w-full max-w-md',
+    wrapper: 'z-[180]',
+    overlay: 'z-[170] bg-slate-950/40 backdrop-blur-sm',
+  },
+  cards: {
+    content: 'w-full max-w-md',
+    wrapper: 'z-[190]',
+    overlay: 'z-[180] bg-slate-950/40 backdrop-blur-sm',
+  },
+  form: {
+    content: 'w-full max-w-2xl',
+    wrapper: 'z-[185]',
+    overlay: 'z-[175] bg-slate-950/40 backdrop-blur-sm',
+  },
+} as const
 
 const cardEntries = computed(() =>
   cardsRegistry.value
@@ -338,7 +363,7 @@ async function createHeroBackground() {
       },
     })
     resetHeroBackgroundForm()
-    showNewBackgroundForm.value = false
+  newBackgroundDialogOpen.value = false
     await fetchConfig()
   } catch (error) {
     if (error instanceof Error && error.message.includes('登录')) {
@@ -798,58 +823,25 @@ onMounted(() => {
         <div
           class="rounded-2xl border border-dashed border-slate-300/80 bg-slate-50/70 p-4 backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/60"
         >
-          <div class="flex items-center justify-between">
-            <h4 class="px-1 text-lg text-slate-600 dark:text-slate-300">
-              新增背景图
-            </h4>
+          <div
+            class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+          >
+            <div class="px-1">
+              <h4 class="text-lg text-slate-600 dark:text-slate-300">
+                新增背景图
+              </h4>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                通过附件 ID 引入新的英雄区背景图。
+              </p>
+            </div>
             <UButton
-              size="xs"
+              color="primary"
               variant="soft"
-              @click="showNewBackgroundForm = !showNewBackgroundForm"
+              size="sm"
+              @click="newBackgroundDialogOpen = true"
             >
-              {{ showNewBackgroundForm ? '收起表单' : '展开表单' }}
+              打开表单
             </UButton>
-          </div>
-          <div v-if="showNewBackgroundForm" class="mt-3 space-y-4">
-            <div class="grid gap-3 md:grid-cols-2">
-              <div class="space-y-2">
-                <label
-                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
-                  >附件 ID</label
-                >
-                <UInput
-                  v-model="newBackground.attachmentId"
-                  placeholder="来自附件系统的 ID"
-                />
-              </div>
-              <div class="space-y-2">
-                <label
-                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
-                  >描述（可选）</label
-                >
-                <UInput
-                  v-model="newBackground.description"
-                  placeholder="用于顶部标题显示"
-                />
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <UButton
-                color="primary"
-                :loading="isMutating"
-                @click="createHeroBackground"
-              >
-                添加背景图
-              </UButton>
-              <UButton
-                type="button"
-                variant="ghost"
-                :disabled="isMutating"
-                @click="resetHeroBackgroundForm"
-              >
-                重置
-              </UButton>
-            </div>
           </div>
         </div>
       </div>
@@ -1111,44 +1103,120 @@ onMounted(() => {
       </section>
     </div>
 
-    <!-- 删除确认对话框 -->
     <UModal
-      :open="deleteConfirmDialogOpen"
-      @update:open="deleteConfirmDialogOpen = $event"
-      :ui="{
-        content: 'w-full max-w-sm',
-        wrapper: 'z-[140]',
-        overlay: 'z-[130] bg-slate-950/40 backdrop-blur-sm',
-      }"
+      :open="newBackgroundDialogOpen"
+      @update:open="updateNewBackgroundDialog"
+      :ui="modalUi.form"
     >
       <template #content>
-        <div class="space-y-4 p-6 text-sm">
-          <p class="text-base font-semibold text-slate-900 dark:text-white">
-            {{ deleteConfirmMessage }}
-          </p>
-          <div class="flex justify-end gap-2">
+        <div class="space-y-5 p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-semibold text-slate-900 dark:text-white">
+                新增背景图
+              </h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                填写附件 ID 与描述后即可加入轮播列表。
+              </p>
+            </div>
             <UButton
               color="neutral"
-              variant="soft"
-              @click="deleteConfirmDialogOpen = false"
-              >取消</UButton
+              variant="ghost"
+              @click="updateNewBackgroundDialog(false)"
+              >关闭</UButton
             >
-            <UButton
-              color="error"
-              variant="soft"
-              :loading="deleteConfirmSubmitting"
-              @click="confirmDelete"
-              >确定</UButton
-            >
+          </div>
+          <div class="space-y-4">
+            <div class="grid gap-3 md:grid-cols-2">
+              <div class="space-y-2">
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >附件 ID</label
+                >
+                <UInput
+                  v-model="newBackground.attachmentId"
+                  placeholder="来自附件系统的 ID"
+                />
+              </div>
+              <div class="space-y-2">
+                <label
+                  class="text-xs font-medium text-slate-500 dark:text-slate-300"
+                  >描述（可选）</label
+                >
+                <UInput
+                  v-model="newBackground.description"
+                  placeholder="用于顶部标题显示"
+                />
+              </div>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
+              <UButton
+                type="button"
+                variant="ghost"
+                :disabled="isMutating"
+                @click="resetHeroBackgroundForm"
+                >重置</UButton
+              >
+              <UButton
+                color="primary"
+                :loading="isMutating"
+                @click="createHeroBackground"
+                >添加背景图</UButton
+              >
+            </div>
           </div>
         </div>
       </template>
     </UModal>
 
+    <!-- 删除确认对话框 -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="duration-200 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="duration-150 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="deleteConfirmDialogOpen"
+          class="fixed inset-0 z-9999 flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            @click="deleteConfirmDialogOpen = false"
+          ></div>
+          <div
+            class="relative w-full max-w-sm space-y-4 rounded-2xl border border-slate-200/80 bg-white/95 p-6 text-sm shadow-2xl dark:border-slate-800/60 dark:bg-slate-900/95"
+          >
+            <p class="text-base font-semibold text-slate-900 dark:text-white">
+              {{ deleteConfirmMessage }}
+            </p>
+            <div class="flex justify-end gap-2">
+              <UButton
+                color="neutral"
+                variant="soft"
+                @click="deleteConfirmDialogOpen = false"
+                >取消</UButton
+              >
+              <UButton
+                color="error"
+                variant="soft"
+                :loading="deleteConfirmSubmitting"
+                @click="confirmDelete"
+                >确定</UButton
+              >
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <UModal
       :open="heroDetailOpen"
       @update:open="heroDetailOpen = $event"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="modalUi.detail"
     >
       <template #content>
         <div class="space-y-5 p-6">
@@ -1193,7 +1261,7 @@ onMounted(() => {
     <UModal
       :open="navDetailOpen"
       @update:open="navDetailOpen = $event"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="modalUi.detail"
     >
       <template #content>
         <div class="space-y-5 p-6">
@@ -1227,7 +1295,7 @@ onMounted(() => {
     <UModal
       :open="cardsDialogOpen"
       @update:open="updateCardsDialog"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="modalUi.cards"
     >
       <template #content>
         <div class="space-y-5 p-6">

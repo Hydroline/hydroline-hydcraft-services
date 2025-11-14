@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useAdminAttachmentsStore } from '@/stores/adminAttachments'
 import { useUiStore } from '@/stores/ui'
 import { getApiBaseUrl } from '@/utils/api'
+import type { AdminAttachmentSummary } from '@/types/admin'
 
 const uiStore = useUiStore()
 const attachmentsStore = useAdminAttachmentsStore()
@@ -17,6 +18,15 @@ function toPublicUrl(item: (typeof items.value)[number]) {
   return item.publicUrl.startsWith('http')
     ? item.publicUrl
     : `${backendBase}${item.publicUrl}`
+}
+
+function formatOwner(owner: AdminAttachmentSummary['owner']) {
+  if (!owner) {
+    return '已删除用户'
+  }
+  const name = owner.name?.trim()
+  const email = owner.email?.trim()
+  return name || email || '已删除用户'
 }
 
 function formatSize(bytes: number) {
@@ -99,9 +109,15 @@ onMounted(async () => {
                 <span class="text-xs text-slate-500 dark:text-slate-400">{{
                   item.originalName
                 }}</span>
-                <span class="text-xs text-slate-400 dark:text-slate-500"
-                  >上传者：{{ item.owner.name ?? item.owner.email }}</span
-                >
+                <span class="text-xs text-slate-400 dark:text-slate-500">
+                  上传者：{{ formatOwner(item.owner) }}
+                  <span
+                    v-if="item.owner?.deleted"
+                    class="ml-1 text-rose-500 dark:text-rose-400"
+                  >
+                    （账户已删除）
+                  </span>
+                </span>
               </div>
             </td>
             <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">

@@ -24,7 +24,11 @@ import { ConfigModule } from '../config/config.module';
 import { VerificationAdminController } from './controllers/verification-admin.controller';
 
 @Module({
-  imports: [Ip2RegionModule, MailModule, forwardRef(() => ConfigModule)],
+  imports: [
+    Ip2RegionModule,
+    MailModule,
+    forwardRef(() => ConfigModule),
+  ],
   controllers: [
     AuthController,
     ApiAuthController,

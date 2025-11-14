@@ -9,7 +9,7 @@ import { AttachmentFolder, Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { promises as fs, createReadStream } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { dirname, extname, join } from 'node:path';
+import { dirname, extname, join, resolve, isAbsolute } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
@@ -27,7 +27,11 @@ type AttachmentWithRelations = Prisma.AttachmentGetPayload<{
     owner: { select: { id: true; name: true; email: true } };
     tags: { include: { tag: true } };
   };
-}>;
+}> & {
+  ownerId: string | null;
+  uploaderNameSnapshot: string | null;
+  uploaderEmailSnapshot: string | null;
+};
 
 type AttachmentSummary = {
   id: string;
@@ -46,9 +50,10 @@ type AttachmentSummary = {
     path: string;
   } | null;
   owner: {
-    id: string;
+    id: string | null;
     name: string | null;
-    email: string;
+    email: string | null;
+    deleted: boolean;
   };
   tags: Array<{ id: string; key: string; name: string }>;
   publicUrl: string | null;
@@ -57,9 +62,11 @@ type AttachmentSummary = {
 @Injectable()
 export class AttachmentsService implements OnModuleInit {
   private readonly logger = new Logger(AttachmentsService.name);
-  private readonly uploadRoot = join(process.cwd(), 'backend', 'uploads');
+  private readonly uploadRoot: string;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {
+    this.uploadRoot = this.resolveUploadRoot();
+  }
 
   async onModuleInit() {
     await fs.mkdir(this.uploadRoot, { recursive: true });
@@ -293,6 +300,14 @@ export class AttachmentsService implements OnModuleInit {
       throw new BadRequestException(`Tags not found: ${missing.join(', ')}`);
     }
 
+    const uploader = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true },
+    });
+    if (!uploader) {
+      throw new NotFoundException('Uploader not found');
+    }
+
     const buffer = file.buffer;
     const hash = createHash('sha256').update(buffer).digest('hex');
     const ext = extname(file.originalname) || '';
@@ -309,6 +324,8 @@ export class AttachmentsService implements OnModuleInit {
       data: {
         folderId: folderId,
         ownerId: userId,
+        uploaderNameSnapshot: uploader.name ?? null,
+        uploaderEmailSnapshot: uploader.email ?? null,
         name: dto.name ?? file.originalname.replace(ext, ''),
         originalName: file.originalname,
         fileName: randomName,
@@ -527,8 +544,7 @@ export class AttachmentsService implements OnModuleInit {
     const hash = createHash('sha256').update(buffer).digest('hex');
     const ext = extname(params.fileName);
 
-    // 使用系统虚拟用户记录（seed），ownerId 允许为空 -> 创建自动用户? 允许 null?
-    // Attachment.ownerId 不可为空，需要指定一个用户 ID。为种子文件我们创建虚拟系统用户条目。
+    // 使用系统虚拟用户记录（seed），虽然 ownerId 允许在上传者删除后置空，但默认仍记录该系统用户。
     const systemUser = await this.resolveSystemUser();
 
     const folder = await this.resolveFolderByPath(
@@ -576,6 +592,8 @@ export class AttachmentsService implements OnModuleInit {
       data: {
         folderId: folder?.id ?? null,
         ownerId: systemUser.id,
+        uploaderNameSnapshot: systemUser.name ?? null,
+        uploaderEmailSnapshot: systemUser.email ?? null,
         name: params.fileName.replace(ext, ''),
         originalName: params.fileName,
         fileName: randomName,
@@ -699,6 +717,20 @@ export class AttachmentsService implements OnModuleInit {
   private serializeAttachment(
     attachment: AttachmentWithRelations,
   ): AttachmentSummary {
+    const ownerSummary = attachment.owner
+      ? {
+          id: attachment.owner.id,
+          name: attachment.owner.name,
+          email: attachment.owner.email,
+          deleted: false,
+        }
+      : {
+          id: attachment.ownerId,
+          name: attachment.uploaderNameSnapshot,
+          email: attachment.uploaderEmailSnapshot,
+          deleted: true,
+        };
+
     return {
       id: attachment.id,
       name: attachment.name,
@@ -717,7 +749,7 @@ export class AttachmentsService implements OnModuleInit {
             path: attachment.folder.path,
           }
         : null,
-      owner: attachment.owner,
+      owner: ownerSummary,
       tags: attachment.tags.map((tag) => ({
         id: tag.tag.id,
         key: tag.tag.key,
@@ -759,5 +791,15 @@ export class AttachmentsService implements OnModuleInit {
   private async ensurePhysicalDirectory(pathFragment: string) {
     const dir = join(this.uploadRoot, pathFragment);
     await fs.mkdir(dir, { recursive: true });
+  }
+
+  private resolveUploadRoot() {
+    const envValue = process.env.ATTACHMENTS_DIR?.trim();
+    if (envValue && envValue.length > 0) {
+      return isAbsolute(envValue)
+        ? envValue
+        : resolve(process.cwd(), envValue);
+    }
+    return resolve(process.cwd(), '..', 'uploads');
   }
 }

@@ -154,9 +154,10 @@ export interface AdminAttachmentSummary {
     path: string
   } | null
   owner: {
-    id: string
+    id: string | null
     name: string | null
-    email: string
+    email: string | null
+    deleted?: boolean
   }
   tags: Array<{
     id: string

@@ -6,7 +6,7 @@ import { usePortalStore } from '@/stores/portal'
 import { useUiStore } from '@/stores/ui'
 import { getApiBaseUrl } from '@/utils/api'
 
-import type { PortalMinecraftProfile } from '@/types/portal'
+import type { AdminOverviewData, PortalMinecraftProfile } from '@/types/portal'
 
 const portalStore = usePortalStore()
 const uiStore = useUiStore()
@@ -67,6 +67,17 @@ function formatDate(value: string | undefined) {
 
 function displayMinecraftAccount(player: PortalMinecraftProfile) {
   return player.authmeBinding?.username ?? player.nickname ?? '未命名'
+}
+
+type AttachmentEntry = AdminOverviewData['attachments']['recent'][number]
+
+function formatAttachmentOwner(owner: AttachmentEntry['owner']) {
+  if (!owner) {
+    return '已删除用户'
+  }
+  const name = owner.name?.toString().trim()
+  const email = owner.email?.toString().trim()
+  return name || email || '已删除用户'
 }
 </script>
 
@@ -257,7 +268,13 @@ function displayMinecraftAccount(player: PortalMinecraftProfile) {
                 </UBadge>
               </div>
               <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                上传者：{{ attachment.owner.name ?? attachment.owner.email }}
+                上传者：{{ formatAttachmentOwner(attachment.owner) }}
+                <span
+                  v-if="attachment.owner?.deleted"
+                  class="ml-1 text-rose-500 dark:text-rose-400"
+                >
+                  （账户已删除）
+                </span>
               </p>
               <p class="text-xs text-slate-400 dark:text-slate-500">
                 时间：{{ formatDate(attachment.createdAt) }}

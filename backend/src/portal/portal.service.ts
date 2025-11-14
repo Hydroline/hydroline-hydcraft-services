@@ -159,7 +159,19 @@ export class PortalService {
             isPublic: item.isPublic,
             size: item.size,
             createdAt: item.createdAt,
-            owner: item.owner,
+            owner: item.owner
+              ? {
+                  id: item.owner.id,
+                  name: item.owner.name,
+                  email: item.owner.email,
+                  deleted: false,
+                }
+              : {
+                  id: item.ownerId,
+                  name: item.uploaderNameSnapshot,
+                  email: item.uploaderEmailSnapshot,
+                  deleted: true,
+                },
             folder: item.folder
               ? {
                   id: item.folder.id,

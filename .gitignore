@@ -5,6 +5,7 @@
 /backend/build
 /frontend/dist
 /frontend/build
+/uploads
 
 # dependencies
 /node_modules
