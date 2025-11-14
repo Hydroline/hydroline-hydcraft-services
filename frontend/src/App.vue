@@ -7,6 +7,12 @@ const appTooltipConfig = {
   delayDuration: 150,
 }
 
+const appToasterConfig = {
+  ui: {
+    viewport: 'z-[260]',
+  },
+}
+
 const authStore = useAuthStore()
 const { loading, initialized, refreshing } = storeToRefs(authStore)
 
@@ -17,7 +23,7 @@ const showSessionLoader = computed(
 </script>
 
 <template>
-  <UApp :tooltip="appTooltipConfig">
+  <UApp :tooltip="appTooltipConfig" :toaster="appToasterConfig">
     <!-- Global providers for overlays and toasts -->
     <UModals />
     <UNotifications />
@@ -38,9 +44,7 @@ const showSessionLoader = computed(
         <div
           class="flex min-w-[220px] flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/75 px-8 py-6 text-center backdrop-blur-xl dark:border-white/5 dark:bg-slate-900/70"
         >
-          <div
-            class="flex h-14 w-14 items-center justify-center rounded-full"
-          >
+          <div class="flex h-14 w-14 items-center justify-center rounded-full">
             <UIcon
               name="i-lucide-loader-2"
               class="h-7 w-7 animate-spin text-primary-600 dark:text-primary-400"

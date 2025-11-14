@@ -23,6 +23,16 @@ type ConfigEntry = {
   updatedAt: string
 }
 
+type NamespaceListResponse = {
+  items: Namespace[]
+  pagination: {
+    total: number
+    page: number
+    pageSize: number
+    pageCount: number
+  }
+}
+
 const authStore = useAuthStore()
 const uiStore = useUiStore()
 const toast = useToast()
@@ -38,16 +48,16 @@ const namespaceDetailOpen = ref(false)
 
 const page = ref(1)
 const pageSize = ref(10)
-const safePageCount = computed(() =>
-  Math.max(Math.ceil((namespaces.value.length || 0) / pageSize.value), 1),
-)
-const isFirstPage = computed(() => page.value <= 1)
-const isLastPage = computed(() => page.value >= safePageCount.value)
-const pageInput = ref<number | null>(null)
-const pagedNamespaces = computed(() => {
-  const start = (page.value - 1) * pageSize.value
-  return namespaces.value.slice(start, start + pageSize.value)
+const pagination = reactive({
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  pageCount: 1,
 })
+const safePageCount = computed(() => Math.max(pagination.pageCount, 1))
+const isFirstPage = computed(() => pagination.page <= 1)
+const isLastPage = computed(() => pagination.page >= pagination.pageCount)
+const pageInput = ref<number | null>(null)
 
 const namespaceForm = reactive({
   key: '',
@@ -79,15 +89,25 @@ const selectedNamespace = computed(
 )
 const isEditingNamespace = computed(() => namespaceModalMode.value === 'edit')
 
-async function fetchNamespaces() {
+async function fetchNamespaces(targetPage = page.value) {
   loadingNamespaces.value = true
   try {
-    const data = await apiFetch<Namespace[]>('/config/namespaces', {
-      token: authStore.token ?? undefined,
-    })
-    namespaces.value = data
+    const data = await apiFetch<NamespaceListResponse>(
+      `/config/namespaces?page=${targetPage}&pageSize=${pageSize.value}`,
+      {
+        token: authStore.token ?? undefined,
+      },
+    )
+    namespaces.value = data.items
+    pagination.total = data.pagination.total
+    pagination.page = data.pagination.page
+    pagination.pageSize = data.pagination.pageSize
+    pagination.pageCount = data.pagination.pageCount
+    page.value = data.pagination.page
     if (selectedNamespaceId.value) {
-      const exists = data.find((item) => item.id === selectedNamespaceId.value)
+      const exists = data.items.find(
+        (item) => item.id === selectedNamespaceId.value,
+      )
       if (!exists) {
         selectedNamespaceId.value = null
       }
@@ -137,8 +157,9 @@ function editNamespace(namespaceId: string) {
 }
 
 function goToPage(target: number) {
-  const next = Math.min(Math.max(1, target), safePageCount.value)
-  page.value = next
+  const totalPages = Math.max(pagination.pageCount, 1)
+  const next = Math.min(Math.max(1, target), totalPages)
+  void fetchNamespaces(next)
 }
 
 function handlePageInput() {
@@ -522,7 +543,7 @@ onMounted(() => {
               class="divide-y divide-slate-100 dark:divide-slate-800/70"
             >
               <tr
-                v-for="ns in pagedNamespaces"
+                v-for="ns in namespaces"
                 :key="ns.id"
                 class="transition hover:bg-slate-50/60 dark:hover:bg-slate-900/50"
               >
@@ -561,7 +582,7 @@ onMounted(() => {
                   </div>
                 </td>
               </tr>
-              <tr v-if="pagedNamespaces.length === 0">
+              <tr v-if="namespaces.length === 0">
                 <td
                   colspan="5"
                   class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
@@ -586,8 +607,8 @@ onMounted(() => {
           class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-300"
         >
           <span
-            >第 {{ page }} / {{ safePageCount }} 页，共
-            {{ namespaces.length }} 个命名空间</span
+            >第 {{ pagination.page }} / {{ pagination.pageCount || 1 }} 页，共
+            {{ pagination.total }} 个命名空间</span
           >
           <div class="flex flex-wrap items-center gap-2">
             <UButton
@@ -642,7 +663,7 @@ onMounted(() => {
               variant="ghost"
               size="xs"
               :disabled="isLastPage || loadingNamespaces"
-              @click="goToPage(safePageCount)"
+              @click="goToPage(pagination.pageCount)"
               >末页</UButton
             >
           </div>

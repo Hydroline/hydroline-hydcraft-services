@@ -1,5 +1,13 @@
 import { Transform } from 'class-transformer';
-import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 function toStringArray(value: unknown): string[] | undefined {
   if (value === undefined || value === null || value === '') {
@@ -32,7 +40,31 @@ function toBoolean(value: unknown): boolean | undefined {
   return Boolean(value);
 }
 
+function toInt(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return Math.trunc(parsed);
+}
+
 export class QueryAttachmentsDto {
+  @IsOptional()
+  @Transform(({ value }) => toInt(value))
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => toInt(value))
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
+
   @IsOptional()
   @IsString()
   folderId?: string;

@@ -384,6 +384,8 @@ export class IpLocationService implements OnModuleInit, OnModuleDestroy {
       process.cwd(),
       path.resolve(process.cwd(), 'data'),
       path.resolve(process.cwd(), 'data/ip2region'),
+      path.resolve(__dirname, '../../data'),
+      path.resolve(__dirname, '../../data/ip2region'),
       path.resolve(__dirname, '../../../data'),
       path.resolve(__dirname, '../../../data/ip2region'),
     ];

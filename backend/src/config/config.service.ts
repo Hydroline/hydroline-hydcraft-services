@@ -5,20 +5,41 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { QueryNamespacesDto } from './dto/query-namespaces.dto';
 
 @Injectable()
 export class ConfigService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listNamespaces() {
-    return this.prisma.configNamespace.findMany({
-      orderBy: { key: 'asc' },
-      include: {
-        _count: {
-          select: { entries: true },
+  async listNamespaces(query?: QueryNamespacesDto) {
+    const page = query?.page && query.page > 0 ? query.page : 1;
+    const sizeInput = query?.pageSize && query.pageSize > 0 ? query.pageSize : 10;
+    const pageSize = Math.min(sizeInput, 50);
+    const skip = (page - 1) * pageSize;
+
+    const [total, namespaces] = await this.prisma.$transaction([
+      this.prisma.configNamespace.count(),
+      this.prisma.configNamespace.findMany({
+        orderBy: { key: 'asc' },
+        skip,
+        take: pageSize,
+        include: {
+          _count: {
+            select: { entries: true },
+          },
         },
+      }),
+    ]);
+
+    return {
+      items: namespaces,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        pageCount: Math.max(Math.ceil(total / pageSize), 1),
       },
-    });
+    };
   }
 
   async createNamespace(data: {

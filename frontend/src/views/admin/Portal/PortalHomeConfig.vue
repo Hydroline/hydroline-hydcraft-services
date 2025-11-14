@@ -189,6 +189,16 @@ const heroAttachmentOptions = ref<AttachmentSelectOption[]>([])
 const heroAttachmentSearchTerm = ref('')
 const heroAttachmentLoading = ref(false)
 const heroAttachmentMap = ref<Record<string, PortalAttachmentSearchResult>>({})
+const heroAttachmentSelectUi = {
+  content: 'z-[250]',
+} as const
+const heroAttachmentCreateConfig = computed(() => {
+  const term = heroAttachmentSearchTerm.value.trim()
+  if (!term) {
+    return undefined
+  }
+  return { when: 'always' } as const
+})
 let heroAttachmentAbort: AbortController | null = null
 let heroAttachmentSearchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -1154,14 +1164,9 @@ onMounted(() => {
         <div class="space-y-5 p-6">
           <div class="flex items-center justify-between">
             <div>
-              <h3
-                class="text-base font-semibold text-slate-900 dark:text-white"
-              >
+              <h3 class="font-semibold text-slate-900 dark:text-white">
                 新增背景图
               </h3>
-              <p class="text-xs text-slate-500 dark:text-slate-400">
-                填写附件 ID 与描述后即可加入轮播列表。
-              </p>
             </div>
             <UButton
               color="neutral"
@@ -1185,6 +1190,7 @@ onMounted(() => {
                       | undefined
                   "
                   :items="heroAttachmentOptions"
+                  :ui="heroAttachmentSelectUi"
                   value-key="id"
                   label-key="label"
                   description-key="description"
@@ -1194,7 +1200,7 @@ onMounted(() => {
                   :search-input="{
                     placeholder: '输入名称或 ID 搜索附件',
                   }"
-                  :create-item="{ when: 'always' }"
+                  :create-item="heroAttachmentCreateConfig"
                   placeholder="选择或搜索附件"
                   @update:model-value="
                     (value: string | undefined) => {
@@ -1203,7 +1209,7 @@ onMounted(() => {
                   "
                   @create="
                     (value: string) => {
-                      newBackground.attachmentId = value
+                      newBackground.attachmentId = value?.trim() ?? ''
                     }
                   "
                 >

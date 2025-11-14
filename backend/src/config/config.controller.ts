@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import { CreateNamespaceDto } from './dto/create-namespace.dto';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { CreateConfigEntryDto } from './dto/create-config-entry.dto';
 import { UpdateConfigEntryDto } from './dto/update-config-entry.dto';
+import { QueryNamespacesDto } from './dto/query-namespaces.dto';
 
 @ApiTags('配置管理')
 @ApiBearerAuth()
@@ -31,8 +33,8 @@ export class ConfigController {
 
   @Get('namespaces')
   @ApiOperation({ summary: '列出配置命名空间' })
-  async listNamespaces() {
-    return this.configService.listNamespaces();
+  async listNamespaces(@Query() query: QueryNamespacesDto) {
+    return this.configService.listNamespaces(query);
   }
 
   @Post('namespaces')

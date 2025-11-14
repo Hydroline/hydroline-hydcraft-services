@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useAdminAttachmentsStore } from '@/stores/adminAttachments'
+import { useAdminRbacStore } from '@/stores/adminRbac'
 import { useUiStore } from '@/stores/ui'
 import { apiFetch, ApiError, getApiBaseUrl } from '@/utils/api'
 import { useAuthStore } from '@/stores/auth'
@@ -20,13 +21,17 @@ type AttachmentTagEntry = {
   description?: string | null
 }
 
+type VisibilityModeOption = 'inherit' | 'public' | 'restricted'
+
 type BatchUploadRow = {
   id: string
   file: File
   name: string
   description: string
   tagKeys: string[]
-  isPublic: boolean
+  visibilityMode: VisibilityModeOption
+  visibilityRoles: string[]
+  visibilityLabels: string[]
   status: 'pending' | 'uploading' | 'done' | 'error'
   errorMessage?: string
 }
@@ -34,12 +39,19 @@ type BatchUploadRow = {
 const uiStore = useUiStore()
 const authStore = useAuthStore()
 const attachmentsStore = useAdminAttachmentsStore()
+const rbacStore = useAdminRbacStore()
 const toast = useToast()
 
 const includeDeleted = ref(attachmentsStore.filters.includeDeleted ?? false)
 const backendBase = getApiBaseUrl()
 
 const items = computed(() => attachmentsStore.items)
+const pagination = computed(() => attachmentsStore.pagination)
+const isFirstPage = computed(() => pagination.value.page <= 1)
+const isLastPage = computed(
+  () => pagination.value.page >= Math.max(pagination.value.pageCount, 1),
+)
+const pageInput = ref<number | null>(null)
 const batchUploadDialogOpen = ref(false)
 const folderDialogOpen = ref(false)
 const batchFolderId = ref<string | null>(null)
@@ -55,6 +67,9 @@ const folderForm = reactive({
   name: '',
   parentId: '',
   description: '',
+  visibilityMode: 'public' as VisibilityModeOption,
+  visibilityRoles: [] as string[],
+  visibilityLabels: [] as string[],
 })
 const tagDialogOpen = ref(false)
 const createTagDialogOpen = ref(false)
@@ -72,6 +87,19 @@ const editTagForm = reactive({
   name: '',
   description: '',
 })
+const managementDialogOpen = ref(false)
+const managementSaving = ref(false)
+const managementDeleting = ref(false)
+const managementAttachment = ref<AdminAttachmentSummary | null>(null)
+const managementForm = reactive({
+  name: '',
+  description: '',
+  folderId: null as string | null,
+  tagKeys: [] as string[],
+  visibilityMode: 'inherit' as VisibilityModeOption,
+  visibilityRoles: [] as string[],
+  visibilityLabels: [] as string[],
+})
 const modalUi = {
   batch: {
     overlay: 'fixed inset-0 z-[190]',
@@ -86,7 +114,7 @@ const modalUi = {
   tags: {
     overlay: 'fixed inset-0 z-[150]',
     wrapper: 'z-[155]',
-    content: 'w-full max-w-4xl z-[160]',
+    content: 'w-full max-w-lg z-[160]',
   },
   tagEditor: {
     overlay: 'fixed inset-0 z-[210]',
@@ -98,6 +126,15 @@ const modalUi = {
     wrapper: 'z-[215]',
     content: 'w-full max-w-lg z-[220]',
   },
+  manager: {
+    overlay: 'fixed inset-0 z-[205]',
+    wrapper: 'z-[210]',
+    content: 'w-full max-w-lg z-[215]',
+  },
+} as const
+
+const attachmentDialogSelectUi = {
+  content: 'z-[350]',
 } as const
 
 function closeEditTagDialog() {
@@ -105,8 +142,10 @@ function closeEditTagDialog() {
   editingTagId.value = null
 }
 
+const ROOT_FOLDER_VALUE = '__ROOT__'
+
 const folderOptions = computed(() => [
-  { label: '根目录 /', value: '' },
+  { label: '根目录 /', value: ROOT_FOLDER_VALUE },
   ...folders.value.map((folder) => ({
     label: folder.path || folder.name,
     value: folder.id,
@@ -118,6 +157,34 @@ const tagOptions = computed(() =>
     label: `${tag.name} (${tag.key})`,
     value: tag.key,
   })),
+)
+
+const roleOptions = computed(() =>
+  rbacStore.roles.map((role) => ({
+    label: role.name,
+    value: role.key,
+  })),
+)
+
+const permissionLabelOptions = computed(() =>
+  rbacStore.labels.map((label) => ({
+    label: label.name,
+    value: label.key,
+    color: label.color ?? undefined,
+  })),
+)
+
+const visibilityModeOptions: Array<{
+  label: string
+  value: VisibilityModeOption
+}> = [
+  { label: '继承文件夹设置', value: 'inherit' },
+  { label: '公开（所有人可见）', value: 'public' },
+  { label: '受限（指定 RBAC）', value: 'restricted' },
+]
+
+const folderVisibilityOptions = visibilityModeOptions.filter(
+  (option) => option.value !== 'inherit',
 )
 
 const hasBatchFiles = computed(() => batchFiles.value.length > 0)
@@ -174,11 +241,12 @@ function notifyError(error: unknown, fallback: string) {
   })
 }
 
-async function refresh() {
+async function refresh(targetPage?: number) {
   uiStore.startLoading()
   try {
     await attachmentsStore.fetch({
       includeDeleted: includeDeleted.value,
+      page: targetPage ?? pagination.value.page,
     })
   } finally {
     uiStore.stopLoading()
@@ -251,12 +319,61 @@ function resetFolderForm() {
   folderForm.name = ''
   folderForm.parentId = ''
   folderForm.description = ''
+  folderForm.visibilityMode = 'public'
+  folderForm.visibilityRoles = []
+  folderForm.visibilityLabels = []
 }
 
 function resetTagForm() {
   tagForm.key = ''
   tagForm.name = ''
   tagForm.description = ''
+}
+
+function resetManagementForm() {
+  managementForm.name = ''
+  managementForm.description = ''
+  managementForm.folderId = null
+  managementForm.tagKeys = []
+  managementForm.visibilityMode = 'inherit'
+  managementForm.visibilityRoles = []
+  managementForm.visibilityLabels = []
+}
+
+function openManagementDialog(item: AdminAttachmentSummary) {
+  managementAttachment.value = item
+  managementForm.name = item.name
+  managementForm.description = item.description ?? ''
+  managementForm.folderId = item.folder?.id ?? null
+  managementForm.tagKeys = item.tags.map((tag) => tag.key)
+  managementForm.visibilityMode = item.visibilityMode
+  managementForm.visibilityRoles = [...item.visibilityRoles]
+  managementForm.visibilityLabels = [...item.visibilityLabels]
+  managementDialogOpen.value = true
+  if (folders.value.length === 0 && !foldersLoading.value) {
+    void fetchFolders()
+  }
+  if (tags.value.length === 0 && !tagsLoading.value) {
+    void fetchTags()
+  }
+}
+
+function closeManagementDialog() {
+  managementDialogOpen.value = false
+  managementAttachment.value = null
+  resetManagementForm()
+}
+
+function visibilitySourceLabel(
+  resolved: AdminAttachmentSummary['resolvedVisibility'],
+) {
+  if (resolved.source === 'folder') {
+    return `继承：${resolved.folderName || '文件夹设置'}`
+  }
+  if (resolved.source === 'attachment') {
+    return '自定义权限'
+  }
+  return '默认公开'
 }
 
 function startEditTag(tag: AttachmentTagEntry) {
@@ -267,11 +384,19 @@ function startEditTag(tag: AttachmentTagEntry) {
 }
 
 function updateBatchFolder(value?: string | null) {
-  batchFolderId.value = value && value.length > 0 ? value : null
+  if (!value || value === ROOT_FOLDER_VALUE) {
+    batchFolderId.value = null
+    return
+  }
+  batchFolderId.value = value
 }
 
 function updateFolderParent(value?: string | null) {
-  folderForm.parentId = value && value.length > 0 ? value : ''
+  if (!value || value === ROOT_FOLDER_VALUE) {
+    folderForm.parentId = ''
+    return
+  }
+  folderForm.parentId = value
 }
 
 async function submitFolder() {
@@ -294,6 +419,15 @@ async function submitFolder() {
         name,
         parentId: folderForm.parentId || undefined,
         description: folderForm.description.trim() || undefined,
+        visibilityMode: folderForm.visibilityMode,
+        visibilityRoles:
+          folderForm.visibilityMode === 'restricted'
+            ? folderForm.visibilityRoles
+            : undefined,
+        visibilityLabels:
+          folderForm.visibilityMode === 'restricted'
+            ? folderForm.visibilityLabels
+            : undefined,
       },
     })
     toast.add({
@@ -418,7 +552,9 @@ function appendFiles(fileList: FileList | File[]) {
       name: file.name,
       description: '',
       tagKeys: [] as string[],
-      isPublic: false,
+      visibilityMode: 'inherit' as VisibilityModeOption,
+      visibilityRoles: [] as string[],
+      visibilityLabels: [] as string[],
       status: 'pending' as BatchUploadRow['status'],
     }),
   )
@@ -435,6 +571,94 @@ function clearBatchFiles() {
 
 function triggerFileSelect() {
   fileInputRef.value?.click()
+}
+
+async function saveManagementDetails() {
+  if (!managementAttachment.value) return
+  const token = ensureToken()
+  managementSaving.value = true
+  try {
+    const folderId = managementForm.folderId
+    const payload: Record<string, unknown> = {
+      name: managementForm.name.trim() || managementAttachment.value.name,
+      description: managementForm.description.trim() || undefined,
+      folderId: folderId === null ? null : folderId || undefined,
+      tagKeys: managementForm.tagKeys,
+      visibilityMode: managementForm.visibilityMode,
+    }
+    if (managementForm.visibilityMode === 'restricted') {
+      payload.visibilityRoles = managementForm.visibilityRoles
+      payload.visibilityLabels = managementForm.visibilityLabels
+    } else {
+      payload.visibilityRoles = []
+      payload.visibilityLabels = []
+    }
+
+    await apiFetch(`/attachments/${managementAttachment.value.id}`, {
+      method: 'PATCH',
+      token,
+      body: payload,
+    })
+    toast.add({ title: '附件信息已更新', color: 'success' })
+    managementDialogOpen.value = false
+    resetManagementForm()
+    await refresh(pagination.value.page)
+  } catch (error) {
+    notifyError(error, '更新附件信息失败')
+  } finally {
+    managementSaving.value = false
+  }
+}
+
+async function deleteAttachmentRecord() {
+  if (!managementAttachment.value) return
+  if (!window.confirm('确定删除该附件吗？操作不可恢复。')) {
+    return
+  }
+  const token = ensureToken()
+  managementDeleting.value = true
+  try {
+    await apiFetch(`/attachments/${managementAttachment.value.id}`, {
+      method: 'DELETE',
+      token,
+    })
+    toast.add({ title: '附件已删除', color: 'warning' })
+    managementDialogOpen.value = false
+    resetManagementForm()
+    await refresh()
+  } catch (error) {
+    notifyError(error, '删除附件失败')
+  } finally {
+    managementDeleting.value = false
+  }
+}
+
+function goToPage(target: number) {
+  const totalPages = Math.max(pagination.value.pageCount, 1)
+  const next = Math.min(Math.max(target, 1), totalPages)
+  void refresh(next)
+}
+
+function goToFirstPage() {
+  goToPage(1)
+}
+
+function goToLastPage() {
+  goToPage(pagination.value.pageCount)
+}
+
+function goToPreviousPage() {
+  goToPage(pagination.value.page - 1)
+}
+
+function goToNextPage() {
+  goToPage(pagination.value.page + 1)
+}
+
+function handlePageInput() {
+  if (!pageInput.value) return
+  goToPage(pageInput.value)
+  pageInput.value = null
 }
 
 function statusLabel(status: BatchUploadRow['status']) {
@@ -475,7 +699,13 @@ async function uploadBatch() {
       if (batchFolderId.value) {
         formData.append('folderId', batchFolderId.value)
       }
-      formData.append('isPublic', row.isPublic ? 'true' : 'false')
+      formData.append('visibilityMode', row.visibilityMode)
+      if (row.visibilityMode === 'restricted' && row.visibilityRoles.length) {
+        formData.append('visibilityRoles', row.visibilityRoles.join(','))
+      }
+      if (row.visibilityMode === 'restricted' && row.visibilityLabels.length) {
+        formData.append('visibilityLabels', row.visibilityLabels.join(','))
+      }
       if (row.tagKeys.length > 0) {
         formData.append('tagKeys', row.tagKeys.join(','))
       }
@@ -527,11 +757,13 @@ async function uploadBatch() {
 
 onMounted(async () => {
   if (items.value.length === 0) {
-    await refresh()
+    await refresh(1)
   }
   if (authStore.token) {
     void fetchFolders()
     void fetchTags()
+    void rbacStore.fetchRoles()
+    void rbacStore.fetchLabels()
   }
 })
 </script>
@@ -550,7 +782,7 @@ onMounted(async () => {
         <label
           class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
         >
-          <UCheckbox v-model="includeDeleted" @change="refresh" size="sm" />
+          <UCheckbox v-model="includeDeleted" @change="refresh(1)" size="sm" />
           显示已删除附件
         </label>
         <div class="flex flex-wrap gap-2">
@@ -589,7 +821,7 @@ onMounted(async () => {
             <th class="px-4 py-3">目录</th>
             <th class="px-4 py-3">标签</th>
             <th class="px-4 py-3">大小</th>
-            <th class="px-4 py-3">状态</th>
+            <th class="px-4 py-3">可见性</th>
             <th class="px-4 py-3">更新时间</th>
             <th class="px-4 py-3 text-right">操作</th>
           </tr>
@@ -642,13 +874,24 @@ onMounted(async () => {
             <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
               {{ formatSize(item.size) }}
             </td>
-            <td class="px-4 py-3">
-              <UBadge
-                :color="item.isPublic ? 'success' : 'neutral'"
-                variant="soft"
-              >
-                {{ item.isPublic ? '公开' : '私有' }}
-              </UBadge>
+            <td class="px-4 py-3 text-xs">
+              <div class="flex flex-col gap-1">
+                <UBadge
+                  :color="
+                    item.resolvedVisibility.mode === 'public'
+                      ? 'success'
+                      : 'warning'
+                  "
+                  variant="soft"
+                >
+                  {{
+                    item.resolvedVisibility.mode === 'public' ? '公开' : '受限'
+                  }}
+                </UBadge>
+                <span class="text-slate-400 dark:text-slate-500">
+                  {{ visibilitySourceLabel(item.resolvedVisibility) }}
+                </span>
+              </div>
             </td>
             <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
               {{ new Date(item.updatedAt).toLocaleString() }}
@@ -666,11 +909,14 @@ onMounted(async () => {
                 >
                   公开链接
                 </UButton>
-                <UTooltip text="待集成完整管理界面">
-                  <UButton size="xs" color="neutral" variant="ghost" disabled>
-                    管理
-                  </UButton>
-                </UTooltip>
+                <UButton
+                  size="xs"
+                  color="neutral"
+                  variant="soft"
+                  @click="openManagementDialog(item)"
+                >
+                  管理
+                </UButton>
               </div>
             </td>
           </tr>
@@ -687,10 +933,320 @@ onMounted(async () => {
       <div
         class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-300"
       >
-        <span>共 {{ items.length }} 个附件</span>
+        <span>
+          第 {{ pagination.page }} / {{ pagination.pageCount || 1 }} 页，共
+          {{ pagination.total }} 个附件
+        </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            size="xs"
+            variant="ghost"
+            :disabled="isFirstPage"
+            @click="goToFirstPage"
+            >首页</UButton
+          >
+          <UButton
+            size="xs"
+            variant="ghost"
+            :disabled="isFirstPage"
+            @click="goToPreviousPage"
+            >上一页</UButton
+          >
+          <UButton
+            size="xs"
+            variant="ghost"
+            :disabled="isLastPage"
+            @click="goToNextPage"
+            >下一页</UButton
+          >
+          <UButton
+            size="xs"
+            variant="ghost"
+            :disabled="isLastPage"
+            @click="goToLastPage"
+            >末页</UButton
+          >
+          <form
+            class="flex items-center gap-2"
+            @submit.prevent="handlePageInput"
+          >
+            <UInput
+              v-model.number="pageInput"
+              type="number"
+              min="1"
+              :max="pagination.pageCount || 1"
+              size="xs"
+              class="w-20"
+              placeholder="跳转页"
+            />
+            <UButton type="submit" size="xs" variant="soft">跳转</UButton>
+          </form>
+        </div>
       </div>
     </div>
   </div>
+
+  <UModal v-model:open="managementDialogOpen" :ui="modalUi.manager">
+    <template #content>
+      <div class="space-y-4 p-4 sm:p-6">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              管理附件
+            </h3>
+            <div
+              v-if="managementAttachment"
+              class="text-xs font-mono text-slate-500 dark:text-slate-400"
+            >
+              {{ managementAttachment.id }}
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <UButton
+              color="error"
+              variant="link"
+              :loading="managementDeleting"
+              @click="deleteAttachmentRecord"
+            >
+              删除附件
+            </UButton>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-x"
+              @click="closeManagementDialog"
+            />
+          </div>
+        </div>
+
+        <div v-if="managementAttachment" class="space-y-6">
+          <div class="grid gap-2 md:grid-cols-2">
+            <div class="space-y-1">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                原文件
+              </div>
+              <div
+                class="font-mono break-all text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{ managementAttachment.originalName }}
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                大小
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{ formatSize(managementAttachment.size) }}
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                上传者
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{ formatOwner(managementAttachment.owner) }}
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                更新时间
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{ new Date(managementAttachment.updatedAt).toLocaleString() }}
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                附件名字
+              </div>
+              <UInput class="w-full" v-model="managementForm.name" />
+            </div>
+
+            <div class="space-y-1">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                所属目录
+              </div>
+              <USelectMenu
+                class="w-full"
+                :items="folderOptions"
+                value-key="value"
+                label-key="label"
+                :model-value="
+                  (managementForm.folderId || ROOT_FOLDER_VALUE) as string
+                "
+                placeholder="根目录"
+                :ui="attachmentDialogSelectUi"
+                @update:model-value="
+                  (value: string | undefined) =>
+                    (managementForm.folderId =
+                      value === ROOT_FOLDER_VALUE
+                        ? null
+                        : (value ?? managementForm.folderId))
+                "
+              />
+            </div>
+            <div class="space-y-1 md:col-span-2">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                描述（可选）
+              </div>
+              <UTextarea
+                class="w-full"
+                v-model="managementForm.description"
+                placeholder="用于后台提示或前台展示"
+                :rows="3"
+              />
+            </div>
+            <div class="space-y-1 md:col-span-2">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                标签
+              </div>
+              <USelect
+                class="w-full"
+                multiple
+                searchable
+                :items="tagOptions"
+                v-model="managementForm.tagKeys"
+                placeholder="选择标签"
+                :loading="tagsLoading"
+                :ui="attachmentDialogSelectUi"
+              />
+            </div>
+            <div class="space-y-1">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                可见性模式
+                <span class="font-medium pl-0.5 text-primary">
+                  当前：{{
+                    visibilitySourceLabel(
+                      managementAttachment.resolvedVisibility,
+                    )
+                  }}</span
+                >
+              </div>
+              <USelectMenu
+                class="w-full"
+                :items="visibilityModeOptions"
+                value-key="value"
+                label-key="label"
+                v-model="managementForm.visibilityMode"
+                :ui="attachmentDialogSelectUi"
+              />
+            </div>
+            <div class="space-y-1">
+              <div
+                class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+              >
+                可见性摘要
+              </div>
+              <div
+                class="rounded-2xl border border-dashed border-slate-300/80 p-2 px-4 text-xs text-slate-500 dark:border-slate-700/60 dark:text-slate-400"
+              >
+                <div class="flex items-center gap-2">
+                  <UBadge
+                    :color="
+                      managementAttachment.resolvedVisibility.mode === 'public'
+                        ? 'success'
+                        : 'warning'
+                    "
+                    size="xs"
+                  >
+                    {{
+                      managementAttachment.resolvedVisibility.mode === 'public'
+                        ? '公开'
+                        : '受限'
+                    }}
+                  </UBadge>
+                  <span>
+                    {{
+                      visibilitySourceLabel(
+                        managementAttachment.resolvedVisibility,
+                      )
+                    }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <template v-if="managementForm.visibilityMode === 'restricted'">
+              <div class="space-y-1">
+                <div
+                  class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+                >
+                  允许的角色
+                </div>
+                <USelect
+                  class="w-full"
+                  multiple
+                  :items="roleOptions"
+                  v-model="managementForm.visibilityRoles"
+                  placeholder="选择角色"
+                  :ui="attachmentDialogSelectUi"
+                />
+              </div>
+              <div class="space-y-1">
+                <div
+                  class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500"
+                >
+                  允许的权限标签
+                </div>
+                <USelect
+                  class="w-full"
+                  multiple
+                  :items="permissionLabelOptions"
+                  v-model="managementForm.visibilityLabels"
+                  placeholder="选择权限标签"
+                  :ui="attachmentDialogSelectUi"
+                />
+              </div>
+            </template>
+          </div>
+
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" @click="closeManagementDialog"
+              >取消</UButton
+            >
+            <UButton
+              color="primary"
+              :loading="managementSaving"
+              @click="saveManagementDetails"
+            >
+              保存
+            </UButton>
+          </div>
+        </div>
+        <div v-else class="py-10 text-center text-sm text-slate-500">
+          未找到附件记录
+        </div>
+      </div>
+    </template>
+  </UModal>
 
   <UModal v-model:open="batchUploadDialogOpen" :ui="modalUi.batch">
     <template #content>
@@ -712,7 +1268,7 @@ onMounted(async () => {
         <div class="grid gap-4 md:grid-cols-[2fr,1fr]">
           <div class="space-y-2">
             <label
-              class="text-xs font-medium text-slate-500 dark:text-slate-300"
+              class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500 dark:text-slate-300"
               >目标文件夹</label
             >
             <USelectMenu
@@ -720,7 +1276,7 @@ onMounted(async () => {
               :items="folderOptions"
               value-key="value"
               label-key="label"
-              :model-value="(batchFolderId || '') as string"
+              :model-value="(batchFolderId || ROOT_FOLDER_VALUE) as string"
               placeholder="选择存储路径（默认根目录）"
               :loading="foldersLoading"
               searchable
@@ -795,7 +1351,7 @@ onMounted(async () => {
                   <th class="px-4 py-3 text-left">附件名称</th>
                   <th class="px-4 py-3 text-left">描述</th>
                   <th class="px-4 py-3 text-left">标签</th>
-                  <th class="px-4 py-3 text-left">公开</th>
+                  <th class="px-4 py-3 text-left">可见性</th>
                   <th class="px-4 py-3 text-left">状态</th>
                   <th class="px-4 py-3 text-right">操作</th>
                 </tr>
@@ -839,13 +1395,33 @@ onMounted(async () => {
                       "
                     />
                   </td>
-                  <td class="px-4 py-3">
-                    <label
-                      class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
+                  <td class="px-4 py-3 space-y-2">
+                    <USelectMenu
+                      class="w-full"
+                      :items="visibilityModeOptions"
+                      value-key="value"
+                      label-key="label"
+                      v-model="row.visibilityMode"
+                    />
+                    <div
+                      v-if="row.visibilityMode === 'restricted'"
+                      class="space-y-1 text-xs"
                     >
-                      <UCheckbox v-model="row.isPublic" />
-                      公开访问
-                    </label>
+                      <USelect
+                        class="w-full"
+                        multiple
+                        :items="roleOptions"
+                        v-model="row.visibilityRoles"
+                        placeholder="允许的角色"
+                      />
+                      <USelect
+                        class="w-full"
+                        multiple
+                        :items="permissionLabelOptions"
+                        v-model="row.visibilityLabels"
+                        placeholder="允许的权限标签"
+                      />
+                    </div>
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex gap-1">
@@ -946,7 +1522,9 @@ onMounted(async () => {
               :items="folderOptions"
               value-key="value"
               label-key="label"
-              :model-value="(folderForm.parentId || '') as string"
+              :model-value="
+                (folderForm.parentId || ROOT_FOLDER_VALUE) as string
+              "
               placeholder="若不选择则创建在根目录"
               :loading="foldersLoading"
               searchable
@@ -965,6 +1543,41 @@ onMounted(async () => {
               :rows="3"
               placeholder="填写说明，帮助他人理解用途"
             />
+          </div>
+          <div class="flex gap-2">
+            <label class="w-32 text-sm text-slate-500 dark:text-slate-300"
+              >可见性</label
+            >
+            <div class="w-full space-y-2">
+              <USelectMenu
+                class="w-full"
+                :items="folderVisibilityOptions"
+                value-key="value"
+                label-key="label"
+                v-model="folderForm.visibilityMode"
+              />
+              <div
+                v-if="folderForm.visibilityMode === 'restricted'"
+                class="space-y-1 text-xs text-slate-500 dark:text-slate-400"
+              >
+                <p>允许访问的角色</p>
+                <USelect
+                  class="w-full"
+                  multiple
+                  :items="roleOptions"
+                  v-model="folderForm.visibilityRoles"
+                  placeholder="选择角色"
+                />
+                <p>允许访问的权限标签</p>
+                <USelect
+                  class="w-full"
+                  multiple
+                  :items="permissionLabelOptions"
+                  v-model="folderForm.visibilityLabels"
+                  placeholder="选择标签"
+                />
+              </div>
+            </div>
           </div>
         </div>
         <div class="flex justify-end gap-2">

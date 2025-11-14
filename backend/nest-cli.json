@@ -8,6 +8,10 @@
       {
         "include": "mail/templates/**/*",
         "outDir": "dist"
+      },
+      {
+        "include": "../data/ip2region/**/*",
+        "outDir": "dist/data"
       }
     ],
     "watchAssets": true

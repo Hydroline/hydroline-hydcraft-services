@@ -85,6 +85,12 @@ enum PIICStatus {
   REVOKED
 }
 
+enum AttachmentVisibilityMode {
+  INHERIT
+  PUBLIC
+  RESTRICTED
+}
+
 model User {
   id            String    @id @default(uuid())
   name          String?
@@ -562,6 +568,9 @@ model AttachmentFolder {
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  visibilityMode AttachmentVisibilityMode @default(PUBLIC)
+  visibilityRoles String[] @default([])
+  visibilityLabels String[] @default([])
 
   parent      AttachmentFolder?  @relation("AttachmentFolderHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children    AttachmentFolder[] @relation("AttachmentFolderHierarchy")
@@ -585,12 +594,15 @@ model Attachment {
   size                  Int
   storageKey            String
   hash                  String?
-  isPublic              Boolean   @default(false)
+  isPublic              Boolean   @default(true)
   externalUrl           String?
   metadata              Json?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   deletedAt             DateTime?
+  visibilityMode        AttachmentVisibilityMode @default(INHERIT)
+  visibilityRoles       String[] @default([])
+  visibilityLabels      String[] @default([])
 
   folder      AttachmentFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
   owner       User?                  @relation("AttachmentUploader", fields: [ownerId], references: [id], onDelete: SetNull)
