@@ -3,6 +3,7 @@ import { ContactVerificationStatus, Prisma } from '@prisma/client';
 import { compare as bcryptCompare, hash as bcryptHash } from 'bcryptjs';
 import { generateRandomString } from 'better-auth/crypto';
 import { UsersServiceContext } from './users.context';
+import { formatDateTimeCn } from '../../../lib/shared/datetime';
 import {
   clearPrimaryContact,
   normalizeOptionalString,
@@ -294,9 +295,7 @@ export async function sendEmailVerificationCode(
     email;
   const now = new Date();
   const year = now.getFullYear();
-  const datetime = `${year}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(
-    now.getDate(),
-  ).padStart(2, '0')}日`;
+  const datetime = formatDateTimeCn(now);
   const identifier = `${ctx.emailVerificationIdentifierPrefix}${email.toLowerCase()}`;
   const code = generateRandomString(6, '0-9');
   const hashed = await bcryptHash(code, 10);
@@ -311,10 +310,11 @@ export async function sendEmailVerificationCode(
     });
   });
   try {
+    const plainText = `您好 ${displayName}，\n\n您的邮箱验证验证码为 ${code}，有效期 10 分钟。如非本人操作，请忽略本邮件。\n\nHydroline（氢气工艺）敬上`;
     await ctx.mailService.sendMail({
       to: email,
       subject: 'Hydroline 邮箱验证',
-      text: `验证码: ${code}，10 分钟内有效。`,
+      text: plainText,
       template: 'password-code',
       context: {
         displayName,
@@ -322,6 +322,8 @@ export async function sendEmailVerificationCode(
         ipHint: '',
         datetime,
         currentYear: String(year),
+        plaintext: plainText,
+        operation: '邮箱验证',
       },
     });
   } catch (error) {

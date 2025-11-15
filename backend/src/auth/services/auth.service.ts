@@ -29,6 +29,7 @@ import { businessError } from '../../authme/authme.errors';
 import { MailService } from '../../mail/mail.service';
 import { ChangePasswordWithCodeDto } from '../dto/change-password-with-code.dto';
 import { OAuthProvidersService } from '../../oauth/services/oauth-providers.service';
+import { formatDateTimeCn } from '../../lib/shared/datetime';
 
 interface AuthResponse {
   token: string | null;
@@ -322,16 +323,9 @@ export class AuthService {
     const displayName = user.name ?? user.email;
     const ipHint = context.ip ? `（IP：${context.ip}）` : '';
     const subject = 'Hydroline 密码安全验证码';
-    const plainText = `您好 ${displayName}，\n\n您的密码安全验证码为 ${code}，有效期 10 分钟${ipHint}。如非本人操作，请忽略本邮件。\n\nHydroline 安全中心`;
+    const plainText = `您好 ${displayName}，\n\n您的密码安全验证码为 ${code}，有效期 10 分钟${ipHint}。如非本人操作，请忽略本邮件。\n\nHydroline（氢气工艺）敬上`;
     const now = new Date();
-    const datetime = now.toLocaleString('zh-CN', {
-      timeZone: 'Asia/Shanghai',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const datetime = formatDateTimeCn(now);
     const currentYear = now.getFullYear();
 
     await this.mailService.sendMail({
@@ -345,6 +339,8 @@ export class AuthService {
         ipHint,
         datetime,
         currentYear: String(currentYear),
+        plaintext: plainText,
+        operation: '密码修改验证',
       },
     });
 
@@ -436,16 +432,9 @@ export class AuthService {
     const displayName = user.name ?? email;
     const ipHint = context.ip ? `（IP：${context.ip}）` : '';
     const subject = 'Hydroline 密码重置验证码';
-    const plainText = `您好 ${displayName}，\n\n您的密码重置验证码为 ${code}，有效期 10 分钟${ipHint}。如非本人操作，请忽略。\n\nHydroline 安全中心`;
+    const plainText = `您好 ${displayName}，\n\n您的密码重置验证码为 ${code}，有效期 10 分钟${ipHint}。如非本人操作，请忽略。\n\nHydroline（氢气工艺）敬上`;
     const now = new Date();
-    const datetime = now.toLocaleString('zh-CN', {
-      timeZone: 'Asia/Shanghai',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const datetime = formatDateTimeCn(now);
     const currentYear = now.getFullYear();
 
     try {
@@ -460,6 +449,8 @@ export class AuthService {
           ipHint,
           datetime,
           currentYear: String(currentYear),
+          plaintext: plainText,
+          operation: '密码重置',
         },
       });
     } catch {
