@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-// 统一使用 UModal 提供的遮罩与过渡
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { usePortalStore } from '@/stores/portal'
@@ -21,7 +20,6 @@ const tab = ref<'login' | 'register'>('login')
 const loginMode = ref<'EMAIL' | 'AUTHME'>('EMAIL')
 const registerMode = ref<'EMAIL' | 'AUTHME'>('EMAIL')
 const loginError = ref('')
-// Forgot password flow states
 const forgotOpen = ref(false)
 const forgotStep = ref<'INPUT' | 'CODE' | 'DONE'>('INPUT')
 const forgotForm = reactive({ email: '', code: '', password: '' })
@@ -29,7 +27,6 @@ const forgotSending = ref(false)
 const forgotError = ref('')
 const registerError = ref('')
 
-// 统一对话框 z-index 配置（与全局用法保持一致）
 const modalUi = {
   auth: {
     content: 'w-full max-w-md z-[185]',
@@ -197,7 +194,6 @@ async function handleRegister() {
 }
 
 function closeDialog() {
-  // 忘记密码层打开时，忽略父层关闭（交给子层处理）
   if (forgotOpen.value) return
   uiStore.closeLoginDialog()
 }
@@ -215,8 +211,6 @@ function closeForgot() {
   forgotOpen.value = false
   forgotStep.value = 'INPUT'
 }
-
-// 统一改为直接调用 closeForgot
 
 async function sendForgotCode() {
   forgotError.value = ''
@@ -257,12 +251,9 @@ async function confirmForgotReset() {
     forgotSending.value = false
   }
 }
-
-// 已内联调用 sendForgotCode 作为重新发送，不再需要独立函数
 </script>
 
 <template>
-  <!-- 父层：登录/注册使用 UModal，统一遮罩与动画 -->
   <UModal
     :open="uiStore.loginDialogOpen"
     @update:open="
@@ -273,7 +264,7 @@ async function confirmForgotReset() {
     :ui="modalUi.auth"
   >
     <template #content>
-      <div class="p-6 bg-white/90 backdrop-blur-md dark:bg-slate-900/80">
+      <div class="p-6">
         <div>
           <div
             class="mt-4 flex rounded-full bg-slate-100/80 p-1 text-sm dark:bg-slate-800/60"
@@ -340,7 +331,10 @@ async function confirmForgotReset() {
                 <UCheckbox v-model="loginForm.rememberMe" />
                 记住我
               </label>
-              <UButton variant="link" @click="openForgot">忘记密码</UButton>
+              <div>
+                <UButton class="px-1!" variant="link">邮箱验证码登录</UButton>
+                <UButton class="px-1!" variant="link" @click="openForgot">忘记密码</UButton>
+              </div>
             </div>
           </template>
           <template v-else>
@@ -372,9 +366,6 @@ async function confirmForgotReset() {
                 <UCheckbox v-model="authmeLoginForm.rememberMe" />
                 记住我
               </label>
-              <span class="text-xs text-slate-400"
-                >服务器账号登录仅限已绑定账号</span
-              >
             </div>
           </template>
 
@@ -385,14 +376,42 @@ async function confirmForgotReset() {
             {{ loginError }}
           </div>
 
-          <UButton
-            type="submit"
-            color="primary"
-            class="w-full flex justify-center items-center"
-            >登录</UButton
-          >
+          <div class="flex gap-2 items-center">
+            <UButton
+              type="submit"
+              color="primary"
+              class="w-full flex justify-center items-center"
+              :loading="uiStore.isLoading"
+              >登录</UButton
+            >
 
-          <div v-if="loginMode === 'EMAIL'" class="relative">
+            <UButton
+              v-if="authmeLoginEnabled && loginMode === 'EMAIL'"
+              type="button"
+              variant="outline"
+              class="w-full flex justify-center items-center gap-2"
+              @click="loginMode = 'AUTHME'"
+            >
+              <UIcon
+                name="i-lucide-database"
+                class="h-4 w-4"
+                aria-hidden="true"
+              />
+              服务器账号登录
+            </UButton>
+
+            <UButton
+              v-if="loginMode === 'AUTHME'"
+              :loading="uiStore.isLoading"
+              variant="ghost"
+              class="w-full flex justify-center items-center"
+              @click="loginMode = 'EMAIL'"
+            >
+              返回邮箱登录
+            </UButton>
+          </div>
+
+          <div class="relative">
             <div class="absolute inset-0 flex items-center">
               <div
                 class="w-full border-t border-slate-200 dark:border-slate-700"
@@ -401,74 +420,31 @@ async function confirmForgotReset() {
             <div class="relative flex justify-center text-sm">
               <span
                 class="bg-white px-2 text-slate-500 dark:bg-slate-900 dark:text-slate-400"
-                >或</span
+                >使用第三方账号快速登录</span
               >
             </div>
           </div>
 
-          <div
-            v-if="oauthProviders.length && loginMode === 'EMAIL'"
-            class="space-y-3 rounded-xl border border-slate-200/70 px-4 py-3 dark:border-slate-700/60"
-          >
-            <p class="text-xs text-center text-slate-500">
-              或使用以下第三方账号快速登录
-            </p>
-            <div class="flex flex-wrap justify-center gap-2">
-              <UButton
-                v-for="provider in oauthProviders"
-                :key="provider.key"
-                size="sm"
-                variant="ghost"
-                :loading="oauthLoadingProvider === provider.key"
-                :disabled="
-                  oauthLoadingProvider !== null &&
-                  oauthLoadingProvider !== provider.key
-                "
-                class="min-w-[130px] justify-center gap-2"
-                @click="startOAuthLogin(provider.key)"
-              >
-                <UIcon
-                  :name="resolveProviderIcon(provider.type)"
-                  class="h-4 w-4"
-                />
-                {{ provider.name }}
-              </UButton>
-            </div>
-          </div>
-
-          <UButton
-            v-if="authmeLoginEnabled && loginMode === 'EMAIL'"
-            type="button"
-            variant="outline"
-            class="w-full flex justify-center items-center gap-2"
-            @click="loginMode = 'AUTHME'"
-          >
-            <svg
-              class="w-4 h-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
+          <div v-if="oauthProviders.length" class="space-y-2 rounded-xl">
+            <UButton
+              v-for="provider in oauthProviders"
+              :key="provider.key"
+              variant="outline"
+              :loading="oauthLoadingProvider === provider.key"
+              :disabled="
+                oauthLoadingProvider !== null &&
+                oauthLoadingProvider !== provider.key
+              "
+              class="w-full justify-center gap-2"
+              @click="startOAuthLogin(provider.key)"
             >
-              <path
-                d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              <UIcon
+                :name="resolveProviderIcon(provider.type)"
+                class="h-4 w-4"
               />
-            </svg>
-            使用服务器账号登录
-          </UButton>
-
-          <UButton
-            v-if="loginMode === 'AUTHME'"
-            type="button"
-            variant="ghost"
-            class="w-full flex justify-center items-center"
-            @click="loginMode = 'EMAIL'"
-          >
-            返回邮箱登录
-          </UButton>
+              {{ provider.name }}
+            </UButton>
+          </div>
         </form>
 
         <form v-else class="mt-6 space-y-4" @submit.prevent="handleRegister">
@@ -552,16 +528,43 @@ async function confirmForgotReset() {
             {{ registerError }}
           </div>
 
-          <UButton
-            type="submit"
-            color="primary"
-            variant="outline"
-            class="w-full flex justify-center items-center"
-          >
-            立即注册
-          </UButton>
+          <div class="flex gap-2 items-center">
+            <UButton
+              type="submit"
+              color="primary"
+              :loading="uiStore.isLoading"
+              class="w-full flex justify-center items-center"
+            >
+              立即注册
+            </UButton>
 
-          <div v-if="registerMode === 'EMAIL'" class="relative">
+            <UButton
+              v-if="authmeRegisterEnabled && registerMode === 'EMAIL'"
+              type="button"
+              variant="outline"
+              class="w-full flex justify-center items-center gap-2"
+              @click="registerMode = 'AUTHME'"
+            >
+              <UIcon
+                name="i-lucide-database"
+                class="h-4 w-4"
+                aria-hidden="true"
+              />
+              服务器账号注册
+            </UButton>
+
+            <UButton
+              v-if="registerMode === 'AUTHME'"
+              type="button"
+              variant="ghost"
+              class="w-full flex justify-center items-center"
+              @click="registerMode = 'EMAIL'"
+            >
+              返回常规注册
+            </UButton>
+          </div>
+
+          <div class="relative">
             <div class="absolute inset-0 flex items-center">
               <div
                 class="w-full border-t border-slate-200 dark:border-slate-700"
@@ -570,79 +573,36 @@ async function confirmForgotReset() {
             <div class="relative flex justify-center text-sm">
               <span
                 class="bg-white px-2 text-slate-500 dark:bg-slate-900 dark:text-slate-400"
-                >或</span
+                >使用第三方账号快速注册</span
               >
             </div>
           </div>
 
-          <div
-            v-if="oauthProviders.length && registerMode === 'EMAIL'"
-            class="space-y-3 rounded-xl border border-slate-200/70 px-4 py-3 dark:border-slate-700/60"
-          >
-            <p class="text-xs text-center text-slate-500">
-              直接使用第三方账号完成注册
-            </p>
-            <div class="flex flex-wrap justify-center gap-2">
-              <UButton
-                v-for="provider in oauthProviders"
-                :key="provider.key"
-                size="sm"
-                variant="ghost"
-                :loading="oauthLoadingProvider === provider.key"
-                :disabled="
-                  oauthLoadingProvider !== null &&
-                  oauthLoadingProvider !== provider.key
-                "
-                class="min-w-[130px] justify-center gap-2"
-                @click="startOAuthLogin(provider.key)"
-              >
-                <UIcon
-                  :name="resolveProviderIcon(provider.type)"
-                  class="h-4 w-4"
-                />
-                {{ provider.name }}
-              </UButton>
-            </div>
-          </div>
-
-          <UButton
-            v-if="authmeRegisterEnabled && registerMode === 'EMAIL'"
-            type="button"
-            variant="outline"
-            class="w-full flex justify-center items-center gap-2"
-            @click="registerMode = 'AUTHME'"
-          >
-            <svg
-              class="w-4 h-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
+          <div v-if="oauthProviders.length" class="space-y-2 rounded-xl">
+            <UButton
+              v-for="provider in oauthProviders"
+              :key="provider.key"
+              variant="outline"
+              :loading="oauthLoadingProvider === provider.key"
+              :disabled="
+                oauthLoadingProvider !== null &&
+                oauthLoadingProvider !== provider.key
+              "
+              class="w-full justify-center gap-2"
+              @click="startOAuthLogin(provider.key)"
             >
-              <path
-                d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              <UIcon
+                :name="resolveProviderIcon(provider.type)"
+                class="h-4 w-4"
               />
-            </svg>
-            使用服务器账号注册
-          </UButton>
-
-          <UButton
-            v-if="registerMode === 'AUTHME'"
-            type="button"
-            variant="ghost"
-            class="w-full flex justify-center items-center"
-            @click="registerMode = 'EMAIL'"
-          >
-            返回常规注册
-          </UButton>
+              {{ provider.name }}
+            </UButton>
+          </div>
         </form>
       </div>
     </template>
   </UModal>
-  <!-- 子层：忘记密码使用 UModal（叠层与动画由 UModals 统一管理） -->
+
   <UModal
     :open="forgotOpen"
     @update:open="
@@ -653,7 +613,7 @@ async function confirmForgotReset() {
     :ui="modalUi.forgot"
   >
     <template #content>
-      <div class="p-6 bg-white/90 backdrop-blur-md dark:bg-slate-900/80">
+      <div class="p-6">
         <div class="flex items-start justify-between gap-3">
           <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
             找回密码
