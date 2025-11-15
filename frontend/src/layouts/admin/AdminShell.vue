@@ -92,10 +92,22 @@ const menuGroups = computed<MenuGroup[]>(() => [
     collapsible: true,
     defaultCollapsed: false,
     items: [
-      { label: 'Provider 管理', to: '/admin/oauth/providers', icon: 'i-lucide-plug' },
+      {
+        label: 'Provider 管理',
+        to: '/admin/oauth/providers',
+        icon: 'i-lucide-plug',
+      },
       { label: '绑定记录', to: '/admin/oauth/accounts', icon: 'i-lucide-link' },
-      { label: 'OAuth 日志', to: '/admin/oauth/logs', icon: 'i-lucide-scroll-text' },
-      { label: '数据统计', to: '/admin/oauth/stats', icon: 'i-lucide-chart-line' },
+      {
+        label: 'OAuth 日志',
+        to: '/admin/oauth/logs',
+        icon: 'i-lucide-scroll-text',
+      },
+      {
+        label: '数据统计',
+        to: '/admin/oauth/stats',
+        icon: 'i-lucide-chart-line',
+      },
     ],
   },
   {
@@ -299,8 +311,8 @@ onMounted(() => {
       <aside
         class="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r border-slate-200/60 bg-white/70 dark:border-slate-800/60 dark:bg-slate-950/70 lg:block"
       >
-        <div class="relative flex h-full flex-col">
-          <nav class="space-y-4 overflow-y-auto px-4 pb-44 pt-4 text-sm">
+        <div class="flex h-full flex-col">
+          <nav class="space-y-4 overflow-y-auto p-4 text-sm">
             <section
               v-for="group in menuGroups"
               :key="group.key"
@@ -342,9 +354,7 @@ onMounted(() => {
             </section>
           </nav>
 
-          <div
-            class="pointer-events-none absolute inset-x-0 bottom-0 p-4 px-6 bg-white/70 dark:bg-slate-950/70 backdrop-blur-2xl"
-          >
+          <div class="p-2 px-6">
             <div
               class="pointer-events-auto space-y-3 text-xs text-slate-500 dark:text-slate-300"
             >

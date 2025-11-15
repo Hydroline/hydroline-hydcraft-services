@@ -10,9 +10,7 @@ const featureStore = useFeatureStore()
 const oauthStore = useOAuthStore()
 const toast = useToast()
 
-const oauthProviders = computed(
-  () => featureStore.flags.oauthProviders ?? [],
-)
+const oauthProviders = computed(() => featureStore.flags.oauthProviders ?? [])
 
 const accounts = computed(() => {
   const raw = (auth.user as { accounts?: unknown } | null)?.accounts
@@ -67,8 +65,7 @@ async function unbindProvider(providerKey: string) {
   } catch (error) {
     toast.add({
       title: '操作失败',
-      description:
-        error instanceof ApiError ? error.message : '请稍后再试',
+      description: error instanceof ApiError ? error.message : '请稍后再试',
       color: 'error',
     })
   } finally {
@@ -78,84 +75,93 @@ async function unbindProvider(providerKey: string) {
 </script>
 
 <template>
-  <section v-if="oauthProviders.length" class="space-y-4">
+  <section v-if="oauthProviders.length" class="space-y-3">
     <div class="flex items-center justify-between px-1">
       <div>
-        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
-          OAuth 绑定
+        <h3
+          class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300"
+        >
+          平台绑定
         </h3>
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-          可选绑定 Microsoft 等第三方账号以便快速登录。
-        </p>
       </div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2">
+    <div class="flex flex-col gap-4">
       <div
         v-for="provider in oauthProviders"
         :key="provider.key"
-        class="rounded-2xl border border-slate-200/70 bg-white px-4 py-4 shadow-sm dark:border-slate-800/70 dark:bg-slate-900"
+        class="rounded-xl border border-slate-200/60 bg-white p-4 dark:border-slate-800/60 dark:bg-slate-700/60"
       >
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-base font-semibold text-slate-900 dark:text-white">
+            <div
+              class="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100"
+            >
               {{ provider.name }}
-            </div>
-            <div class="text-xs uppercase text-slate-500">
-              {{ provider.type }}
+
+              <UBadge
+                v-if="linkedAccount(provider.key)"
+                color="primary"
+                size="sm"
+                variant="soft"
+                >已绑定</UBadge
+              >
             </div>
           </div>
-          <UBadge
-            v-if="linkedAccount(provider.key)"
-            color="primary"
-            variant="soft"
-            size="xs"
-            >已绑定</UBadge
-          >
+          <div class="flex gap-2">
+            <UButton
+              v-if="linkedAccount(provider.key)"
+              color="error"
+              size="sm"
+              variant="ghost"
+              :loading="loadingProvider === provider.key"
+              @click="unbindProvider(provider.key)"
+            >
+              解除绑定
+            </UButton>
+            <UButton
+              v-else
+              color="primary"
+              size="sm"
+              variant="soft"
+              :loading="loadingProvider === provider.key"
+              @click="bindProvider(provider.key)"
+            >
+              绑定
+            </UButton>
+          </div>
         </div>
-        <div class="mt-3 text-sm text-slate-600 dark:text-slate-300">
+        <div class="grid gap-4 md:grid-cols-2 mt-3 text-sm text-slate-600 dark:text-slate-300">
           <template v-if="linkedAccount(provider.key)">
             <div>
-              账号：
-              {{
-                (linkedAccount(provider.key)?.providerAccountId as string) ??
-                '已绑定'
-              }}
+              <div class="text-xs text-slate-500 dark:text-slate-500">账号</div>
+              <div
+                class="line-clamp-1 truncate text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{
+                  (linkedAccount(provider.key)?.providerAccountId as string) ??
+                  '已绑定'
+                }}
+              </div>
             </div>
             <div class="text-xs text-slate-500">
-              绑定时间：
-              {{
-                linkedAccount(provider.key)?.createdAt
-                  ? new Date(
-                      linkedAccount(provider.key)?.createdAt as string,
-                    ).toLocaleString()
-                  : '—'
-              }}
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                绑定时间
+              </div>
+              <div
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
+              >
+                {{
+                  linkedAccount(provider.key)?.createdAt
+                    ? new Date(
+                        linkedAccount(provider.key)?.createdAt as string,
+                      ).toLocaleString()
+                    : '—'
+                }}
+              </div>
             </div>
           </template>
-          <template v-else>
-            尚未绑定 {{ provider.name }} 账号
-          </template>
-        </div>
-        <div class="mt-4 flex gap-2">
-          <UButton
-            v-if="linkedAccount(provider.key)"
-            color="error"
-            variant="ghost"
-            :loading="loadingProvider === provider.key"
-            @click="unbindProvider(provider.key)"
-          >
-            解除绑定
-          </UButton>
-          <UButton
-            v-else
-            color="primary"
-            variant="soft"
-            :loading="loadingProvider === provider.key"
-            @click="bindProvider(provider.key)"
-          >
-            绑定
-          </UButton>
+          <template v-else> 尚未绑定 {{ provider.name }} 账号 </template>
         </div>
       </div>
     </div>

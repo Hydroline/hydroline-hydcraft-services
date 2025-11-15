@@ -86,8 +86,10 @@ const mailTemplateOptions = computed(() =>
   mailTemplates.value.map((tpl) => ({ label: tpl.label, value: tpl.key })),
 )
 
-const selectedMailTemplate = computed(() =>
-  mailTemplates.value.find((tpl) => tpl.key === testMailForm.template) ?? null,
+const selectedMailTemplate = computed(
+  () =>
+    mailTemplates.value.find((tpl) => tpl.key === testMailForm.template) ??
+    null,
 )
 
 const logIconByStatus: Record<TestMailLogStatus, string> = {
@@ -263,7 +265,9 @@ async function sendTestMail() {
   }
   updateLogEntry(validationLog, 'success', email)
 
-  let contextPayload: Record<string, string | number | boolean | null> | undefined
+  let contextPayload:
+    | Record<string, string | number | boolean | null>
+    | undefined
   if (testMailContextJson.value.trim()) {
     const contextLog = createLogEntry('解析模板变量 JSON', 'active')
     try {
@@ -644,9 +648,13 @@ watch(
     >
       <template #content>
         <div class="space-y-5 p-6">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          >
             <div>
-              <h3 class="text-base font-semibold text-slate-900 dark:text-white">
+              <h3
+                class="text-base font-semibold text-slate-900 dark:text-white"
+              >
                 发送测试邮件
               </h3>
               <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -695,7 +703,9 @@ watch(
                   value-key="value"
                   label-key="label"
                   :loading="mailTemplatesLoading"
-                  :disabled="mailTemplatesLoading || mailTemplateOptions.length === 0"
+                  :disabled="
+                    mailTemplatesLoading || mailTemplateOptions.length === 0
+                  "
                   placeholder="选择邮件模板"
                 />
                 <p
@@ -732,7 +742,9 @@ watch(
             class="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 text-sm dark:border-slate-800/70 dark:bg-slate-900/40"
           >
             <div class="flex items-center justify-between">
-              <span class="font-medium text-slate-700 dark:text-slate-200">发送进度</span>
+              <span class="font-medium text-slate-700 dark:text-slate-200"
+                >发送进度</span
+              >
               <UBadge
                 v-if="testMailSending"
                 size="xs"
@@ -742,7 +754,10 @@ watch(
                 发送中
               </UBadge>
             </div>
-            <div v-if="testMailLogs.length === 0" class="text-xs text-slate-500 dark:text-slate-400">
+            <div
+              v-if="testMailLogs.length === 0"
+              class="text-xs text-slate-500 dark:text-slate-400"
+            >
               发送记录会显示在这里
             </div>
             <ul v-else class="space-y-2 text-xs">
@@ -761,10 +776,14 @@ watch(
                 />
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
-                    <span class="font-medium text-slate-700 dark:text-slate-200">
+                    <span
+                      class="font-medium text-slate-700 dark:text-slate-200"
+                    >
                       {{ log.label }}
                     </span>
-                    <span class="text-[10px] text-slate-400 dark:text-slate-500">
+                    <span
+                      class="text-[10px] text-slate-400 dark:text-slate-500"
+                    >
                       {{ log.timestamp }}
                     </span>
                   </div>
@@ -784,7 +803,7 @@ watch(
 
     <!-- 未验证用户列表 -->
     <section
-      class="rounded-3xl border border-slate-200/70 bg-white/80 text-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+      class="rounded-3xl overflow-hidden border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
     >
       <div class="overflow-x-auto">
         <table

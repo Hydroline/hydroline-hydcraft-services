@@ -47,7 +47,13 @@ const dateLabels = computed(() => {
 })
 
 const series = computed<
-  Array<{ name: string; data: number[]; type: string; smooth: boolean; showSymbol: boolean }>
+  Array<{
+    name: string
+    data: number[]
+    type: string
+    smooth: boolean
+    showSymbol: boolean
+  }>
 >(() => {
   const groups = new Map<string, number[]>()
   const labels = dateLabels.value
@@ -92,15 +98,34 @@ const hasData = computed(() => stats.value.length > 0)
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">
-          OAuth 数据统计
-        </h2>
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-          近况概览以及不同动作的趋势变化。
-        </p>
-      </div>
+    <div class="flex items-center justify-end gap-2">
+      <USelect
+        v-model="filters.providerKey"
+        :items="
+          providers.map((item) => ({
+            label: item.name,
+            value: item.key,
+          }))
+        "
+        placeholder="全部 Provider"
+      />
+      <USelect
+        v-model="filters.days"
+        :items="[
+          { label: '近 7 天', value: 7 },
+          { label: '近 14 天', value: 14 },
+          { label: '近 30 天', value: 30 },
+        ]"
+      />
+      <UButton
+        color="primary"
+        @click="
+          () => {
+            fetchStats()
+          }
+        "
+        >应用筛选</UButton
+      >
       <UButton
         color="neutral"
         variant="soft"
@@ -112,74 +137,59 @@ const hasData = computed(() => stats.value.length > 0)
       </UButton>
     </div>
 
-    <UCard>
-      <template #header>
-        <div class="grid gap-3 md:grid-cols-3">
-          <USelectMenu
-            v-model="filters.providerKey"
-            :options="[
-              { label: '全部 Provider', value: '' },
-              ...providers.map((item) => ({ label: item.name, value: item.key })),
-            ]"
-          />
-          <USelectMenu
-            v-model="filters.days"
-            :options="[
-              { label: '近 7 天', value: 7 },
-              { label: '近 14 天', value: 14 },
-              { label: '近 30 天', value: 30 },
-            ]"
-          />
-          <UButton
-            color="primary"
-            @click="() => {
-              fetchStats()
-            }"
-          >
-            应用筛选
-          </UButton>
+    <!-- 统计容器：与 LuckPerms 外观一致的卡片容器 -->
+    <div
+      class="rounded-3xl overflow-hidden border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+    >
+      <div class="p-4 md:p-6 space-y-4">
+        <div v-if="loading" class="space-y-3">
+          <USkeleton class="h-72 w-full rounded-xl" />
         </div>
-      </template>
-
-      <div v-if="loading" class="space-y-3">
-        <USkeleton class="h-72 w-full rounded-xl" />
-      </div>
-      <div v-else-if="errorMessage" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-        {{ errorMessage }}
-      </div>
-      <div v-else class="space-y-4">
-        <div
-          v-if="!hasData"
-          class="rounded-lg border border-dashed border-slate-200/80 px-4 py-16 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
-        >
-          暂无统计数据
-        </div>
-        <div v-else class="h-[360px]">
-          <VChart :option="chartOption" autoresize />
-        </div>
-        <div class="grid gap-4 md:grid-cols-3">
+        <UAlert
+          v-else-if="errorMessage"
+          color="error"
+          variant="soft"
+          icon="i-lucide-alert-triangle"
+          :title="'加载失败'"
+          :description="errorMessage"
+        />
+        <template v-else>
           <div
-            v-for="seriesEntry in series"
-            :key="seriesEntry.name"
-            class="rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/40"
+            v-if="!hasData"
+            class="rounded-lg border border-dashed border-slate-200/80 px-4 py-16 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
           >
-            <div class="text-xs uppercase text-slate-500">
-              {{ seriesEntry.name }}
-            </div>
-            <div class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">
-              {{
-                seriesEntry.data.reduce(
-                  (total: number, current: number) => total + Number(current ?? 0),
-                  0,
-                )
-              }}
-            </div>
-            <div class="text-xs text-slate-500">
-              最近 {{ filters.days }} 天累计
+            暂无统计数据
+          </div>
+          <div v-else class="h-[360px]">
+            <VChart :option="chartOption" autoresize />
+          </div>
+          <div class="grid gap-4 md:grid-cols-3">
+            <div
+              v-for="seriesEntry in series"
+              :key="seriesEntry.name"
+              class="rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/40"
+            >
+              <div class="text-xs uppercase text-slate-500">
+                {{ seriesEntry.name }}
+              </div>
+              <div
+                class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white"
+              >
+                {{
+                  seriesEntry.data.reduce(
+                    (total: number, current: number) =>
+                      total + Number(current ?? 0),
+                    0,
+                  )
+                }}
+              </div>
+              <div class="text-xs text-slate-500">
+                最近 {{ filters.days }} 天累计
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </div>
-    </UCard>
+    </div>
   </div>
 </template>

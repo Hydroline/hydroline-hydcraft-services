@@ -324,7 +324,10 @@ function handlePageInput(type: 'roles' | 'permissions' | 'labels') {
     pageInputRef.value = currentPage
     return
   }
-  const normalized = Math.max(1, Math.min(Math.trunc(pageInputRef.value), pageCount))
+  const normalized = Math.max(
+    1,
+    Math.min(Math.trunc(pageInputRef.value), pageCount),
+  )
   pageInputRef.value = normalized
   goToPage(normalized, type)
 }
@@ -413,7 +416,7 @@ watch(
 
     <div v-if="activeTab === 'roles'" class="space-y-4">
       <div
-        class="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+        class="rounded-3xl overflow-hidden border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
       >
         <table
           class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800"
@@ -555,7 +558,6 @@ watch(
           </div>
         </div>
       </div>
-      
     </div>
 
     <div v-else-if="activeTab === 'permissions'" class="space-y-4">
@@ -797,7 +799,6 @@ watch(
           </div>
         </div>
       </div>
-
     </div>
 
     <div v-else-if="activeTab === 'catalog'" class="space-y-4">

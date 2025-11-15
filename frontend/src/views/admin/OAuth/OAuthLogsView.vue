@@ -39,7 +39,6 @@ const filters = reactive({
 })
 
 const actionOptions = [
-  { label: '全部动作', value: '' },
   { label: 'Authorize', value: 'AUTHORIZE' },
   { label: 'Token Exchange', value: 'TOKEN' },
   { label: '登录', value: 'LOGIN' },
@@ -50,7 +49,6 @@ const actionOptions = [
 ]
 
 const statusOptions = [
-  { label: '全部状态', value: '' },
   { label: '成功', value: 'SUCCESS' },
   { label: '失败', value: 'FAILURE' },
 ]
@@ -90,23 +88,46 @@ function goTo(page: number) {
   void fetchLogs()
 }
 
-const providerOptions = computed(() => [
-  { label: '全部 Provider', value: '' },
-  ...providers.value.map((item) => ({ label: item.name, value: item.key })),
-])
+const providerOptions = computed(() =>
+  providers.value.map((item) => ({ label: item.name, value: item.key })),
+)
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">
-          OAuth 日志
-        </h2>
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-          查询第三方登录的授权、绑定与错误日志。
-        </p>
-      </div>
+    <div class="flex items-center justify-end gap-2">
+      <USelect
+        v-model="filters.providerKey"
+        :items="providerOptions"
+        placeholder="全部 Provider"
+      />
+      <USelect
+        v-model="filters.action"
+        :items="actionOptions"
+        placeholder="全部动作"
+      />
+      <USelect
+        v-model="filters.status"
+        :items="statusOptions"
+        placeholder="全部状态"
+      />
+      <UInput
+        v-model="filters.search"
+        placeholder="关键词"
+        icon="i-lucide-search"
+      />
+      <UButton
+        color="primary"
+        variant="soft"
+        @click="
+          () => {
+            filters.page = 1
+            fetchLogs()
+          }
+        "
+      >
+        应用筛选
+      </UButton>
       <UButton
         color="neutral"
         variant="soft"
@@ -118,92 +139,114 @@ const providerOptions = computed(() => [
       </UButton>
     </div>
 
-    <UCard>
-      <template #header>
-        <div class="grid gap-3 md:grid-cols-5">
-          <USelectMenu v-model="filters.providerKey" :options="providerOptions" />
-          <USelectMenu v-model="filters.action" :options="actionOptions" />
-          <USelectMenu v-model="filters.status" :options="statusOptions" />
-          <UInput v-model="filters.search" placeholder="关键词" icon="i-lucide-search" />
-          <UButton color="primary" @click="() => { filters.page = 1; fetchLogs() }"
-            >应用筛选</UButton
-          >
-        </div>
-      </template>
+    <!-- 错误提示 -->
+    <UAlert
+      v-if="errorMessage"
+      color="error"
+      variant="soft"
+      icon="i-lucide-alert-triangle"
+      :title="'加载失败'"
+      :description="errorMessage"
+    />
 
-      <div v-if="loading" class="space-y-3">
-        <USkeleton v-for="n in 6" :key="n" class="h-14 w-full rounded" />
-      </div>
-      <div v-else>
-        <div
-          v-if="errorMessage"
-          class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600"
+    <!-- 表格容器（与 LuckPerms 一致） -->
+    <div
+      class="rounded-3xl overflow-hidden border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+    >
+      <div class="overflow-x-auto">
+        <table
+          class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800"
         >
-          {{ errorMessage }}
-        </div>
-        <div
-          v-else-if="logs.length === 0"
-          class="rounded-lg border border-dashed border-slate-200/70 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
-        >
-          暂无日志记录
-        </div>
-        <div v-else class="space-y-3">
-          <div
-            v-for="item in logs"
-            :key="item.id"
-            class="rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+          <thead
+            class="bg-slate-50/70 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70 dark:text-slate-400"
           >
-            <div class="flex flex-wrap items-center gap-2 text-sm">
-              <UBadge size="xs" variant="soft">{{ item.providerKey }}</UBadge>
-              <UBadge
-                size="xs"
-                :color="item.status === 'SUCCESS' ? 'primary' : 'error'"
-                variant="soft"
-              >
-                {{ item.status }}
-              </UBadge>
-              <span class="uppercase text-xs text-slate-500">
-                {{ item.action }}
-              </span>
-              <span class="text-xs text-slate-400">
+            <tr>
+              <th class="px-3 py-2 text-left">Provider</th>
+              <th class="px-3 py-2 text-left">动作</th>
+              <th class="px-3 py-2 text-left">状态</th>
+              <th class="px-3 py-2 text-left">消息</th>
+              <th class="px-3 py-2 text-left">用户</th>
+              <th class="px-3 py-2 text-left">时间</th>
+            </tr>
+          </thead>
+
+          <tbody
+            v-if="!loading && logs.length > 0"
+            class="divide-y divide-slate-100 dark:divide-slate-800/70"
+          >
+            <tr
+              v-for="item in logs"
+              :key="item.id"
+              class="transition hover:bg-slate-50/60 dark:hover:bg-slate-900/50"
+            >
+              <td class="px-3 py-3 text-xs uppercase">
+                {{ item.providerKey }}
+              </td>
+              <td class="px-3 py-3 text-xs uppercase">{{ item.action }}</td>
+              <td class="px-3 py-3">
+                <UBadge
+                  size="xs"
+                  variant="soft"
+                  :color="item.status === 'SUCCESS' ? 'primary' : 'error'"
+                >
+                  {{ item.status }}
+                </UBadge>
+              </td>
+              <td class="px-3 py-3 text-sm text-slate-700 dark:text-slate-200">
+                {{ item.message || '—' }}
+              </td>
+              <td class="px-3 py-3 text-xs text-slate-500">
+                {{ item.user?.email ?? '未知用户' }}（ID:
+                {{ item.user?.id || 'N/A' }}）
+              </td>
+              <td class="px-3 py-3 text-xs text-slate-500">
                 {{ new Date(item.createdAt).toLocaleString() }}
-              </span>
-            </div>
-            <div class="mt-2 text-sm text-slate-700 dark:text-slate-200">
-              {{ item.message || '—' }}
-            </div>
-            <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              账户：{{ item.user?.email ?? '未知用户' }}（ID:
-              {{ item.user?.id || 'N/A' }}）
-            </div>
-          </div>
-        </div>
-      </div>
+              </td>
+            </tr>
+          </tbody>
 
-      <div
-        v-if="pagination.pageCount > 1"
-        class="mt-6 flex items-center justify-between text-sm text-slate-500"
-      >
-        <span>
-          共 {{ pagination.total }} 条，{{ pagination.page }}/{{ pagination.pageCount }} 页
-        </span>
-        <div class="space-x-2">
-          <UButton
-            size="xs"
-            :disabled="filters.page <= 1"
-            @click="goTo(filters.page - 1)"
-          >
-            上一页
-          </UButton>
-          <UButton
-            size="xs"
-            :disabled="filters.page >= pagination.pageCount"
-            @click="goTo(filters.page + 1)"
-          >
-            下一页
-          </UButton>
-        </div>
+          <tbody v-else-if="loading">
+            <tr>
+              <td colspan="6" class="p-6 text-center text-slate-500">
+                加载中...
+              </td>
+            </tr>
+          </tbody>
+          <tbody v-else>
+            <tr>
+              <td colspan="6" class="p-8 text-center text-slate-500">
+                暂无日志记录
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </UCard>
+    </div>
+
+    <div
+      v-if="pagination.pageCount > 1"
+      class="mt-6 flex items-center justify-between text-sm text-slate-500"
+    >
+      <span>
+        共 {{ pagination.total }} 条，{{ pagination.page }}/{{
+          pagination.pageCount
+        }}
+        页
+      </span>
+      <div class="space-x-2">
+        <UButton
+          size="xs"
+          :disabled="filters.page <= 1"
+          @click="goTo(filters.page - 1)"
+          >上一页</UButton
+        >
+        <UButton
+          size="xs"
+          :disabled="filters.page >= pagination.pageCount"
+          @click="goTo(filters.page + 1)"
+          >下一页</UButton
+        >
+      </div>
+    </div>
   </div>
 </template>

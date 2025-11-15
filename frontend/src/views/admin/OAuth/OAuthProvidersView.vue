@@ -122,15 +122,7 @@ function closeForm() {
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">
-          OAuth Provider 管理
-        </h2>
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-          管理第三方登录配置、密钥及启用状态。
-        </p>
-      </div>
+    <div class="flex items-center justify-end">
       <div class="flex items-center gap-2">
         <UButton
           color="neutral"
@@ -144,102 +136,102 @@ function closeForm() {
         <UButton color="primary" icon="i-lucide-plus" @click="openCreate">
           新增 Provider
         </UButton>
+        <span class="ml-2 text-xs text-slate-500 dark:text-slate-400">
+          当前共 {{ providers.length }} 个 Provider
+        </span>
       </div>
     </div>
 
-    <UCard>
-      <template #header>
-        <div class="flex items-center justify-between">
-          <div>
-            <h3 class="font-semibold text-slate-900 dark:text-white">
-              Provider 列表
-            </h3>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-              当前共 {{ providers.length }} 个 Provider
-            </p>
-          </div>
-        </div>
-      </template>
-
-      <div v-if="loading" class="space-y-3">
-        <USkeleton v-for="n in 4" :key="n" class="h-14 w-full rounded" />
-      </div>
-      <div v-else>
-        <div
-          v-if="providers.length === 0"
-          class="rounded-lg border border-dashed border-slate-200/70 px-4 py-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
+    <div
+      class="rounded-3xl overflow-hidden border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+    >
+      <div class="overflow-x-auto">
+        <table
+          class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800"
         >
-          暂无 Provider，点击右上角按钮创建。
-        </div>
-        <div v-else class="-mx-4 overflow-x-auto px-4">
-          <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-            <thead>
-              <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <th class="px-3 py-2">Key</th>
-                <th class="px-3 py-2">名称</th>
-                <th class="px-3 py-2">类型</th>
-                <th class="px-3 py-2">状态</th>
-                <th class="px-3 py-2">客户端 ID</th>
-                <th class="px-3 py-2 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-              <tr
-                v-for="provider in providers"
-                :key="provider.id"
-                class="text-sm text-slate-700 dark:text-slate-200"
-              >
-                <td class="px-3 py-3 font-mono text-xs text-slate-500">
-                  {{ provider.key }}
-                </td>
-                <td class="px-3 py-3">
-                  <div class="font-semibold text-slate-900 dark:text-white">
-                    {{ provider.name }}
-                  </div>
-                  <div class="text-xs text-slate-500">
-                    {{ provider.description || '—' }}
-                  </div>
-                </td>
-                <td class="px-3 py-3 uppercase text-xs">
-                  {{ provider.type }}
-                </td>
-                <td class="px-3 py-3">
-                  <UBadge
-                    :color="provider.enabled ? 'primary' : 'neutral'"
-                    variant="soft"
+          <thead
+            class="bg-slate-50/70 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70 dark:text-slate-400"
+          >
+            <tr>
+              <th class="px-3 py-2 text-left">Key</th>
+              <th class="px-3 py-2 text-left">名称</th>
+              <th class="px-3 py-2 text-left">类型</th>
+              <th class="px-3 py-2 text-left">状态</th>
+              <th class="px-3 py-2 text-left">客户端 ID</th>
+              <th class="px-3 py-2 text-right">操作</th>
+            </tr>
+          </thead>
+
+          <tbody
+            v-if="!loading && providers.length > 0"
+            class="divide-y divide-slate-100 dark:divide-slate-800/70"
+          >
+            <tr
+              v-for="provider in providers"
+              :key="provider.id"
+              class="transition hover:bg-slate-50/60 dark:hover:bg-slate-900/50"
+            >
+              <td class="px-3 py-3 font-mono text-xs text-slate-500">
+                {{ provider.key }}
+              </td>
+              <td class="px-3 py-3">
+                <div class="font-semibold text-slate-900 dark:text-white">
+                  {{ provider.name }}
+                </div>
+                <div class="text-xs text-slate-500">
+                  {{ provider.description || '—' }}
+                </div>
+              </td>
+              <td class="px-3 py-3 uppercase text-xs">{{ provider.type }}</td>
+              <td class="px-3 py-3">
+                <UBadge
+                  :color="provider.enabled ? 'primary' : 'neutral'"
+                  variant="soft"
+                >
+                  {{ provider.enabled ? '启用' : '禁用' }}
+                </UBadge>
+              </td>
+              <td class="px-3 py-3 text-xs text-slate-500">
+                {{ provider.settings.clientId || '未配置' }}
+              </td>
+              <td class="px-3 py-3 text-right">
+                <div class="flex justify-end gap-2">
+                  <UButton
                     size="xs"
+                    variant="ghost"
+                    icon="i-lucide-pen-square"
+                    @click="openEdit(provider)"
                   >
-                    {{ provider.enabled ? '启用' : '禁用' }}
+                    编辑
+                  </UButton>
+                  <UBadge
+                    v-if="provider.settings.hasClientSecret"
+                    variant="soft"
+                  >
+                    已配置密钥
                   </UBadge>
-                </td>
-                <td class="px-3 py-3 text-xs text-slate-500">
-                  {{ provider.settings.clientId || '未配置' }}
-                </td>
-                <td class="px-3 py-3 text-right">
-                  <div class="flex justify-end gap-2">
-                    <UButton
-                      size="xs"
-                      variant="ghost"
-                      icon="i-lucide-pen-square"
-                      @click="openEdit(provider)"
-                    >
-                      编辑
-                    </UButton>
-                    <UBadge
-                      v-if="provider.settings.hasClientSecret"
-                      size="xs"
-                      variant="soft"
-                    >
-                      已配置密钥
-                    </UBadge>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+
+          <tbody v-else-if="loading">
+            <tr>
+              <td colspan="6" class="p-6 text-center text-slate-500">
+                加载中...
+              </td>
+            </tr>
+          </tbody>
+          <tbody v-else>
+            <tr>
+              <td colspan="6" class="p-8 text-center text-slate-500">
+                暂无 Provider，点击右上角按钮创建。
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </UCard>
+    </div>
 
     <UModal v-model:open="formModalOpen">
       <template #content>
@@ -255,36 +247,61 @@ function closeForm() {
 
           <div class="grid gap-4">
             <div class="space-y-1">
-              <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Key</label>
+              <label
+                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                >Key</label
+              >
               <UInput v-model="form.key" :disabled="Boolean(editingProvider)" />
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">名称</label>
+              <label
+                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                >名称</label
+              >
               <UInput v-model="form.name" />
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">类型</label>
+              <label
+                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                >类型</label
+              >
               <UInput v-model="form.type" />
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">描述</label>
-              <UTextarea v-model="form.description" rows="2" />
+              <label
+                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                >描述</label
+              >
+              <UTextarea v-model="form.description" :rows="2" />
             </div>
-            <div class="flex items-center justify-between rounded-lg border border-slate-200/80 px-3 py-2 dark:border-slate-800">
-              <span class="text-sm text-slate-600 dark:text-slate-300">启用状态</span>
+            <div
+              class="flex items-center justify-between rounded-lg border border-slate-200/80 px-3 py-2 dark:border-slate-800"
+            >
+              <span class="text-sm text-slate-600 dark:text-slate-300"
+                >启用状态</span
+              >
               <USwitch v-model="form.enabled" />
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Tenant ID</label>
+                <label
+                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                  >Tenant ID</label
+                >
                 <UInput v-model="form.tenantId" />
               </div>
               <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Client ID</label>
+                <label
+                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                  >Client ID</label
+                >
                 <UInput v-model="form.clientId" />
               </div>
               <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Client Secret</label>
+                <label
+                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                  >Client Secret</label
+                >
                 <UInput
                   v-model="form.clientSecret"
                   type="password"
@@ -292,20 +309,32 @@ function closeForm() {
                 />
               </div>
               <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Redirect URL</label>
+                <label
+                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                  >Redirect URL</label
+                >
                 <UInput v-model="form.redirectUri" />
               </div>
               <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Authorize URL</label>
+                <label
+                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                  >Authorize URL</label
+                >
                 <UInput v-model="form.authorizeUrl" />
               </div>
               <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Token URL</label>
+                <label
+                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                  >Token URL</label
+                >
                 <UInput v-model="form.tokenUrl" />
               </div>
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Scopes（空格分隔）</label>
+              <label
+                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                >Scopes（空格分隔）</label
+              >
               <UInput v-model="form.scopes" />
             </div>
           </div>

@@ -21,8 +21,8 @@ const loading = ref(false)
 const sections: Array<{ id: SectionKey; label: string }> = [
   { id: 'basic', label: '基础资料' },
   { id: 'minecraft', label: '服务器账户' },
-  { id: 'security', label: '账户安全' },
-  { id: 'sessions', label: '会话管理' },
+  { id: 'security', label: '隐私与安全' },
+  { id: 'sessions', label: '登录设备管理' },
 ]
 
 const activeId = computed<SectionKey>(() => {

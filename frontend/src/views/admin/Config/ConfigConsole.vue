@@ -517,7 +517,7 @@ onMounted(() => {
 
     <section class="space-y-3">
       <div
-        class="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+        class="rounded-3xl overflow-hidden border border-slate-200/70 bg-white/80 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
       >
         <div class="overflow-x-auto">
           <table
