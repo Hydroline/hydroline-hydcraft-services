@@ -6,6 +6,7 @@ import { ApiError } from '@/utils/api'
 
 const oauthStore = useOAuthStore()
 const { providers } = storeToRefs(oauthStore)
+const toast = useToast()
 
 const loading = computed(() => oauthStore.loadingProviders)
 const formModalOpen = ref(false)
@@ -104,8 +105,10 @@ async function submitForm() {
     }
     formModalOpen.value = false
   } catch (error) {
-    formError.value =
+    const message =
       error instanceof ApiError ? error.message : '保存失败，请稍后再试'
+    formError.value = message
+    toast.add({ title: '保存失败', description: message, color: 'error' })
   } finally {
     formSaving.value = false
   }
@@ -236,110 +239,98 @@ function closeForm() {
     <UModal v-model:open="formModalOpen">
       <template #content>
         <div class="space-y-4 p-6">
-          <div>
+          <div class="flex justify-between items-center gap-4">
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
               {{ editingProvider ? '编辑 Provider' : '创建 Provider' }}
             </h3>
-            <p class="text-sm text-slate-500">
-              配置 OAuth Provider 基本信息与凭据。
-            </p>
-          </div>
 
-          <div class="grid gap-4">
-            <div class="space-y-1">
-              <label
-                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                >Key</label
-              >
-              <UInput v-model="form.key" :disabled="Boolean(editingProvider)" />
-            </div>
-            <div class="space-y-1">
-              <label
-                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                >名称</label
-              >
-              <UInput v-model="form.name" />
-            </div>
-            <div class="space-y-1">
-              <label
-                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                >类型</label
-              >
-              <UInput v-model="form.type" />
-            </div>
-            <div class="space-y-1">
-              <label
-                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                >描述</label
-              >
-              <UTextarea v-model="form.description" :rows="2" />
-            </div>
-            <div
-              class="flex items-center justify-between rounded-lg border border-slate-200/80 px-3 py-2 dark:border-slate-800"
-            >
+            <div class="flex items-center justify-between gap-2">
               <span class="text-sm text-slate-600 dark:text-slate-300"
                 >启用状态</span
               >
-              <USwitch v-model="form.enabled" />
-            </div>
-            <div class="grid gap-4 md:grid-cols-2">
-              <div class="space-y-1">
-                <label
-                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                  >Tenant ID</label
-                >
-                <UInput v-model="form.tenantId" />
-              </div>
-              <div class="space-y-1">
-                <label
-                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                  >Client ID</label
-                >
-                <UInput v-model="form.clientId" />
-              </div>
-              <div class="space-y-1">
-                <label
-                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                  >Client Secret</label
-                >
-                <UInput
-                  v-model="form.clientSecret"
-                  type="password"
-                  placeholder="留空则保持不变"
-                />
-              </div>
-              <div class="space-y-1">
-                <label
-                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                  >Redirect URL</label
-                >
-                <UInput v-model="form.redirectUri" />
-              </div>
-              <div class="space-y-1">
-                <label
-                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                  >Authorize URL</label
-                >
-                <UInput v-model="form.authorizeUrl" />
-              </div>
-              <div class="space-y-1">
-                <label
-                  class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                  >Token URL</label
-                >
-                <UInput v-model="form.tokenUrl" />
-              </div>
-            </div>
-            <div class="space-y-1">
-              <label
-                class="text-xs font-semibold text-slate-600 dark:text-slate-300"
-                >Scopes（空格分隔）</label
-              >
-              <UInput v-model="form.scopes" />
+              <USwitch size="sm" v-model="form.enabled" />
             </div>
           </div>
 
-          <p v-if="formError" class="text-sm text-rose-500">{{ formError }}</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">Key</div>
+              <UInput
+                class="w-full"
+                v-model="form.key"
+                :disabled="Boolean(editingProvider)"
+              />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">名称</div>
+              <UInput class="w-full" v-model="form.name" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">类型</div>
+              <UInput class="w-full" v-model="form.type" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                Scopes（空格分隔）
+              </div>
+              <UInput class="w-full" v-model="form.scopes" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                Tenant ID
+              </div>
+              <UInput class="w-full" v-model="form.tenantId" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                Client ID
+              </div>
+              <UInput class="w-full" v-model="form.clientId" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                Client Secret
+              </div>
+              <UInput
+                class="w-full"
+                v-model="form.clientSecret"
+                type="password"
+                placeholder="留空则保持不变"
+              />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                Redirect URL
+              </div>
+              <UInput class="w-full" v-model="form.redirectUri" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                Authorize URL
+              </div>
+              <UInput class="w-full" v-model="form.authorizeUrl" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs text-slate-500 dark:text-slate-500">
+                Token URL
+              </div>
+              <UInput class="w-full" v-model="form.tokenUrl" />
+            </div>
+
+            <div class="space-y-1 md:col-span-2">
+              <div class="text-xs text-slate-500 dark:text-slate-500">描述</div>
+              <UTextarea class="w-full" v-model="form.description" :rows="3" />
+            </div>
+          </div>
 
           <div class="flex justify-end gap-2">
             <UButton variant="ghost" @click="closeForm">取消</UButton>
