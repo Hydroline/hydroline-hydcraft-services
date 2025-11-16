@@ -113,7 +113,7 @@ const extraAccounts = computed(() =>
               <p class="text-sm font-semibold text-slate-900 dark:text-white">
                 {{ provider.name }}
               </p>
-              <UBadge size="sm" variant="soft">{{
+              <UBadge size="xs" variant="soft">{{
                 linkedAccount(provider.key) ? '已绑定' : '未绑定'
               }}</UBadge>
             </div>
