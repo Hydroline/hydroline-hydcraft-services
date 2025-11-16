@@ -41,10 +41,14 @@
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-synthesis: none;
+  color-scheme: light;
 }
 
 html {
   scroll-behavior: smooth;
+  background: radial-gradient(ellipse at left bottom,
+      var(--color-surface-0) 0% 50%,
+      var(--color-surface-1) 120% 175%);
 }
 
 body {
@@ -61,6 +65,26 @@ body {
   scrollbar-color: var(--color-surface-3) transparent;
   scrollbar-width: thin;
   box-sizing: border-box;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-surface-3);
+  border-radius: 8px;
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 ::selection {
@@ -81,4 +105,8 @@ body {
 .dark ::-moz-selection {
   background: color-mix(in srgb, var(--color-primary--hover) 70%, transparent);
   color: var(--ui-primary-foreground);
+}
+
+.dark {
+  color-scheme: dark;
 }
