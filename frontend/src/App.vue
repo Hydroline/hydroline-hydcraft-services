@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { zh_cn } from '@nuxt/ui/locale'
 
 const appTooltipConfig = {
   delayDuration: 150,
@@ -22,7 +23,7 @@ const showSessionLoader = computed(
 </script>
 
 <template>
-  <UApp :tooltip="appTooltipConfig" :toaster="appToasterConfig">
+  <UApp :locale="zh_cn" :tooltip="appTooltipConfig" :toaster="appToasterConfig">
     <UModals />
     <UNotifications />
     <RouterView />
