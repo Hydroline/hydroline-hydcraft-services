@@ -19,6 +19,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { DEFAULT_PERMISSIONS } from '../auth/services/roles.service';
+import { McsmCommandDto } from './dto/mcsm-command.dto';
 
 @ApiTags('Minecraft 服务器')
 @ApiBearerAuth()
@@ -88,5 +89,51 @@ export class MinecraftServerController {
     @Body() dto: { intervalMinutes?: number; retentionDays?: number },
   ) {
     return this.service.updatePingSettings(dto);
+  }
+
+  @Get(':id/mcsm/status')
+  @ApiOperation({ summary: '获取 MCSM 实例状态' })
+  getMcsmStatus(@Param('id') id: string) {
+    return this.service.getMcsmStatus(id);
+  }
+
+  @Get(':id/mcsm/output')
+  @ApiOperation({ summary: '获取 MCSM 实例输出日志' })
+  getMcsmOutput(@Param('id') id: string, @Query('size') size?: string) {
+    const n = size ? Number(size) : undefined;
+    return this.service.getMcsmOutput(
+      id,
+      n !== undefined && Number.isFinite(n) ? n : undefined,
+    );
+  }
+
+  @Post(':id/mcsm/command')
+  @ApiOperation({ summary: '向 MCSM 实例发送命令' })
+  sendMcsmCommand(@Param('id') id: string, @Body() dto: McsmCommandDto) {
+    return this.service.sendMcsmCommand(id, dto.command);
+  }
+
+  @Post(':id/mcsm/start')
+  @ApiOperation({ summary: '启动 MCSM 实例' })
+  startMcsm(@Param('id') id: string) {
+    return this.service.startMcsmInstance(id);
+  }
+
+  @Post(':id/mcsm/stop')
+  @ApiOperation({ summary: '停止 MCSM 实例' })
+  stopMcsm(@Param('id') id: string) {
+    return this.service.stopMcsmInstance(id);
+  }
+
+  @Post(':id/mcsm/restart')
+  @ApiOperation({ summary: '重启 MCSM 实例' })
+  restartMcsm(@Param('id') id: string) {
+    return this.service.restartMcsmInstance(id);
+  }
+
+  @Post(':id/mcsm/kill')
+  @ApiOperation({ summary: '强制终止 MCSM 实例进程' })
+  killMcsm(@Param('id') id: string) {
+    return this.service.killMcsmInstance(id);
   }
 }

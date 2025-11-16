@@ -60,4 +60,24 @@ export class UpdateMinecraftServerDto {
 
   @IsOptional()
   metadata?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  mcsmPanelUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  mcsmDaemonId?: string;
+
+  @IsOptional()
+  @IsString()
+  mcsmInstanceUuid?: string;
+
+  @IsOptional()
+  @IsString()
+  mcsmApiKey?: string;
+
+  @IsOptional()
+  @IsInt()
+  mcsmRequestTimeoutMs?: number;
 }

@@ -6,6 +6,8 @@ import { UpdateMinecraftServerDto } from './dto/update-minecraft-server.dto';
 import { MinecraftService } from './minecraft.service';
 import { MinecraftPingScheduler } from './ping.scheduler';
 import { PingMinecraftRequestDto } from './dto/ping-minecraft.dto';
+import { McsmClient } from '../lib/mcsmanager/mcsmanager.client';
+import { McsmInstanceDetail } from '../lib/mcsmanager/types';
 
 @Injectable()
 export class MinecraftServerService {
@@ -68,10 +70,12 @@ export class MinecraftServerService {
         }
       : undefined;
 
-    return this.prisma.minecraftServer.findMany({
-      where,
-      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
-    });
+    return this.prisma.minecraftServer
+      .findMany({
+        where,
+        orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+      })
+      .then((list) => list.map((item) => this.stripSecret(item)));
   }
 
   async getServerById(id: string) {
@@ -81,12 +85,13 @@ export class MinecraftServerService {
     if (!server) {
       throw new NotFoundException('Server not found');
     }
-    return server;
+    return this.stripSecret(server);
   }
 
   async createServer(dto: CreateMinecraftServerDto, actorId?: string) {
     const payload = this.toCreatePayload(dto, actorId);
-    return this.prisma.minecraftServer.create({ data: payload });
+    const created = await this.prisma.minecraftServer.create({ data: payload });
+    return this.stripSecret(created);
   }
 
   async updateServer(
@@ -96,10 +101,11 @@ export class MinecraftServerService {
   ) {
     await this.getServerById(id);
     const payload = this.toUpdatePayload(dto, actorId);
-    return this.prisma.minecraftServer.update({
+    const updated = await this.prisma.minecraftServer.update({
       where: { id },
       data: payload,
     });
+    return this.stripSecret(updated);
   }
 
   async deleteServer(id: string) {
@@ -196,6 +202,76 @@ export class MinecraftServerService {
     return (await this.pingScheduler.updateSettings(dto)) as unknown;
   }
 
+  async getMcsmStatus(id: string): Promise<{
+    server: unknown;
+    detail: McsmInstanceDetail;
+  }> {
+    const { server, client } = await this.prepareMcsmClient(id);
+    const detail = await client.getInstanceDetail();
+    // 当实例接口不返回 processInfo 时，尝试用 overview 的节点级数据补充
+    if (!detail.processInfo || Object.keys(detail.processInfo).length === 0) {
+      const overview = await client.getOverview();
+      const remote = overview.remote?.find((r) => {
+        return (
+          r.id === server.mcsmDaemonId ||
+          r.uuid === server.mcsmDaemonId ||
+          r.uuid === server.mcsmInstanceUuid
+        );
+      });
+      if (remote) {
+        const chartPoint = remote.cpuMemChart?.[remote.cpuMemChart.length - 1];
+        const cpuPercent =
+          chartPoint?.cpu ?? (remote.process?.cpu ? remote.process.cpu / 1_000_000 : undefined);
+        const memPercent =
+          chartPoint?.mem ?? (remote.process?.memory ? remote.process.memory / 1024 / 1024 : undefined);
+        detail.processInfo = {
+          cpu: cpuPercent,
+          memory: memPercent,
+        };
+      }
+    }
+    return { server: this.stripSecret(server), detail };
+  }
+
+  async getMcsmOutput(id: string, size?: number) {
+    const { server, client } = await this.prepareMcsmClient(id);
+    const output = await client.getOutputLog(size);
+    return { server: this.stripSecret(server), output: output.output };
+  }
+
+  async sendMcsmCommand(id: string, command: string) {
+    if (!command || command.trim().length === 0) {
+      throw new HttpException('Command cannot be empty', 400);
+    }
+    const { server, client } = await this.prepareMcsmClient(id);
+    const result = await client.sendCommand(command);
+    return { server: this.stripSecret(server), result };
+  }
+
+  async startMcsmInstance(id: string) {
+    const { server, client } = await this.prepareMcsmClient(id);
+    const result = await client.startInstance();
+    return { server: this.stripSecret(server), result };
+  }
+
+  async stopMcsmInstance(id: string) {
+    const { server, client } = await this.prepareMcsmClient(id);
+    const result = await client.stopInstance();
+    return { server: this.stripSecret(server), result };
+  }
+
+  async restartMcsmInstance(id: string) {
+    const { server, client } = await this.prepareMcsmClient(id);
+    const result = await client.restartInstance();
+    return { server: this.stripSecret(server), result };
+  }
+
+  async killMcsmInstance(id: string) {
+    const { server, client } = await this.prepareMcsmClient(id);
+    const result = await client.killInstance();
+    return { server: this.stripSecret(server), result };
+  }
+
   private toCreatePayload(
     dto: CreateMinecraftServerDto,
     actorId?: string,
@@ -214,6 +290,11 @@ export class MinecraftServerService {
         dto.metadata !== undefined
           ? (dto.metadata as Prisma.InputJsonValue)
           : undefined,
+      mcsmPanelUrl: dto.mcsmPanelUrl,
+      mcsmDaemonId: dto.mcsmDaemonId,
+      mcsmInstanceUuid: dto.mcsmInstanceUuid,
+      mcsmApiKey: dto.mcsmApiKey,
+      mcsmRequestTimeoutMs: dto.mcsmRequestTimeoutMs,
       createdBy: actorId ? { connect: { id: actorId } } : undefined,
       updatedBy: actorId ? { connect: { id: actorId } } : undefined,
     };
@@ -256,10 +337,67 @@ export class MinecraftServerService {
     if (dto.metadata !== undefined) {
       payload.metadata = dto.metadata as Prisma.InputJsonValue;
     }
+    if (dto.mcsmPanelUrl !== undefined) {
+      payload.mcsmPanelUrl = dto.mcsmPanelUrl;
+    }
+    if (dto.mcsmDaemonId !== undefined) {
+      payload.mcsmDaemonId = dto.mcsmDaemonId;
+    }
+    if (dto.mcsmInstanceUuid !== undefined) {
+      payload.mcsmInstanceUuid = dto.mcsmInstanceUuid;
+    }
+    if (dto.mcsmApiKey !== undefined) {
+      payload.mcsmApiKey = dto.mcsmApiKey;
+    }
+    if (dto.mcsmRequestTimeoutMs !== undefined) {
+      payload.mcsmRequestTimeoutMs = dto.mcsmRequestTimeoutMs;
+    }
     return payload;
   }
 
   private normalizeCode(value: string) {
     return value.trim();
+  }
+
+  private stripSecret<T extends { mcsmApiKey?: string | null }>(server: T) {
+    if (!server) return server;
+    const { mcsmApiKey: apiKey, ...rest } = server as Record<string, unknown>;
+    return {
+      ...rest,
+      mcsmConfigured: Boolean(apiKey),
+    } as Omit<T, 'mcsmApiKey'> & { mcsmConfigured: boolean };
+  }
+
+  private async getServerWithSecret(id: string) {
+    const server = await this.prisma.minecraftServer.findUnique({
+      where: { id },
+    });
+    if (!server) {
+      throw new NotFoundException('Server not found');
+    }
+    return server;
+  }
+
+  private async prepareMcsmClient(id: string) {
+    const server = await this.getServerWithSecret(id);
+    if (
+      !server.mcsmPanelUrl ||
+      !server.mcsmDaemonId ||
+      !server.mcsmInstanceUuid ||
+      !server.mcsmApiKey
+    ) {
+      throw new HttpException(
+        'MCSM 配置不完整：请设置面板地址、Daemon ID、Instance UUID 与 API Key',
+        400,
+      );
+    }
+    const client = new McsmClient({
+      baseUrl: server.mcsmPanelUrl,
+      apiKey: server.mcsmApiKey,
+      uuid: server.mcsmInstanceUuid,
+      daemonId: server.mcsmDaemonId,
+      timeoutMs: server.mcsmRequestTimeoutMs ?? undefined,
+    });
+    return { server, client };
   }
 }

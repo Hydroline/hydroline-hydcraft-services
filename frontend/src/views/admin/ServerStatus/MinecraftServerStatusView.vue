@@ -10,6 +10,7 @@ import type {
   MinecraftServerEdition,
   MinecraftPingHistoryItem,
   MinecraftPingSettings,
+  McsmInstanceDetail,
 } from '@/types/minecraft'
 import VChart from 'vue-echarts'
 import dayjs from 'dayjs'
@@ -31,6 +32,18 @@ const motdHtml = ref<string | null>(null)
 const detailOpen = ref(false)
 // 每个服务器卡片内的单独加载态
 const pingLoadingById = reactive<Record<string, boolean>>({})
+const mcsmDetail = ref<McsmInstanceDetail | null>(null)
+const mcsmOutput = ref('')
+const mcsmStatusLoading = ref(false)
+const mcsmOutputLoading = ref(false)
+const mcsmCommand = ref('')
+const mcsmCommandLoading = ref(false)
+const mcsmControlsLoading = reactive({
+  start: false,
+  stop: false,
+  restart: false,
+  kill: false,
+})
 
 // 删除确认对话框
 const deleteConfirmDialogOpen = ref(false)
@@ -108,6 +121,11 @@ const form = reactive({
   description: '',
   isActive: true,
   displayOrder: 0,
+  mcsmPanelUrl: '',
+  mcsmDaemonId: '',
+  mcsmInstanceUuid: '',
+  mcsmApiKey: '',
+  mcsmRequestTimeoutMs: undefined as number | undefined,
 })
 
 const tableRows = computed(() =>
@@ -137,6 +155,17 @@ const dialogTitle = computed(() =>
     ? `编辑：${editingServer.value.displayName}`
     : '新建服务器',
 )
+
+const mcsmConfigReady = computed(() => {
+  const s = editingServer.value
+  if (!s) return false
+  return Boolean(
+    s.mcsmPanelUrl &&
+      s.mcsmDaemonId &&
+      s.mcsmInstanceUuid &&
+      (s.mcsmConfigured || form.mcsmApiKey),
+  )
+})
 
 const editionOptions = [
   { label: 'Java 版', value: 'JAVA' },
@@ -250,6 +279,11 @@ function populateForm(server: MinecraftServer) {
   form.description = server.description ?? ''
   form.isActive = server.isActive
   form.displayOrder = server.displayOrder ?? 0
+  form.mcsmPanelUrl = server.mcsmPanelUrl ?? ''
+  form.mcsmDaemonId = server.mcsmDaemonId ?? ''
+  form.mcsmInstanceUuid = server.mcsmInstanceUuid ?? ''
+  form.mcsmApiKey = ''
+  form.mcsmRequestTimeoutMs = server.mcsmRequestTimeoutMs ?? undefined
 }
 
 function resetForm() {
@@ -262,6 +296,11 @@ function resetForm() {
   form.description = ''
   form.isActive = true
   form.displayOrder = 0
+  form.mcsmPanelUrl = ''
+  form.mcsmDaemonId = ''
+  form.mcsmInstanceUuid = ''
+  form.mcsmApiKey = ''
+  form.mcsmRequestTimeoutMs = undefined
 }
 
 function buildPayload() {
@@ -278,6 +317,11 @@ function buildPayload() {
     description: form.description.trim() || undefined,
     isActive: form.isActive,
     displayOrder: form.displayOrder,
+    mcsmPanelUrl: form.mcsmPanelUrl.trim() || undefined,
+    mcsmDaemonId: form.mcsmDaemonId.trim() || undefined,
+    mcsmInstanceUuid: form.mcsmInstanceUuid.trim() || undefined,
+    mcsmApiKey: form.mcsmApiKey.trim() || undefined,
+    mcsmRequestTimeoutMs: form.mcsmRequestTimeoutMs,
   }
 }
 
@@ -429,6 +473,23 @@ function editionLabel(edition: MinecraftServerEdition) {
   return edition === 'BEDROCK' ? '基岩版' : 'Java 版'
 }
 
+function mcsmStatusLabel(status?: number | null) {
+  if (status === -1) return '忙碌'
+  if (status === 0) return '停止'
+  if (status === 1) return '停止中'
+  if (status === 2) return '启动中'
+  if (status === 3) return '运行中'
+  return '未知'
+}
+
+function mcsmStatusColor(status?: number | null) {
+  if (status === 3) return 'success'
+  if (status === 2) return 'primary'
+  if (status === 1) return 'warning'
+  if (status === 0) return 'neutral'
+  return 'info'
+}
+
 async function handlePing(server: MinecraftServer) {
   await triggerPing(server.id)
 }
@@ -453,9 +514,21 @@ async function handleConfirmDelete() {
 function openDetail(server: MinecraftServer) {
   editingServer.value = server
   detailOpen.value = true
+  mcsmDetail.value = null
+  mcsmOutput.value = ''
+  mcsmCommand.value = ''
   // 即时刷新一次
   void triggerPing(server.id)
   void loadHistory(server.id)
+  if (
+    server.mcsmPanelUrl &&
+    server.mcsmDaemonId &&
+    server.mcsmInstanceUuid &&
+    (server.mcsmConfigured || form.mcsmApiKey)
+  ) {
+    void loadMcsmStatus(server.id)
+    void loadMcsmOutput(server.id, 1024)
+  }
 }
 
 function openAdhoc() {
@@ -486,6 +559,93 @@ async function submitAdhoc() {
     })
   } finally {
     adhocLoading.value = false
+  }
+}
+
+async function loadMcsmStatus(serverId: string) {
+  mcsmStatusLoading.value = true
+  try {
+    const { detail } = await serverStore.fetchMcsmStatus(serverId)
+    mcsmDetail.value = detail
+  } catch (e) {
+    mcsmDetail.value = null
+    toast.add({
+      title: '获取 MCSM 状态失败',
+      description: (e as Error).message,
+      color: 'error',
+    })
+  } finally {
+    mcsmStatusLoading.value = false
+  }
+}
+
+async function loadMcsmOutput(serverId: string, size?: number) {
+  mcsmOutputLoading.value = true
+  try {
+    const { output } = await serverStore.fetchMcsmOutput(serverId, size)
+    mcsmOutput.value = output
+  } catch (e) {
+    mcsmOutput.value = ''
+    toast.add({
+      title: '获取输出失败',
+      description: (e as Error).message,
+      color: 'error',
+    })
+  } finally {
+    mcsmOutputLoading.value = false
+  }
+}
+
+async function runMcsmCommand(serverId: string) {
+  if (!mcsmCommand.value.trim()) {
+    toast.add({ title: '请输入命令', color: 'warning' })
+    return
+  }
+  mcsmCommandLoading.value = true
+  try {
+    await serverStore.sendMcsmCommand(serverId, mcsmCommand.value.trim())
+    toast.add({ title: '命令已发送', color: 'success' })
+    mcsmCommand.value = ''
+    await loadMcsmOutput(serverId)
+  } catch (e) {
+    toast.add({
+      title: '发送命令失败',
+      description: (e as Error).message,
+      color: 'error',
+    })
+  } finally {
+    mcsmCommandLoading.value = false
+  }
+}
+
+async function controlMcsm(
+  serverId: string,
+  action: 'start' | 'stop' | 'restart' | 'kill',
+) {
+  mcsmControlsLoading[action] = true
+  try {
+    if (action === 'start') {
+      await serverStore.startMcsm(serverId)
+    } else if (action === 'stop') {
+      await serverStore.stopMcsm(serverId)
+    } else if (action === 'restart') {
+      await serverStore.restartMcsm(serverId)
+    } else {
+      await serverStore.killMcsm(serverId)
+    }
+    toast.add({
+      title: `实例${action === 'restart' ? '已重启' : '已执行'}`,
+      color: 'success',
+    })
+    await loadMcsmStatus(serverId)
+  } catch (e) {
+    toast.add({
+      title: '操作失败',
+      description: (e as Error).message,
+      color: 'error',
+    })
+  } finally {
+    mcsmControlsLoading[action] = false
   }
 }
 </script>
@@ -823,162 +983,480 @@ async function submitAdhoc() {
               暂无 MOTD 数据
             </p>
           </div>
+
+          <div
+            class="mt-4 rounded-2xl border border-slate-200/70 bg-white/70 p-4 dark:border-slate-800/60 dark:bg-slate-900/50"
+          >
+            <div class="mb-3 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span
+                  class="text-sm font-medium text-slate-700 dark:text-slate-200"
+                  >MCSM 实例</span
+                >
+                <UBadge
+                  size="xs"
+                  variant="soft"
+                  :color="mcsmStatusColor(mcsmDetail?.status)"
+                  >{{ mcsmStatusLabel(mcsmDetail?.status) }}</UBadge
+                >
+              </div>
+              <UButton
+                size="xs"
+                variant="ghost"
+                icon="i-lucide-refresh-cw"
+                :loading="mcsmStatusLoading"
+                :disabled="!mcsmConfigReady"
+                @click="
+                  editingServer?.id ? loadMcsmStatus(editingServer.id) : null
+                "
+              >
+                刷新状态
+              </UButton>
+            </div>
+            <div v-if="!mcsmConfigReady" class="text-sm text-slate-500">
+              未配置 MCSM 参数（或未保存 API Key），请在编辑表单中补充。
+            </div>
+            <div v-else class="grid gap-3 md:grid-cols-4">
+              <div class="md:col-span-4">
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <UButton
+                    size="xs"
+                    :loading="mcsmControlsLoading.start"
+                    :disabled="mcsmStatusLoading"
+                    icon="i-lucide-play"
+                    @click="
+                      editingServer?.id
+                        ? controlMcsm(editingServer.id, 'start')
+                        : null
+                    "
+                    >启动</UButton
+                  >
+                  <UButton
+                    size="xs"
+                    :loading="mcsmControlsLoading.stop"
+                    :disabled="mcsmStatusLoading"
+                    color="warning"
+                    icon="i-lucide-square"
+                    @click="
+                      editingServer?.id
+                        ? controlMcsm(editingServer.id, 'stop')
+                        : null
+                    "
+                    >停止</UButton
+                  >
+                  <UButton
+                    size="xs"
+                    :loading="mcsmControlsLoading.restart"
+                    :disabled="mcsmStatusLoading"
+                    color="primary"
+                    icon="i-lucide-rotate-ccw"
+                    @click="
+                      editingServer?.id
+                        ? controlMcsm(editingServer.id, 'restart')
+                        : null
+                    "
+                    >重启</UButton
+                  >
+                  <UButton
+                    size="xs"
+                    :loading="mcsmControlsLoading.kill"
+                    :disabled="mcsmStatusLoading"
+                    color="error"
+                    icon="i-lucide-zap"
+                    @click="
+                      editingServer?.id
+                        ? controlMcsm(editingServer.id, 'kill')
+                        : null
+                    "
+                    >强制终止</UButton
+                  >
+                </div>
+              </div>
+
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">CPU</p>
+                <p
+                  class="text-base font-semibold text-slate-900 dark:text-white"
+                >
+                  {{ mcsmDetail?.processInfo?.cpu ?? '—' }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">内存</p>
+                <p
+                  class="text-base font-semibold text-slate-900 dark:text-white"
+                >
+                  {{ mcsmDetail?.processInfo?.memory ?? '—' }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  在线人数
+                </p>
+                <p
+                  class="text-base font-semibold text-slate-900 dark:text-white"
+                >
+                  {{ mcsmDetail?.info?.currentPlayers ?? '—' }} /
+                  {{ mcsmDetail?.info?.maxPlayers ?? '—' }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">版本</p>
+                <p
+                  class="text-base font-semibold text-slate-900 dark:text-white"
+                >
+                  {{ mcsmDetail?.info?.version ?? '—' }}
+                </p>
+              </div>
+            </div>
+            <div v-if="mcsmConfigReady" class="mt-4 space-y-3">
+              <div class="flex items-center gap-2">
+                <UInput
+                  v-model="mcsmCommand"
+                  class="flex-1"
+                  placeholder="输入要发送到实例的命令"
+                  :disabled="mcsmCommandLoading"
+                />
+                <UButton
+                  color="primary"
+                  :loading="mcsmCommandLoading"
+                  :disabled="!editingServer?.id"
+                  @click="
+                    editingServer?.id ? runMcsmCommand(editingServer.id) : null
+                  "
+                  >发送命令</UButton
+                >
+              </div>
+              <div>
+                <div class="mb-2 flex items-center justify-between">
+                  <span class="text-xs text-slate-500 dark:text-slate-400"
+                    >输出日志</span
+                  >
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    :loading="mcsmOutputLoading"
+                    :disabled="!editingServer?.id"
+                    @click="
+                      editingServer?.id
+                        ? loadMcsmOutput(editingServer.id, 1024)
+                        : null
+                    "
+                    >刷新输出</UButton
+                  >
+                </div>
+                <pre
+                  class="max-h-64 overflow-auto rounded-xl bg-slate-900/80 p-3 text-xs text-slate-100"
+                  >{{ mcsmOutput || '暂无输出' }}</pre
+                >
+              </div>
+            </div>
+          </div>
         </UCard>
       </template>
     </UModal>
 
     <UModal :open="dialogOpen" @update:open="dialogOpen = $event">
       <template #content>
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
-                {{ dialogTitle }}
-              </h3>
-              <UTooltip text="保存后可立即 Ping">
-                <UIcon
-                  name="i-lucide-info"
-                  class="h-4 w-4 text-slate-400 dark:text-slate-500"
-                />
-              </UTooltip>
-            </div>
-          </template>
+        <div class="max-h-[80vh] overflow-y-auto">
+          <UCard>
+            <template #header>
+              <div class="flex items-center justify-between">
+                <h3
+                  class="text-lg font-semibold text-slate-900 dark:text-white"
+                >
+                  {{ dialogTitle }}
+                </h3>
+                <UTooltip text="保存后可立即 Ping">
+                  <UIcon
+                    name="i-lucide-info"
+                    class="h-4 w-4 text-slate-400 dark:text-slate-500"
+                  />
+                </UTooltip>
+              </div>
+            </template>
 
-          <!-- 统一的两列布局，左侧 Label 右侧控件；保证所有标签对齐 -->
-          <div class="grid gap-4 md:grid-cols-2">
-            <!-- 显示名称 -->
-            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-              <label
-                for="displayName"
-                class="text-sm text-slate-600 dark:text-slate-300"
-                >显示名称<span class="text-red-500">*</span></label
-              >
-              <UInput
-                id="displayName"
-                v-model="form.displayName"
-                placeholder="示例：七周目"
-              />
-            </div>
-            <!-- 中文内部代号 -->
-            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-              <label
-                for="internalCodeCn"
-                class="text-sm text-slate-600 dark:text-slate-300"
-                >中文内部代号<span class="text-red-500">*</span></label
-              >
-              <UInput
-                id="internalCodeCn"
-                v-model="form.internalCodeCn"
-                placeholder="示例：氮"
-              />
-            </div>
-            <!-- 英文内部代号 -->
-            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-              <label
-                for="internalCodeEn"
-                class="text-sm text-slate-600 dark:text-slate-300"
-                >英文内部代号<span class="text-red-500">*</span></label
-              >
-              <UInput
-                id="internalCodeEn"
-                v-model="form.internalCodeEn"
-                placeholder="示例：Nitrogen"
-              />
-            </div>
-            <!-- 版本 -->
-            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-              <label
-                for="edition"
-                class="text-sm text-slate-600 dark:text-slate-300"
-                >版本</label
-              >
-              <USelect
-                id="edition"
-                v-model="form.edition"
-                :items="editionOptions"
-                value-key="value"
-                label-key="label"
-              />
-            </div>
-            <!-- Host -->
-            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-              <label
-                for="host"
-                class="text-sm text-slate-600 dark:text-slate-300"
-                >服务器 Host<span class="text-red-500">*</span></label
-              >
-              <UInput
-                id="host"
-                v-model="form.host"
-                placeholder="mc.hydroline.example"
-              />
-            </div>
-            <!-- Port -->
-            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-              <label
-                for="port"
-                class="text-sm text-slate-600 dark:text-slate-300"
-                >端口</label
-              >
-              <UInput
-                id="port"
-                v-model.number="form.port"
-                type="number"
-                min="1"
-                max="65535"
-                placeholder="留空=自动（默认或 SRV）"
-              />
-            </div>
-            <!-- 描述 -->
-            <div
-              class="grid grid-cols-[7rem,1fr] items-start gap-2 md:col-span-2"
-            >
-              <label
-                for="description"
-                class="mt-2 text-sm text-slate-600 dark:text-slate-300"
-                >描述</label
-              >
-              <UTextarea
-                id="description"
-                v-model="form.description"
-                placeholder="用于后台备注信息"
-              />
-            </div>
-            <!-- 显示顺序 -->
-            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-              <label
-                for="displayOrder"
-                class="text-sm text-slate-600 dark:text-slate-300"
-                >显示顺序</label
-              >
-              <UInput
-                id="displayOrder"
-                v-model.number="form.displayOrder"
-                type="number"
-              />
-            </div>
-            <!-- 状态 -->
-            <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
-              <label
-                for="isActive"
-                class="text-sm text-slate-600 dark:text-slate-300"
-                >状态</label
-              >
+            <!-- 统一的两列布局，左侧 Label 右侧控件；保证所有标签对齐 -->
+            <div class="grid gap-4 md:grid-cols-2">
+              <!-- 显示名称 -->
+              <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                <label
+                  for="displayName"
+                  class="text-sm text-slate-600 dark:text-slate-300"
+                  >显示名称<span class="text-red-500">*</span></label
+                >
+                <UInput
+                  id="displayName"
+                  v-model="form.displayName"
+                  placeholder="示例：七周目"
+                />
+              </div>
+              <!-- 中文内部代号 -->
+              <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                <label
+                  for="internalCodeCn"
+                  class="text-sm text-slate-600 dark:text-slate-300"
+                  >中文内部代号<span class="text-red-500">*</span></label
+                >
+                <UInput
+                  id="internalCodeCn"
+                  v-model="form.internalCodeCn"
+                  placeholder="示例：氮"
+                />
+              </div>
+              <!-- 英文内部代号 -->
+              <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                <label
+                  for="internalCodeEn"
+                  class="text-sm text-slate-600 dark:text-slate-300"
+                  >英文内部代号<span class="text-red-500">*</span></label
+                >
+                <UInput
+                  id="internalCodeEn"
+                  v-model="form.internalCodeEn"
+                  placeholder="示例：Nitrogen"
+                />
+              </div>
+              <!-- 版本 -->
+              <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                <label
+                  for="edition"
+                  class="text-sm text-slate-600 dark:text-slate-300"
+                  >版本</label
+                >
+                <USelect
+                  id="edition"
+                  v-model="form.edition"
+                  :items="editionOptions"
+                  value-key="value"
+                  label-key="label"
+                />
+              </div>
+              <!-- Host -->
+              <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                <label
+                  for="host"
+                  class="text-sm text-slate-600 dark:text-slate-300"
+                  >服务器 Host<span class="text-red-500">*</span></label
+                >
+                <UInput
+                  id="host"
+                  v-model="form.host"
+                  placeholder="mc.hydroline.example"
+                />
+              </div>
+              <!-- Port -->
+              <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                <label
+                  for="port"
+                  class="text-sm text-slate-600 dark:text-slate-300"
+                  >端口</label
+                >
+                <UInput
+                  id="port"
+                  v-model.number="form.port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  placeholder="留空=自动（默认或 SRV）"
+                />
+              </div>
+              <!-- 描述 -->
               <div
-                class="flex h-10 items-center rounded-xl border border-slate-200 px-3 dark:border-slate-700"
+                class="grid grid-cols-[7rem,1fr] items-start gap-2 md:col-span-2"
               >
-                <!-- UToggle 在当前 @nuxt/ui 版本中未被插件自动注册，替换为 UCheckbox 保持布尔开关功能 -->
-                <UCheckbox id="isActive" v-model="form.isActive" label="启用" />
+                <label
+                  for="description"
+                  class="mt-2 text-sm text-slate-600 dark:text-slate-300"
+                  >描述</label
+                >
+                <UTextarea
+                  id="description"
+                  v-model="form.description"
+                  placeholder="用于后台备注信息"
+                />
+              </div>
+              <!-- 显示顺序 -->
+              <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                <label
+                  for="displayOrder"
+                  class="text-sm text-slate-600 dark:text-slate-300"
+                  >显示顺序</label
+                >
+                <UInput
+                  id="displayOrder"
+                  v-model.number="form.displayOrder"
+                  type="number"
+                />
+              </div>
+              <!-- 状态 -->
+              <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                <label
+                  for="isActive"
+                  class="text-sm text-slate-600 dark:text-slate-300"
+                  >状态</label
+                >
+                <div
+                  class="flex h-10 items-center rounded-xl border border-slate-200 px-3 dark:border-slate-700"
+                >
+                  <UCheckbox
+                    id="isActive"
+                    v-model="form.isActive"
+                    label="启用"
+                  />
+                </div>
+              </div>
+
+              <div class="md:col-span-2">
+                <div class="mb-2 flex items-center gap-2">
+                  <span
+                    class="text-sm font-medium text-slate-700 dark:text-slate-200"
+                    >MCSM 配置</span
+                  >
+                  <UTooltip text="仅 API Key 不会回显，留空则不更新">
+                    <UIcon
+                      name="i-lucide-info"
+                      class="h-4 w-4 text-slate-400 dark:text-slate-500"
+                    />
+                  </UTooltip>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                    <label
+                      for="mcsmPanelUrl"
+                      class="text-sm text-slate-600 dark:text-slate-300"
+                      >面板地址</label
+                    >
+                    <UInput
+                      id="mcsmPanelUrl"
+                      v-model="form.mcsmPanelUrl"
+                      placeholder="http://panel.hydcraft.cn/"
+                    />
+                  </div>
+                  <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                    <label
+                      for="mcsmDaemonId"
+                      class="text-sm text-slate-600 dark:text-slate-300"
+                      >Daemon ID</label
+                    >
+                    <UInput
+                      id="mcsmDaemonId"
+                      v-model="form.mcsmDaemonId"
+                      placeholder="daemons-xxxx"
+                    />
+                  </div>
+                  <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                    <label
+                      for="mcsmInstanceUuid"
+                      class="text-sm text-slate-600 dark:text-slate-300"
+                      >Instance UUID</label
+                    >
+                    <UInput
+                      id="mcsmInstanceUuid"
+                      v-model="form.mcsmInstanceUuid"
+                      placeholder="50c7..."
+                    />
+                  </div>
+                  <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                    <label
+                      for="mcsmApiKey"
+                      class="text-sm text-slate-600 dark:text-slate-300"
+                      >API Key</label
+                    >
+                    <UInput
+                      id="mcsmApiKey"
+                      v-model="form.mcsmApiKey"
+                      type="password"
+                      placeholder="输入以更新，留空保持不变"
+                    />
+                  </div>
+                  <div class="grid grid-cols-[7rem,1fr] items-center gap-2">
+                    <label
+                      for="mcsmRequestTimeoutMs"
+                      class="text-sm text-slate-600 dark:text-slate-300"
+                      >超时 (ms)</label
+                    >
+                    <UInput
+                      id="mcsmRequestTimeoutMs"
+                      v-model.number="form.mcsmRequestTimeoutMs"
+                      type="number"
+                      min="1000"
+                      placeholder="默认 10000"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <template #footer>
-            <div class="flex justify-between">
+            <!-- 历史图表 -->
+            <div class="mt-4">
+              <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                最近 {{ historyDays }} 天走势
+              </p>
+              <div class="h-60">
+                <VChart
+                  v-if="history.length"
+                  :option="{
+                    tooltip: { trigger: 'axis' },
+                    grid: { left: 40, right: 20, top: 30, bottom: 30 },
+                    xAxis: {
+                      type: 'category',
+                      data: history
+                        .slice()
+                        .reverse()
+                        .map((p) => formatChartLabel(p.createdAt)),
+                    },
+                    yAxis: {
+                      type: 'value',
+                      min: 0,
+                      splitLine: { show: false },
+                    },
+                    // 默认隐藏延迟图层
+                    legend: {
+                      top: 0,
+                      selected: { 在线人数: true, '延迟(ms)': false },
+                      selectedMode: 'single',
+                    },
+                    series: [
+                      {
+                        type: 'line',
+                        name: '在线人数',
+                        smooth: true,
+                        showSymbol: false,
+                        data: history
+                          .slice()
+                          .reverse()
+                          .map((p) => p.onlinePlayers ?? 0),
+                      },
+                      {
+                        type: 'line',
+                        name: '延迟(ms)',
+                        smooth: true,
+                        showSymbol: false,
+                        data: history
+                          .slice()
+                          .reverse()
+                          .map((p) => p.latency ?? 0),
+                      },
+                    ],
+                  }"
+                  autoresize
+                />
+                <div
+                  v-else
+                  class="flex h-full items-center justify-center text-xs text-slate-500 dark:text-slate-400"
+                >
+                  {{ historyLoading ? '加载中...' : '暂无历史数据' }}
+                </div>
+              </div>
+            </div>
+            <div
+              class="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-4 dark:border-slate-800"
+            >
               <div class="text-xs text-slate-500 dark:text-slate-400">
                 保存后会自动刷新服务端状态。
               </div>
-              <div class="flex gap-2">
+              <div class="flex justify-end gap-2">
                 <UButton variant="ghost" @click="dialogOpen = false"
                   >取消</UButton
                 >
@@ -987,66 +1465,8 @@ async function submitAdhoc() {
                 </UButton>
               </div>
             </div>
-          </template>
-          <!-- 历史图表 -->
-          <div class="mt-4">
-            <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">
-              最近 {{ historyDays }} 天走势
-            </p>
-            <div class="h-60">
-              <VChart
-                v-if="history.length"
-                :option="{
-                  tooltip: { trigger: 'axis' },
-                  grid: { left: 40, right: 20, top: 30, bottom: 30 },
-                  xAxis: {
-                    type: 'category',
-                    data: history
-                      .slice()
-                      .reverse()
-                      .map((p) => formatChartLabel(p.createdAt)),
-                  },
-                  yAxis: { type: 'value', min: 0, splitLine: { show: false } },
-                  // 默认隐藏延迟图层
-                  legend: {
-                    top: 0,
-                    selected: { 在线人数: true, '延迟(ms)': false },
-                    selectedMode: 'single',
-                  },
-                  series: [
-                    {
-                      type: 'line',
-                      name: '在线人数',
-                      smooth: true,
-                      showSymbol: false,
-                      data: history
-                        .slice()
-                        .reverse()
-                        .map((p) => p.onlinePlayers ?? 0),
-                    },
-                    {
-                      type: 'line',
-                      name: '延迟(ms)',
-                      smooth: true,
-                      showSymbol: false,
-                      data: history
-                        .slice()
-                        .reverse()
-                        .map((p) => p.latency ?? 0),
-                    },
-                  ],
-                }"
-                autoresize
-              />
-              <div
-                v-else
-                class="flex h-full items-center justify-center text-xs text-slate-500 dark:text-slate-400"
-              >
-                {{ historyLoading ? '加载中...' : '暂无历史数据' }}
-              </div>
-            </div>
-          </div>
-        </UCard>
+          </UCard>
+        </div>
       </template>
     </UModal>
 
@@ -1160,7 +1580,7 @@ async function submitAdhoc() {
       :ui="{
         content: 'w-full max-w-sm',
         wrapper: 'z-[140]',
-        overlay: 'z-[130]'
+        overlay: 'z-[130]',
       }"
     >
       <template #content>

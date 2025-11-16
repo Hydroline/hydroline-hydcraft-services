@@ -7,6 +7,7 @@ import type {
   MinecraftServerEdition,
   MinecraftPingHistoryItem,
   MinecraftPingSettings,
+  McsmInstanceDetail,
 } from '@/types/minecraft'
 
 type CreateServerPayload = {
@@ -19,6 +20,11 @@ type CreateServerPayload = {
   description?: string
   isActive?: boolean
   displayOrder?: number
+  mcsmPanelUrl?: string
+  mcsmDaemonId?: string
+  mcsmInstanceUuid?: string
+  mcsmApiKey?: string
+  mcsmRequestTimeoutMs?: number
 }
 
 type UpdateServerPayload = Partial<CreateServerPayload>
@@ -41,9 +47,12 @@ export const useMinecraftServerStore = defineStore('minecraft-servers', {
       this.loading = true
       try {
         const token = this.authHeaders()
-        const data = await apiFetch<MinecraftServer[]>('/admin/minecraft/servers', {
-          token,
-        })
+        const data = await apiFetch<MinecraftServer[]>(
+          '/admin/minecraft/servers',
+          {
+            token,
+          },
+        )
         this.items = data
         return data
       } finally {
@@ -52,21 +61,27 @@ export const useMinecraftServerStore = defineStore('minecraft-servers', {
     },
     async create(payload: CreateServerPayload) {
       const token = this.authHeaders()
-      const server = await apiFetch<MinecraftServer>('/admin/minecraft/servers', {
-        method: 'POST',
-        token,
-        body: payload,
-      })
+      const server = await apiFetch<MinecraftServer>(
+        '/admin/minecraft/servers',
+        {
+          method: 'POST',
+          token,
+          body: payload,
+        },
+      )
       this.items.push(server)
       return server
     },
     async update(id: string, payload: UpdateServerPayload) {
       const token = this.authHeaders()
-      const server = await apiFetch<MinecraftServer>(`/admin/minecraft/servers/${id}`, {
-        method: 'PATCH',
-        token,
-        body: payload,
-      })
+      const server = await apiFetch<MinecraftServer>(
+        `/admin/minecraft/servers/${id}`,
+        {
+          method: 'PATCH',
+          token,
+          body: payload,
+        },
+      )
       this.items = this.items.map((item) => (item.id === id ? server : item))
       return server
     },
@@ -98,10 +113,12 @@ export const useMinecraftServerStore = defineStore('minecraft-servers', {
         { token },
       )
     },
-    async updatePingSettings(payload: Partial<{
-      intervalMinutes: number
-      retentionDays: number
-    }>) {
+    async updatePingSettings(
+      payload: Partial<{
+        intervalMinutes: number
+        retentionDays: number
+      }>,
+    ) {
       const token = this.authHeaders()
       return await apiFetch<MinecraftPingSettings>(
         '/admin/minecraft/servers/ping/settings',
@@ -126,6 +143,64 @@ export const useMinecraftServerStore = defineStore('minecraft-servers', {
         method: 'POST',
         body: payload,
       })
+    },
+
+    async fetchMcsmStatus(id: string) {
+      const token = this.authHeaders()
+      return await apiFetch<{
+        server: MinecraftServer
+        detail: McsmInstanceDetail
+      }>(`/admin/minecraft/servers/${id}/mcsm/status`, { token })
+    },
+
+    async fetchMcsmOutput(id: string, size?: number) {
+      const token = this.authHeaders()
+      const q = new URLSearchParams()
+      if (size) q.set('size', String(size))
+      return await apiFetch<{ server: MinecraftServer; output: string }>(
+        `/admin/minecraft/servers/${id}/mcsm/output${q.toString() ? `?${q.toString()}` : ''}`,
+        { token },
+      )
+    },
+
+    async sendMcsmCommand(id: string, command: string) {
+      const token = this.authHeaders()
+      return await apiFetch<{ server: MinecraftServer; result: unknown }>(
+        `/admin/minecraft/servers/${id}/mcsm/command`,
+        { method: 'POST', token, body: { command } },
+      )
+    },
+
+    async startMcsm(id: string) {
+      const token = this.authHeaders()
+      return await apiFetch<{ server: MinecraftServer; result: unknown }>(
+        `/admin/minecraft/servers/${id}/mcsm/start`,
+        { method: 'POST', token },
+      )
+    },
+
+    async stopMcsm(id: string) {
+      const token = this.authHeaders()
+      return await apiFetch<{ server: MinecraftServer; result: unknown }>(
+        `/admin/minecraft/servers/${id}/mcsm/stop`,
+        { method: 'POST', token },
+      )
+    },
+
+    async restartMcsm(id: string) {
+      const token = this.authHeaders()
+      return await apiFetch<{ server: MinecraftServer; result: unknown }>(
+        `/admin/minecraft/servers/${id}/mcsm/restart`,
+        { method: 'POST', token },
+      )
+    },
+
+    async killMcsm(id: string) {
+      const token = this.authHeaders()
+      return await apiFetch<{ server: MinecraftServer; result: unknown }>(
+        `/admin/minecraft/servers/${id}/mcsm/kill`,
+        { method: 'POST', token },
+      )
     },
   },
 })

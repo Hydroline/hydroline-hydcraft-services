@@ -63,4 +63,24 @@ export class CreateMinecraftServerDto {
   @IsOptional()
   @IsUUID()
   createdById?: string;
+
+  @IsOptional()
+  @IsString()
+  mcsmPanelUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  mcsmDaemonId?: string;
+
+  @IsOptional()
+  @IsString()
+  mcsmInstanceUuid?: string;
+
+  @IsOptional()
+  @IsString()
+  mcsmApiKey?: string;
+
+  @IsOptional()
+  @IsInt()
+  mcsmRequestTimeoutMs?: number;
 }

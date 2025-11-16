@@ -589,6 +589,11 @@ model MinecraftServer {
   isActive       Boolean                @default(true)
   displayOrder   Int                    @default(0)
   metadata       Json?
+  mcsmPanelUrl   String?
+  mcsmDaemonId   String?
+  mcsmInstanceUuid String?
+  mcsmApiKey     String?
+  mcsmRequestTimeoutMs Int?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
   createdById    String?
