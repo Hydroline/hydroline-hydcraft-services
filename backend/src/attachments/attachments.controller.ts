@@ -126,6 +126,15 @@ export class AttachmentsController {
 
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermissions(DEFAULT_PERMISSIONS.MANAGE_ATTACHMENTS)
+  @Delete('folders/:folderId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '删除附件文件夹' })
+  async deleteFolder(@Param('folderId') folderId: string) {
+    return this.attachmentsService.deleteFolder(folderId);
+  }
+
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermissions(DEFAULT_PERMISSIONS.MANAGE_ATTACHMENTS)
   @Get('tags/all')
   @ApiBearerAuth()
   @ApiOperation({ summary: '获取附件标签列表' })

@@ -81,6 +81,18 @@ export interface AdminUserListResponse {
   }
 }
 
+export interface AdminOauthAccount {
+  id: string
+  provider: string
+  providerId?: string | null
+  providerAccountId: string
+  type?: string | null
+  profile?: unknown
+  createdAt?: string | Date | null
+  providerName?: string | null
+  providerType?: string | null
+}
+
 export interface AdminAuthmeBindingEntry {
   id?: string
   authmeUsername: string
@@ -132,6 +144,7 @@ export interface AdminUserDetail
     ipAddress: string | null
     userAgent: string | null
   }>
+  oauthAccounts?: AdminOauthAccount[]
 }
 
 export interface AdminContactEntry {

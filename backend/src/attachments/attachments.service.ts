@@ -243,6 +243,30 @@ export class AttachmentsService implements OnModuleInit {
     return updated;
   }
 
+  async deleteFolder(folderId: string) {
+    const folder = await this.prisma.attachmentFolder.findUnique({
+      where: { id: folderId },
+    });
+    if (!folder) {
+      throw new NotFoundException('Folder not found');
+    }
+
+    const [childFolders, attachments] = await Promise.all([
+      this.prisma.attachmentFolder.count({ where: { parentId: folderId } }),
+      this.prisma.attachment.count({ where: { folderId } }),
+    ]);
+
+    if (childFolders > 0) {
+      throw new BadRequestException('Folder is not empty: contains subfolders');
+    }
+    if (attachments > 0) {
+      throw new BadRequestException('Folder is not empty: contains attachments');
+    }
+
+    await this.prisma.attachmentFolder.delete({ where: { id: folderId } });
+    return { success: true } as const;
+  }
+
   async listTags() {
     return this.prisma.attachmentTag.findMany({ orderBy: { key: 'asc' } });
   }

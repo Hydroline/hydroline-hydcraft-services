@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, watch, onMounted, reactive, ref } from 'vue'
 import { useAdminAttachmentsStore } from '@/stores/adminAttachments'
 import { useAdminRbacStore } from '@/stores/adminRbac'
 import { useUiStore } from '@/stores/ui'
@@ -12,6 +12,10 @@ type AttachmentFolderEntry = {
   name: string
   path: string
   parentId: string | null
+  description?: string | null
+  visibilityMode?: VisibilityModeOption | 'PUBLIC' | 'RESTRICTED' | 'INHERIT'
+  visibilityRoles?: string[]
+  visibilityLabels?: string[]
 }
 
 type AttachmentTagEntry = {
@@ -62,7 +66,9 @@ const folders = ref<AttachmentFolderEntry[]>([])
 const tags = ref<AttachmentTagEntry[]>([])
 const foldersLoading = ref(false)
 const tagsLoading = ref(false)
-const creatingFolder = ref(false)
+const folderSubmitting = ref(false)
+const editingFolderId = ref<string | null>(null)
+const selectedFolderId = ref<string | null>(null)
 const folderForm = reactive({
   name: '',
   parentId: '',
@@ -71,6 +77,8 @@ const folderForm = reactive({
   visibilityRoles: [] as string[],
   visibilityLabels: [] as string[],
 })
+const deletingFolderId = ref<string | null>(null)
+selectedFolderId.value = attachmentsStore.filters.folderId ?? null
 const tagDialogOpen = ref(false)
 const createTagDialogOpen = ref(false)
 const editingTagId = ref<string | null>(null)
@@ -136,6 +144,9 @@ const modalUi = {
 const attachmentDialogSelectUi = {
   content: 'z-[350]',
 } as const
+
+// 让下拉面板在模态框中不被裁剪：使用 fixed 定位的 Popper
+const selectPopperFixed = { strategy: 'fixed' } as const
 
 function closeEditTagDialog() {
   editTagDialogOpen.value = false
@@ -225,6 +236,13 @@ function folderLabel(id: string | null) {
   return folder?.path || folder?.name || '未知目录'
 }
 
+function folderVisibilityLabel(mode?: string | null) {
+  const normalized = (mode || '').toString().toLowerCase()
+  if (normalized === 'restricted') return '受限'
+  if (normalized === 'inherit') return '继承'
+  return '公开'
+}
+
 function notifyError(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
     toast.add({
@@ -247,10 +265,18 @@ async function refresh(targetPage?: number) {
     await attachmentsStore.fetch({
       includeDeleted: includeDeleted.value,
       page: targetPage ?? pagination.value.page,
+      folderId: selectedFolderId.value ?? undefined,
     })
+    selectedFolderId.value = attachmentsStore.filters.folderId
   } finally {
     uiStore.stopLoading()
   }
+}
+
+function handleFolderFilterChange(value: string | null) {
+  const normalized = !value || value === ROOT_FOLDER_VALUE ? null : value
+  selectedFolderId.value = normalized
+  void refresh(1)
 }
 
 async function fetchFolders() {
@@ -296,11 +322,34 @@ function openBatchUploadDialog() {
   }
 }
 
-function openFolderDialog() {
+function openFolderDialog(folder?: AttachmentFolderEntry) {
+  if (folder) {
+    editingFolderId.value = folder.id
+    folderForm.name = folder.name
+    folderForm.parentId = folder.parentId ?? ''
+    folderForm.description = folder.description ?? ''
+    const mode = (folder.visibilityMode || 'public').toString().toLowerCase()
+    folderForm.visibilityMode = (
+      ['public', 'restricted'].includes(mode) ? mode : 'public'
+    ) as VisibilityModeOption
+    folderForm.visibilityRoles = folder.visibilityRoles ?? []
+    folderForm.visibilityLabels = folder.visibilityLabels ?? []
+  } else {
+    resetFolderForm()
+  }
   folderDialogOpen.value = true
   if (folders.value.length === 0 && !foldersLoading.value) {
     void fetchFolders()
   }
+}
+
+function startCreateFolder() {
+  resetFolderForm()
+  openFolderDialog()
+}
+
+function startEditFolder(folder: AttachmentFolderEntry) {
+  openFolderDialog(folder)
 }
 
 function openTagDialog() {
@@ -322,6 +371,7 @@ function resetFolderForm() {
   folderForm.visibilityMode = 'public'
   folderForm.visibilityRoles = []
   folderForm.visibilityLabels = []
+  editingFolderId.value = null
 }
 
 function resetTagForm() {
@@ -410,37 +460,67 @@ async function submitFolder() {
     return
   }
   const token = ensureToken()
-  creatingFolder.value = true
+  folderSubmitting.value = true
   try {
-    await apiFetch('/attachments/folders', {
-      method: 'POST',
-      token,
-      body: {
-        name,
-        parentId: folderForm.parentId || undefined,
-        description: folderForm.description.trim() || undefined,
-        visibilityMode: folderForm.visibilityMode,
-        visibilityRoles:
-          folderForm.visibilityMode === 'restricted'
-            ? folderForm.visibilityRoles
-            : undefined,
-        visibilityLabels:
-          folderForm.visibilityMode === 'restricted'
-            ? folderForm.visibilityLabels
-            : undefined,
-      },
-    })
-    toast.add({
-      title: '文件夹已创建',
-      color: 'success',
-    })
+    const payload: Record<string, unknown> = {
+      name,
+      parentId: folderForm.parentId || null,
+      description: folderForm.description.trim() || undefined,
+      visibilityMode: folderForm.visibilityMode,
+    }
+    if (folderForm.visibilityMode === 'restricted') {
+      payload.visibilityRoles = folderForm.visibilityRoles
+      payload.visibilityLabels = folderForm.visibilityLabels
+    } else {
+      payload.visibilityRoles = []
+      payload.visibilityLabels = []
+    }
+
+    if (editingFolderId.value) {
+      await apiFetch(`/attachments/folders/${editingFolderId.value}`, {
+        method: 'PATCH',
+        token,
+        body: payload,
+      })
+      toast.add({ title: '文件夹已更新', color: 'success' })
+    } else {
+      await apiFetch('/attachments/folders', {
+        method: 'POST',
+        token,
+        body: payload,
+      })
+      toast.add({ title: '文件夹已创建', color: 'success' })
+    }
     folderDialogOpen.value = false
     resetFolderForm()
     await fetchFolders()
+    await refresh()
   } catch (error) {
-    notifyError(error, '创建附件文件夹失败')
+    notifyError(error, '保存附件文件夹失败')
   } finally {
-    creatingFolder.value = false
+    folderSubmitting.value = false
+  }
+}
+
+async function deleteFolder(folder: AttachmentFolderEntry) {
+  if (!window.confirm(`确定删除文件夹「${folder.path}」吗？`)) return
+  const token = ensureToken()
+  deletingFolderId.value = folder.id
+  try {
+    await apiFetch(`/attachments/folders/${folder.id}`, {
+      method: 'DELETE',
+      token,
+    })
+    toast.add({ title: '文件夹已删除', color: 'success' })
+    if (selectedFolderId.value === folder.id) {
+      selectedFolderId.value = null
+    }
+    await fetchFolders()
+    await refresh()
+  } catch (error) {
+    notifyError(error, '删除附件文件夹失败')
+  } finally {
+    deletingFolderId.value = null
   }
 }
 
@@ -766,6 +846,12 @@ onMounted(async () => {
     void rbacStore.fetchLabels()
   }
 })
+
+watch(folderDialogOpen, (open) => {
+  if (!open) {
+    resetFolderForm()
+  }
+})
 </script>
 
 <template>
@@ -780,12 +866,38 @@ onMounted(async () => {
           <UCheckbox v-model="includeDeleted" @change="refresh(1)" size="sm" />
           显示已删除附件
         </label>
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="text-slate-600 dark:text-slate-300">当前目录</span>
+          <USelectMenu
+            class="w-56"
+            :items="folderOptions"
+            value-key="value"
+            label-key="label"
+            :ui="{ option: { base: 'text-sm' } }"
+            :model-value="(selectedFolderId || ROOT_FOLDER_VALUE) as string"
+            placeholder="选择目录"
+            :loading="foldersLoading"
+            @update:model-value="
+              (value: string | undefined) =>
+                handleFolderFilterChange(value ?? ROOT_FOLDER_VALUE)
+            "
+          />
+          <UButton
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            :loading="foldersLoading"
+            @click="fetchFolders"
+          >
+            刷新目录
+          </UButton>
+        </div>
         <div class="flex flex-wrap gap-2">
           <UButton color="primary" @click="openBatchUploadDialog">
             批量上传
           </UButton>
-          <UButton variant="soft" color="primary" @click="openFolderDialog">
-            新建文件夹
+          <UButton variant="soft" color="primary" @click="startCreateFolder">
+            文件夹管理
           </UButton>
           <UButton variant="soft" color="primary" @click="openTagDialog">
             标签管理
@@ -1097,6 +1209,7 @@ onMounted(async () => {
                 "
                 placeholder="根目录"
                 :ui="attachmentDialogSelectUi"
+                :popper="selectPopperFixed"
                 @update:model-value="
                   (value: string | undefined) =>
                     (managementForm.folderId =
@@ -1134,6 +1247,7 @@ onMounted(async () => {
                 placeholder="选择标签"
                 :loading="tagsLoading"
                 :ui="attachmentDialogSelectUi"
+                :popper="selectPopperFixed"
               />
             </div>
             <div class="space-y-1">
@@ -1156,6 +1270,7 @@ onMounted(async () => {
                 label-key="label"
                 v-model="managementForm.visibilityMode"
                 :ui="attachmentDialogSelectUi"
+                :popper="selectPopperFixed"
               />
             </div>
             <div class="space-y-1">
@@ -1207,6 +1322,7 @@ onMounted(async () => {
                   v-model="managementForm.visibilityRoles"
                   placeholder="选择角色"
                   :ui="attachmentDialogSelectUi"
+                  :popper="selectPopperFixed"
                 />
               </div>
               <div class="space-y-1">
@@ -1222,6 +1338,7 @@ onMounted(async () => {
                   v-model="managementForm.visibilityLabels"
                   placeholder="选择权限标签"
                   :ui="attachmentDialogSelectUi"
+                  :popper="selectPopperFixed"
                 />
               </div>
             </template>
@@ -1279,6 +1396,8 @@ onMounted(async () => {
               placeholder="选择存储路径（默认根目录）"
               :loading="foldersLoading"
               searchable
+              :ui="attachmentDialogSelectUi"
+              :popper="selectPopperFixed"
               @update:model-value="
                 (value: string | undefined) => updateBatchFolder(value)
               "
@@ -1491,13 +1610,21 @@ onMounted(async () => {
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
-              新建附件文件夹
+              附件文件夹管理
             </h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              {{ editingFolderId ? '编辑文件夹' : '新建文件夹' }}
+            </p>
           </div>
           <UButton
             color="neutral"
             variant="ghost"
-            @click="folderDialogOpen = false"
+            @click="
+              () => {
+                folderDialogOpen = false
+                resetFolderForm()
+              }
+            "
             icon="i-lucide-x"
           />
         </div>
@@ -1518,7 +1645,11 @@ onMounted(async () => {
             >
             <USelectMenu
               class="w-full"
-              :items="folderOptions"
+              :items="
+                folderOptions.filter(
+                  (option) => option.value !== editingFolderId,
+                )
+              "
               value-key="value"
               label-key="label"
               :model-value="
@@ -1527,6 +1658,8 @@ onMounted(async () => {
               placeholder="若不选择则创建在根目录"
               :loading="foldersLoading"
               searchable
+              :ui="attachmentDialogSelectUi"
+              :popper="selectPopperFixed"
               @update:model-value="
                 (value: string | undefined) => updateFolderParent(value)
               "
@@ -1554,6 +1687,8 @@ onMounted(async () => {
                 value-key="value"
                 label-key="label"
                 v-model="folderForm.visibilityMode"
+                :ui="attachmentDialogSelectUi"
+                :popper="selectPopperFixed"
               />
               <div
                 v-if="folderForm.visibilityMode === 'restricted'"
@@ -1566,6 +1701,8 @@ onMounted(async () => {
                   :items="roleOptions"
                   v-model="folderForm.visibilityRoles"
                   placeholder="选择角色"
+                  :ui="attachmentDialogSelectUi"
+                  :popper="selectPopperFixed"
                 />
                 <p>允许访问的权限标签</p>
                 <USelect
@@ -1574,6 +1711,8 @@ onMounted(async () => {
                   :items="permissionLabelOptions"
                   v-model="folderForm.visibilityLabels"
                   placeholder="选择标签"
+                  :ui="attachmentDialogSelectUi"
+                  :popper="selectPopperFixed"
                 />
               </div>
             </div>
@@ -1583,16 +1722,128 @@ onMounted(async () => {
           <UButton
             color="neutral"
             variant="ghost"
-            :disabled="creatingFolder"
-            @click="folderDialogOpen = false"
+            :disabled="folderSubmitting"
+            @click="
+              () => {
+                folderDialogOpen = false
+                resetFolderForm()
+              }
+            "
             >取消</UButton
           >
           <UButton
             color="primary"
-            :loading="creatingFolder"
+            :loading="folderSubmitting"
             @click="submitFolder"
-            >创建</UButton
+            >{{ editingFolderId ? '保存' : '创建' }}</UButton
           >
+        </div>
+        <div
+          class="space-y-3 border-t border-slate-200/70 pt-4 dark:border-slate-800/60"
+        >
+          <div class="flex items-center justify-between">
+            <div
+              class="text-sm font-semibold text-slate-700 dark:text-slate-200"
+            >
+              已有文件夹
+            </div>
+            <div class="flex gap-2">
+              <UButton size="xs" variant="soft" @click="startCreateFolder">
+                新建
+              </UButton>
+              <UButton
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                :loading="foldersLoading"
+                @click="fetchFolders"
+              >
+                刷新
+              </UButton>
+            </div>
+          </div>
+          <div
+            v-if="foldersLoading"
+            class="rounded-xl border border-dashed border-slate-200/70 p-4 text-center text-xs text-slate-500 dark:border-slate-800/60 dark:text-slate-400"
+          >
+            目录加载中…
+          </div>
+          <div
+            v-else-if="folders.length === 0"
+            class="rounded-xl border border-dashed border-slate-200/70 p-4 text-center text-xs text-slate-500 dark:border-slate-800/60 dark:text-slate-400"
+          >
+            暂无文件夹
+          </div>
+          <div
+            v-else
+            class="max-h-72 overflow-y-auto rounded-xl border border-slate-200/70 dark:border-slate-800/60"
+          >
+            <table
+              class="min-w-full divide-y divide-slate-200 text-xs dark:divide-slate-800"
+            >
+              <thead class="bg-slate-50/60 dark:bg-slate-900/60">
+                <tr
+                  class="text-left text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                >
+                  <th class="px-3 py-2">路径</th>
+                  <th class="px-3 py-2">可见性</th>
+                  <th class="px-3 py-2">描述</th>
+                  <th class="px-3 py-2 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                <tr
+                  v-for="folder in folders"
+                  :key="folder.id"
+                  class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60"
+                >
+                  <td
+                    class="px-3 py-2 font-mono text-[13px] text-slate-700 dark:text-slate-200"
+                  >
+                    {{ folder.path || folder.name }}
+                  </td>
+                  <td class="px-3 py-2">
+                    <UBadge
+                      size="xs"
+                      :color="
+                        folderVisibilityLabel(folder.visibilityMode) === '受限'
+                          ? 'warning'
+                          : 'success'
+                      "
+                      variant="soft"
+                    >
+                      {{ folderVisibilityLabel(folder.visibilityMode) }}
+                    </UBadge>
+                  </td>
+                  <td
+                    class="px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400"
+                  >
+                    {{ folder.description || '—' }}
+                  </td>
+                  <td class="px-3 py-2 text-right">
+                    <div class="flex justify-end gap-2">
+                      <UButton
+                        size="xs"
+                        variant="soft"
+                        @click="startEditFolder(folder)"
+                      >
+                        编辑
+                      </UButton>
+                      <UButton
+                        size="xs"
+                        color="error"
+                        variant="ghost"
+                        :loading="deletingFolderId === folder.id"
+                        @click="deleteFolder(folder)"
+                      >
+                        删除
+                      </UButton>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </template>

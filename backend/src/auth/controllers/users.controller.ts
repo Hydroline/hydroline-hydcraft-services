@@ -77,6 +77,26 @@ export class UsersController {
     return this.usersService.deleteUser(userId);
   }
 
+  @Get(':userId/oauth/accounts')
+  @ApiOperation({ summary: '查看用户的 OAuth 绑定' })
+  async listOauthAccounts(@Param('userId') userId: string) {
+    return this.usersService.listUserOauthAccounts(userId);
+  }
+
+  @Delete(':userId/oauth/accounts/:accountId')
+  @ApiOperation({ summary: '解绑指定的 OAuth 账户' })
+  async unlinkOauthAccount(
+    @Param('userId') userId: string,
+    @Param('accountId') accountId: string,
+    @Req() req: Request,
+  ) {
+    return this.usersService.unlinkUserOauthAccount(
+      userId,
+      accountId,
+      req.user?.id,
+    );
+  }
+
   @Patch(':userId/profile')
   @ApiOperation({ summary: '更新用户档案' })
   async updateProfile(

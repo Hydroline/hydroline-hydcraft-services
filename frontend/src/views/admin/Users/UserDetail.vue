@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import { ApiError, apiFetch } from '@/utils/api'
 import type { RegionValue } from '@/views/user/Profile/components/RegionSelector.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useFeatureStore } from '@/stores/feature'
 import { useAdminUsersStore } from '@/stores/adminUsers'
 import { useAdminRbacStore } from '@/stores/adminRbac'
 import type {
@@ -16,6 +17,7 @@ import { playerStatusOptions, type PlayerStatus } from '@/constants/status'
 import UserDetailSectionOverview from './components/UserDetailSectionOverview.vue'
 import UserDetailSectionProfile from './components/UserDetailSectionProfile.vue'
 import UserDetailSectionServerAccounts from './components/UserDetailSectionServerAccounts.vue'
+import UserDetailSectionOAuth from './components/UserDetailSectionOAuth.vue'
 import UserBindingHistoryDialog from './components/UserBindingHistoryDialog.vue'
 import UserSessionsDialog from './components/UserSessionsDialog.vue'
 import ResetPasswordResultDialog from './components/ResetPasswordResultDialog.vue'
@@ -26,6 +28,7 @@ type PasswordMode = 'temporary' | 'custom'
 const props = defineProps<{ userId: string | null; emailToken?: number }>()
 const emit = defineEmits<{ (event: 'deleted'): void }>()
 const auth = useAuthStore()
+const featureStore = useFeatureStore()
 const usersStore = useAdminUsersStore()
 const rbacStore = useAdminRbacStore()
 const toast = useToast()
@@ -52,6 +55,8 @@ const showCustomPassword = ref(false)
 const passwordSubmitting = ref(false)
 const deleteDialogOpen = ref(false)
 const deleteSubmitting = ref(false)
+
+const oauthUnbindingId = ref<string | null>(null)
 
 // 新增：三个列表对话框的开关
 const bindingHistoryDialogOpen = ref(false)
@@ -125,6 +130,9 @@ const labelOptions = computed(() =>
 )
 
 const sessions = computed(() => detail.value?.sessions ?? [])
+
+const oauthProviders = computed(() => featureStore.flags.oauthProviders ?? [])
+const oauthAccounts = computed(() => detail.value?.oauthAccounts ?? [])
 
 // 已迁移到分离的 Section 组件中计算主 Minecraft 信息与昵称列表。
 const minecraftProfiles = computed(() => {
@@ -1204,12 +1212,39 @@ async function unbind(bindingId: string) {
   deleteConfirmDialogOpen.value = true
 }
 
+async function unbindOauthAccount(accountId: string) {
+  if (!auth.token || !detail.value) return
+  oauthUnbindingId.value = accountId
+  try {
+    await apiFetch(
+      `/auth/users/${detail.value.id}/oauth/accounts/${accountId}`,
+      {
+        method: 'DELETE',
+        token: auth.token,
+      },
+    )
+    toast.add({ title: '已解除 OAuth 绑定', color: 'success' })
+    await fetchDetail()
+  } catch (error) {
+    toast.add({
+      title: '解绑失败',
+      description: error instanceof ApiError ? error.message : '请稍后再试',
+      color: 'error',
+    })
+  } finally {
+    oauthUnbindingId.value = null
+  }
+}
+
 onMounted(async () => {
   if (rbacStore.roles.length === 0) {
     await rbacStore.fetchRoles()
   }
   if (rbacStore.labels.length === 0) {
     await rbacStore.fetchLabels()
+  }
+  if (!featureStore.loaded) {
+    await featureStore.initialize()
   }
 })
 
@@ -1255,6 +1290,7 @@ watch(
       closeResetPasswordDialog()
       closePiicDialog()
       closeDeleteDialog()
+      oauthUnbindingId.value = null
       return
     }
     await fetchDetail()
@@ -1309,6 +1345,13 @@ async function confirmDelete() {
       :profile-form="profileForm"
       :profile-saving="profileSaving"
       @save="saveProfile"
+    />
+    <UserDetailSectionOAuth
+      :providers="oauthProviders"
+      :accounts="oauthAccounts"
+      :loading="loading"
+      :unbinding-id="oauthUnbindingId"
+      @unbind="unbindOauthAccount"
     />
     <UserDetailSectionServerAccounts
       :detail="detail"

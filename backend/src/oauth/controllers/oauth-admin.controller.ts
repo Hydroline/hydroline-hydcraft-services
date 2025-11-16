@@ -89,7 +89,10 @@ export class OAuthAdminController {
     }
     const [items, total] = await this.prisma.$transaction([
       this.prisma.account.findMany({
-        where,
+        where: {
+          ...where,
+          provider: { not: 'credential' },
+        },
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
@@ -99,7 +102,12 @@ export class OAuthAdminController {
           },
         },
       }),
-      this.prisma.account.count({ where }),
+      this.prisma.account.count({
+        where: {
+          ...where,
+          provider: { not: 'credential' },
+        },
+      }),
     ]);
     return {
       items,

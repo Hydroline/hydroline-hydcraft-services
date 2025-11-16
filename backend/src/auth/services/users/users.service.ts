@@ -22,6 +22,10 @@ import {
   ensureUser,
 } from './users-core.manager';
 import {
+  listUserOauthAccounts,
+  unlinkUserOauthAccount,
+} from './users-oauth.manager';
+import {
   addContact,
   addContactAdmin,
   updateContact,
@@ -120,6 +124,18 @@ export class UsersService {
 
   async updateCurrentUser(userId: string, dto: UpdateCurrentUserDto) {
     return updateCurrentUser(this.ctx, userId, dto);
+  }
+
+  async listUserOauthAccounts(userId: string) {
+    return listUserOauthAccounts(this.ctx, userId);
+  }
+
+  async unlinkUserOauthAccount(
+    userId: string,
+    accountId: string,
+    actorId?: string,
+  ) {
+    return unlinkUserOauthAccount(this.ctx, userId, accountId, actorId);
   }
 
   async getUserDetail(userId: string) {

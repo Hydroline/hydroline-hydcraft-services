@@ -23,6 +23,7 @@ import {
 import { ResetUserPasswordDto } from '../../dto/reset-user-password.dto';
 import { UpdateCurrentUserDto } from '../../dto/update-current-user.dto';
 import { UpdateUserProfileDto } from '../../dto/update-user-profile.dto';
+import { listUserOauthAccounts } from './users-oauth.manager';
 
 export async function initializeUserRecords(
   ctx: UsersServiceContext,
@@ -521,7 +522,9 @@ export async function getSessionUser(ctx: UsersServiceContext, userId: string) {
     authmeBindings,
     luckperms: bindingData.luckperms,
     security,
-    accounts: user.accounts,
+    accounts: user.accounts.filter(
+      (account) => account.provider !== 'credential',
+    ),
   } as typeof user & {
     authmeBindings: typeof authmeBindings;
     luckperms: typeof bindingData.luckperms;
@@ -760,6 +763,8 @@ export async function getUserDetail(ctx: UsersServiceContext, userId: string) {
       metadata: contact.metadata,
     }));
 
+  const oauthAccounts = await listUserOauthAccounts(ctx, userId);
+
   return {
     ...rest,
     nicknames,
@@ -769,6 +774,7 @@ export async function getUserDetail(ctx: UsersServiceContext, userId: string) {
     lastLoginIpLocation: lastLoginLocation?.display ?? null,
     lastLoginIpLocationRaw: lastLoginLocation?.raw ?? null,
     phoneContacts,
+    oauthAccounts,
   };
 }
 
