@@ -22,7 +22,7 @@ import { DEFAULT_PERMISSIONS } from '../auth/services/roles.service';
 import { McsmCommandDto } from './dto/mcsm-command.dto';
 import { BeaconMtrLogsQueryDto } from './dto/beacon-mtr-logs.dto';
 import {
-  BeaconPlayerScopedQueryDto,
+  BeaconPlayerPagedQueryDto,
   BeaconPlayerSessionsQueryDto,
 } from './dto/beacon-player.dto';
 import { BeaconStatusQueryDto } from './dto/beacon-status.dto';
@@ -144,7 +144,6 @@ export class MinecraftServerController {
   }
 
   // Hydroline Beacon HTTP 网关
-
   @Get(':id/beacon/status')
   @ApiOperation({ summary: '获取 Beacon 服务器状态与在线玩家信息' })
   getBeaconStatus(
@@ -207,7 +206,7 @@ export class MinecraftServerController {
   @ApiOperation({ summary: '查询玩家成就信息（Beacon）' })
   getBeaconPlayerAdvancements(
     @Param('id') id: string,
-    @Query() dto: BeaconPlayerScopedQueryDto,
+    @Query() dto: BeaconPlayerPagedQueryDto,
   ) {
     return this.service.getBeaconPlayerAdvancements(id, dto);
   }
@@ -216,7 +215,7 @@ export class MinecraftServerController {
   @ApiOperation({ summary: '查询玩家统计信息（Beacon）' })
   getBeaconPlayerStats(
     @Param('id') id: string,
-    @Query() dto: BeaconPlayerScopedQueryDto,
+    @Query() dto: BeaconPlayerPagedQueryDto,
   ) {
     return this.service.getBeaconPlayerStats(id, dto);
   }
@@ -234,7 +233,7 @@ export class MinecraftServerController {
   @ApiOperation({ summary: '查询玩家 NBT 原始数据（Beacon）' })
   getBeaconPlayerNbt(
     @Param('id') id: string,
-    @Query() dto: BeaconPlayerScopedQueryDto,
+    @Query() dto: BeaconPlayerPagedQueryDto,
   ) {
     return this.service.getBeaconPlayerNbt(id, dto);
   }
@@ -243,7 +242,7 @@ export class MinecraftServerController {
   @ApiOperation({ summary: '查询玩家身份信息（Beacon）' })
   lookupBeaconPlayerIdentity(
     @Param('id') id: string,
-    @Query() dto: BeaconPlayerScopedQueryDto,
+    @Query() dto: BeaconPlayerPagedQueryDto,
   ) {
     return this.service.lookupBeaconPlayerIdentity(id, dto);
   }

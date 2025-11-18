@@ -12,7 +12,7 @@ import {
   AUTHME_DEFAULT_SAFE_MESSAGE,
 } from './authme.constants';
 import { AuthmeDbConfig } from './authme.config';
-import { MysqlAuthmeLib } from '../lib/authme/authme-lib';
+import { MysqlAuthmeLib } from '../lib/authme/authme.lib';
 import type { AuthmeLib, AuthmeUser } from './authme.interfaces';
 import { PromAuthmeMetricsRecorder } from './authme.metrics';
 import {

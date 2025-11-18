@@ -2188,7 +2188,10 @@ async function controlMcsm(
                   icon="i-lucide-pencil"
                   :disabled="!beaconDialogServer"
                   @click="
-                    beaconDialogServer ? (openEditDialog(beaconDialogServer), (beaconDialogOpen = false)) : null
+                    beaconDialogServer
+                      ? (openEditDialog(beaconDialogServer),
+                        (beaconDialogOpen = false))
+                      : null
                   "
                   >编辑</UButton
                 >
@@ -2283,14 +2286,13 @@ async function controlMcsm(
                   </UBadge>
                   <span class="text-xs text-slate-500 dark:text-slate-400">
                     重试
-                    {{
-                      beaconConnDetail?.connection?.reconnectAttempts ?? 0
-                    }}
+                    {{ beaconConnDetail?.connection?.reconnectAttempts ?? 0 }}
                     次
                   </span>
                   <UBadge
                     v-if="
-                      (beaconConnDetail?.connection?.reconnectAttempts ?? 0) >= 10 &&
+                      (beaconConnDetail?.connection?.reconnectAttempts ?? 0) >=
+                        10 &&
                       !beaconConnDetail?.connection?.connected &&
                       !beaconConnDetail?.connection?.connecting
                     "

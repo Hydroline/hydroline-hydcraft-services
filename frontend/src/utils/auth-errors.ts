@@ -112,6 +112,15 @@ const STATIC_TRANSLATIONS: Record<string, string> = {
   'Server not found': '服务器不存在',
   'Invalid MOTD content': '无效的 MOTD 内容',
   'Unable to connect to server': '无法连接到服务器',
+  // Beacon / websocket errors
+  'Beacon is not connected. Cannot execute event get_player_mtr_logs. Please verify the Beacon service and try again.':
+    'Beacon 未连接，无法加载 MTR 审计日志，请检查 Beacon 服务后重试。',
+  'Beacon is not connected. Cannot execute event get_status. Please verify the Beacon service and try again.':
+    'Beacon 未连接，无法获取状态，请检查 Beacon 服务后重试。',
+  'Beacon is not connected. Cannot execute event get_player_advancements. Please verify the Beacon service and try again.':
+    'Beacon 未连接，无法加载成就数据，请检查 Beacon 服务后重试。',
+  'Beacon is not connected. Cannot execute event get_player_stats. Please verify the Beacon service and try again.':
+    'Beacon 未连接，无法加载统计数据，请检查 Beacon 服务后重试。',
   // Mail and permission errors
   'Mail service is not configured': '邮件服务未配置',
   'Missing user context': '缺少用户上下文',

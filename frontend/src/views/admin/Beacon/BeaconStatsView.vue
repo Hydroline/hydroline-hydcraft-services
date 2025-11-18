@@ -19,7 +19,7 @@ const query = reactive({
   playerUuid: '',
   playerName: '',
   page: 1,
-  pageSize: 50,
+  pageSize: 100,
 })
 
 const data = ref<BeaconPlayerGenericResponse<BeaconPlayerStatsResult> | null>(
@@ -99,27 +99,18 @@ const filteredRows = computed(() => {
   const important = rows.value.filter((r) =>
     importantPrefixes.some((p) => r.key.startsWith(p)),
   )
-  const base = important.length > 0 ? important : rows.value
-
-  const start = (query.page - 1) * query.pageSize
-  const end = start + query.pageSize
-  return base.slice(start, end)
+  return (important.length > 0 ? important : rows.value).slice(
+    0,
+    pageSize.value,
+  )
 })
 
 const detailOpen = ref(false)
 const detailStats = computed(() => data.value?.result.stats ?? {})
 
-const total = computed(() => {
-  const allRows = rows.value
-  if (!allRows.length) return 0
-  const important = allRows.filter((r) =>
-    importantPrefixes.some((p) => r.key.startsWith(p)),
-  )
-  return (important.length > 0 ? important : allRows).length
-})
-
-const page = computed(() => query.page)
-const pageSize = computed(() => query.pageSize)
+const total = computed(() => data.value?.result.total ?? 0)
+const page = computed(() => data.value?.result.page ?? query.page)
+const pageSize = computed(() => data.value?.result.page_size ?? query.pageSize)
 const pageCount = computed(() =>
   pageSize.value > 0 ? Math.max(1, Math.ceil(total.value / pageSize.value)) : 1,
 )
@@ -145,6 +136,8 @@ async function refresh() {
     const params = {
       playerUuid: query.playerUuid || undefined,
       playerName: query.playerName || undefined,
+      page: query.page,
+      pageSize: query.pageSize,
     }
     const res = (await serverStore.getBeaconPlayerStats(
       selectedServerId.value,

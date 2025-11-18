@@ -93,6 +93,9 @@ export interface BeaconPlayerAdvancementsResult {
   success?: boolean
   player_uuid?: string
   advancements?: Record<string, string>
+  total?: number
+  page?: number
+  page_size?: number
   [key: string]: unknown
 }
 
@@ -100,6 +103,9 @@ export interface BeaconPlayerStatsResult {
   success?: boolean
   player_uuid?: string
   stats?: Record<string, number>
+  total?: number
+  page?: number
+  page_size?: number
   [key: string]: unknown
 }
 

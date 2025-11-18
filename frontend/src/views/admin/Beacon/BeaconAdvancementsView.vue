@@ -19,7 +19,7 @@ const query = reactive({
   playerUuid: '',
   playerName: '',
   page: 1,
-  pageSize: 50,
+  pageSize: 100,
 })
 
 const data =
@@ -46,7 +46,7 @@ const activeServer = computed<MinecraftServer | null>(() => {
 
 const rows = computed(() => {
   const adv = data.value?.result.advancements ?? {}
-  const all = Object.entries(adv).map(([key, raw]) => {
+  return Object.entries(adv).map(([key, raw]) => {
     let parsed: unknown = null
     try {
       parsed = JSON.parse(raw as string)
@@ -55,18 +55,11 @@ const rows = computed(() => {
     }
     return { id: key, raw, parsed }
   })
-  const start = (query.page - 1) * query.pageSize
-  const end = start + query.pageSize
-  return all.slice(start, end)
 })
 
-const total = computed(() => {
-  const adv = data.value?.result.advancements ?? {}
-  return Object.keys(adv).length
-})
-
-const page = computed(() => query.page)
-const pageSize = computed(() => query.pageSize)
+const total = computed(() => data.value?.result.total ?? 0)
+const page = computed(() => data.value?.result.page ?? query.page)
+const pageSize = computed(() => data.value?.result.page_size ?? query.pageSize)
 const pageCount = computed(() =>
   pageSize.value > 0 ? Math.max(1, Math.ceil(total.value / pageSize.value)) : 1,
 )
@@ -97,6 +90,8 @@ async function refresh() {
     const params = {
       playerUuid: query.playerUuid || undefined,
       playerName: query.playerName || undefined,
+      page: query.page,
+      pageSize: query.pageSize,
     }
     const res = (await serverStore.getBeaconPlayerAdvancements(
       selectedServerId.value,
@@ -275,9 +270,7 @@ onMounted(async () => {
         v-if="hasQueried && total > 0"
         class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-300"
       >
-        <span>
-          第 {{ page }} / {{ pageCount }} 页，共 {{ total }} 条成就
-        </span>
+        <span> 第 {{ page }} / {{ pageCount }} 页，共 {{ total }} 条成就 </span>
         <div class="flex flex-wrap items-center gap-2">
           <UButton
             color="neutral"

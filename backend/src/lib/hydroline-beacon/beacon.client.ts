@@ -1,5 +1,7 @@
-// 使用 CommonJS 形式加载 socket.io-client，以兼容 v2 的导出结构
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+import { HttpException, Logger } from '@nestjs/common';
+
+// 使用 CommonJS 形式加载 socket.io-client 以兼容 v2 的导出结构
+// 否则直接用会出问题
 const socketIo =
   require('socket.io-client') as typeof import('socket.io-client');
 
@@ -36,9 +38,17 @@ export class HydrolineBeaconClient {
   private lastConnectedAt: Date | null = null;
   private reconnectAttempts = 0;
   private initialOptions: HydrolineBeaconClientOptions;
+  private readonly logger = new Logger(
+    `BeaconClient: ${(() => {
+      // 延迟日志标签的生成，避免在构造函数中获取 endpoint
+      return '';
+    })()}`,
+  );
 
   constructor(private readonly options: HydrolineBeaconClientOptions) {
     this.initialOptions = { ...options };
+    // 重新设置 logger 标签为包含 endpoint 的版本
+    (this.logger as any).context = `BeaconClient: ${this.options.endpoint}`;
   }
 
   private ensureSocket(): Socket {
@@ -61,18 +71,28 @@ export class HydrolineBeaconClient {
       this.lastConnectedAt = new Date();
       this.lastError = null;
       this.reconnectAttempts = 0;
+      this.logger.log(
+        `Connection established (attempts: ${this.reconnectAttempts})`,
+      );
     });
     socket.on('disconnect', () => {
       this.connecting = false;
+      this.logger.debug('Disconnected from beacon server');
     });
     socket.on('connect_error', (err: Error) => {
       this.lastError = err.message;
       this.reconnectAttempts++;
+      this.logger.warn(
+        `Connection error (attempt ${this.reconnectAttempts}): ${err.message}`,
+      );
     });
     socket.on('error', (err: unknown) => {
       this.lastError =
         (err instanceof Error ? err.message : String(err)) ?? 'UNKNOWN_ERROR';
       this.reconnectAttempts++;
+      this.logger.error(
+        `Socket error (attempt ${this.reconnectAttempts}): ${this.lastError}`,
+      );
     });
     return socket;
   }
@@ -82,6 +102,15 @@ export class HydrolineBeaconClient {
     payload: Record<string, unknown>,
     options?: EmitOptions,
   ): Promise<TResponse> {
+    const status = this.getConnectionStatus();
+    if (!status.connected) {
+      const err = new HttpException(
+        `Beacon is not connected. Cannot execute event ${event}. Please verify the Beacon service and try again.`,
+        503,
+      );
+      this.logger.warn(err.message);
+      throw err;
+    }
     const socket = this.ensureSocket();
     const body = {
       ...payload,
@@ -90,7 +119,9 @@ export class HydrolineBeaconClient {
     const timeoutMs = options?.timeoutMs ?? this.options.timeoutMs ?? 10000;
     return new Promise<TResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`${event} ack timeout`));
+        const err = new Error(`${event} ack timeout after ${timeoutMs}ms`);
+        this.logger.warn(`Request timeout: ${err.message} (event: ${event})`);
+        reject(err);
       }, timeoutMs);
 
       socket.emit(event, body, (response: TResponse) => {

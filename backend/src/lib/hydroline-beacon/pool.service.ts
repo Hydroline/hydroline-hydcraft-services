@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { HydrolineBeaconClient } from './client';
+import { Injectable, Logger } from '@nestjs/common';
+import { HydrolineBeaconClient } from './beacon.client';
 
 interface BeaconPoolEntry {
   client: HydrolineBeaconClient;
@@ -17,6 +17,7 @@ interface BeaconPoolEntry {
 
 @Injectable()
 export class HydrolineBeaconPoolService {
+  private readonly logger = new Logger('BeaconPool');
   private readonly pool = new Map<string, BeaconPoolEntry>();
   private readonly healthTimer: NodeJS.Timeout;
 
@@ -30,26 +31,34 @@ export class HydrolineBeaconPoolService {
       const status = entry.client.getConnectionStatus();
       // 若不在连接中且未连接，且未安排重试，则依据策略安排一次尝试
       if (!status.connected && !status.connecting && !entry.retryTimer) {
+        this.logger.debug(
+          `Health check: scheduling reconnection for ${entry.serverId}`,
+        );
         this.scheduleNextAttempt(entry);
       }
     }
   }
 
   private computeDelayMsForAttempt(n: number): number {
-    // 要求：失败后重试 10 次，间隔依次 5s、10s、30s、60s，然后保持 60s
+    // 要求：失败后重试 10 次，间隔依次 10s、30s、60s，然后保持 60s
     if (n <= 1) return 0; // 第一次立即尝试（由创建时触发）
-    if (n === 2) return 5000;
-    if (n === 3) return 10000;
-    if (n === 4) return 30000;
-    return 60000; // 第5次及之后
+    if (n === 2) return 10000; // 10s
+    if (n === 3) return 30000; // 30s
+    return 60000; // 第4次及之后保持 60s
   }
 
   private scheduleNextAttempt(entry: BeaconPoolEntry) {
-    if (entry.attempts >= 10) {
+    if (entry.attempts >= (entry.maxRetry ?? 10)) {
+      this.logger.warn(
+        `Max retry attempts (${entry.maxRetry ?? 10}) reached for ${entry.serverId}, stopping reconnection`,
+      );
       return; // 超过 10 次停止
     }
     const nextAttemptIndex = entry.attempts + 1;
     const delay = this.computeDelayMsForAttempt(nextAttemptIndex);
+    this.logger.log(
+      `Scheduling reconnection attempt ${nextAttemptIndex}/${entry.maxRetry ?? 10} for ${entry.serverId} in ${delay}ms`,
+    );
     entry.retryTimer = setTimeout(() => {
       entry.retryTimer = null;
       // 已连接则不再重试
@@ -58,9 +67,12 @@ export class HydrolineBeaconPoolService {
       // 执行一次尝试
       entry.attempts = nextAttemptIndex;
       entry.lastAttemptAt = Date.now();
+      this.logger.debug(
+        `Attempting reconnection (${nextAttemptIndex}/10) for ${entry.serverId} to ${entry.endpoint}`,
+      );
       entry.client.forceReconnect();
-      // 若仍未连接，下一轮 healthCheck 会安排下一次尝试
-      // 也可直接在此继续排下轮，保持简单交给 healthCheck
+      // 继续安排下一次尝试，不依赖 healthCheck
+      this.scheduleNextAttempt(entry);
     }, delay);
   }
 
@@ -76,6 +88,9 @@ export class HydrolineBeaconPoolService {
       const currentStatus = existing.client.getConnectionStatus();
       // 若配置发生变化（endpoint/key），重建连接
       if (existing.endpoint !== opts.endpoint || existing.key !== opts.key) {
+        this.logger.log(
+          `Config changed for ${opts.serverId}, forcing reconnection`,
+        );
         existing.client.forceReconnect();
         this.pool.delete(opts.serverId);
       } else {
@@ -85,6 +100,9 @@ export class HydrolineBeaconPoolService {
         return existing.client;
       }
     }
+    this.logger.log(
+      `Creating new beacon connection for ${opts.serverId} to ${opts.endpoint}`,
+    );
     const client = new HydrolineBeaconClient({
       endpoint: opts.endpoint,
       key: opts.key,

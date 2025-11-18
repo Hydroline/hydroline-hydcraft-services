@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { storeToRefs } from 'pinia'
 import { useMinecraftServerStore } from '@/stores/minecraftServers'
+import { translateAuthErrorMessage } from '@/utils/auth-errors'
 import type {
   BeaconMtrLogRecord,
   BeaconMtrLogsResponse,
@@ -13,8 +14,7 @@ const serverStore = useMinecraftServerStore()
 const { items: servers } = storeToRefs(serverStore)
 
 const loading = ref(false)
-const error = ref<string | null>(null)
-const selectedServerId = ref<string | null>(null)
+const selectedServerId = ref<string | undefined>(undefined)
 
 const query = reactive({
   playerUuid: '',
@@ -23,8 +23,10 @@ const query = reactive({
   startDate: '',
   endDate: '',
   changeType: '',
+  orderColumn: 'timestamp' as 'timestamp' | 'id',
+  order: 'desc' as 'asc' | 'desc',
   page: 1,
-  pageSize: 50,
+  pageSize: 20,
 })
 
 const data = ref<BeaconMtrLogsResponse | null>(null)
@@ -62,10 +64,22 @@ function formatDate(input?: string | null) {
   return d.format('YYYY-MM-DD HH:mm:ss')
 }
 
+function toggleSort(column: 'timestamp' | 'id') {
+  if (query.orderColumn === column) {
+    query.order = query.order === 'desc' ? 'asc' : 'desc'
+  } else {
+    query.orderColumn = column
+    query.order = 'desc'
+  }
+  query.page = 1
+  void refresh(1)
+}
+
 async function refresh(targetPage?: number) {
   if (!selectedServerId.value) return
+  // 防止并发重复请求，导致重复 toast
+  if (loading.value) return
   loading.value = true
-  error.value = null
   try {
     const params = {
       playerUuid: query.playerUuid || undefined,
@@ -74,19 +88,26 @@ async function refresh(targetPage?: number) {
       startDate: query.startDate || undefined,
       endDate: query.endDate || undefined,
       changeType: query.changeType || undefined,
+      orderColumn: query.orderColumn,
+      order: query.order,
       page: targetPage ?? query.page,
       pageSize: query.pageSize,
     }
-    const res = await serverStore.getBeaconMtrLogs(
+    const res = (await serverStore.getBeaconMtrLogs(
       selectedServerId.value,
       params,
-    )
-    data.value = res as BeaconMtrLogsResponse
+    )) as BeaconMtrLogsResponse
+    data.value = res
     query.page = res.result?.page ?? params.page ?? 1
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : '无法加载 MTR 审计日志，请稍后重试。'
-    error.value = message
+    const raw = err instanceof Error ? err.message : String(err ?? '')
+    const message = translateAuthErrorMessage(raw)
+    const toast = useToast()
+    toast.add({
+      title: '加载 MTR 审计日志失败',
+      description: message,
+      color: 'error',
+    })
   } finally {
     loading.value = false
   }
@@ -129,10 +150,8 @@ onMounted(async () => {
   if (servers.value.length === 0) {
     await serverStore.fetchAll()
   }
-  selectedServerId.value = beaconServers.value[0]?.id ?? null
-  if (selectedServerId.value && activeServer.value) {
-    await refresh(1)
-  }
+  selectedServerId.value = beaconServers.value[0]?.id ?? undefined
+  // 初始刷新由下面的 watch(selectedServerId) 统一触发，避免重复请求/重复 toast
 })
 
 watch(selectedServerId, async (value) => {
@@ -165,21 +184,6 @@ watch(selectedServerId, async (value) => {
         />
       </div>
     </header>
-
-    <UAlert v-if="error" color="error" variant="soft" class="rounded-2xl">
-      {{ error }}
-    </UAlert>
-
-    <UAlert
-      v-if="!beaconServers.length"
-      color="warning"
-      variant="soft"
-      class="rounded-2xl"
-    >
-      当前没有配置 Hydroline Beacon
-      的服务器，请先在「服务端状态」中为某个服务端填写 Beacon Endpoint 与 Key
-      并启用。
-    </UAlert>
 
     <section
       class="flex flex-wrap items-end gap-3 rounded-3xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm dark:border-slate-800/60 dark:bg-slate-900/60"
@@ -221,6 +225,30 @@ watch(selectedServerId, async (value) => {
           placeholder="例如 EDIT / CREATE / DELETE"
         />
       </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-xs uppercase tracking-wide text-slate-500"
+          >排序字段</span
+        >
+        <USelect
+          v-model="query.orderColumn"
+          :items="[
+            { label: '时间戳', value: 'timestamp' },
+            { label: 'ID', value: 'id' },
+          ]"
+          class="min-w-[120px]"
+        />
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-xs uppercase tracking-wide text-slate-500">顺序</span>
+        <USelect
+          v-model="query.order"
+          :items="[
+            { label: '倒序（默认）', value: 'desc' },
+            { label: '正序', value: 'asc' },
+          ]"
+          class="min-w-[120px]"
+        />
+      </div>
       <div class="flex flex-1 justify-end gap-2">
         <UButton color="neutral" variant="ghost" @click="resetFilters">
           重置
@@ -248,7 +276,18 @@ watch(selectedServerId, async (value) => {
           <tr
             class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
           >
-            <th class="px-4 py-3">时间</th>
+            <th
+              class="px-4 py-3 cursor-pointer select-none"
+              @click="toggleSort('timestamp')"
+            >
+              <span>时间</span>
+              <span
+                v-if="query.orderColumn === 'timestamp'"
+                class="ml-1 text-[10px]"
+              >
+                {{ query.order === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
             <th class="px-4 py-3">玩家</th>
             <th class="px-4 py-3">动作</th>
             <th class="px-4 py-3">类/上下文</th>

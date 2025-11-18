@@ -286,12 +286,19 @@ export const useMinecraftServerStore = defineStore('minecraft-servers', {
 
     async getBeaconPlayerAdvancements(
       id: string,
-      params: { playerUuid?: string; playerName?: string },
+      params: {
+        playerUuid?: string
+        playerName?: string
+        page?: number
+        pageSize?: number
+      },
     ) {
       const token = this.authHeaders()
       const search = new URLSearchParams()
       if (params.playerUuid) search.set('playerUuid', params.playerUuid)
       if (params.playerName) search.set('playerName', params.playerName)
+      if (params.page) search.set('page', String(params.page))
+      if (params.pageSize) search.set('pageSize', String(params.pageSize))
       const query = search.toString()
       return await apiFetch(
         `/admin/minecraft/servers/${id}/beacon/players/advancements${
@@ -303,12 +310,19 @@ export const useMinecraftServerStore = defineStore('minecraft-servers', {
 
     async getBeaconPlayerStats(
       id: string,
-      params: { playerUuid?: string; playerName?: string },
+      params: {
+        playerUuid?: string
+        playerName?: string
+        page?: number
+        pageSize?: number
+      },
     ) {
       const token = this.authHeaders()
       const search = new URLSearchParams()
       if (params.playerUuid) search.set('playerUuid', params.playerUuid)
       if (params.playerName) search.set('playerName', params.playerName)
+      if (params.page) search.set('page', String(params.page))
+      if (params.pageSize) search.set('pageSize', String(params.pageSize))
       const query = search.toString()
       return await apiFetch(
         `/admin/minecraft/servers/${id}/beacon/players/stats${

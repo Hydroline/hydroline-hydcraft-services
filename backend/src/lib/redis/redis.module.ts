@@ -25,7 +25,9 @@ import { RedisService } from './redis.service';
 
         try {
           const redisUrl = `redis://${process.env.REDIS_PASSWORD ? `:${process.env.REDIS_PASSWORD}@` : ''}${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}/${process.env.REDIS_DB || '0'}`;
-          logger.log(`Connecting to Redis: ${redisUrl.replace(/:[^:]*@/, ':***@')}`);
+          logger.log(
+            `Connecting to Redis: ${redisUrl.replace(/:[^:]*@/, ':***@')}`,
+          );
 
           const store = await redisStore({
             url: redisUrl,

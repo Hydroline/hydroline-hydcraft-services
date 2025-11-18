@@ -8,7 +8,11 @@ import { MinecraftPingScheduler } from './ping.scheduler';
 import { PingMinecraftRequestDto } from './dto/ping-minecraft.dto';
 import { McsmClient } from '../lib/mcsmanager/mcsmanager.client';
 import { McsmInstanceDetail } from '../lib/mcsmanager/types';
-import { HydrolineBeaconClient, HydrolineBeaconPoolService, BeaconLibService } from '../lib/hydroline-beacon';
+import {
+  HydrolineBeaconClient,
+  HydrolineBeaconPoolService,
+  BeaconLibService,
+} from '../lib/hydroline-beacon';
 
 @Injectable()
 export class MinecraftServerService {
@@ -137,6 +141,17 @@ export class MinecraftServerService {
     }
     return server;
   }
+  private async getBeaconClient(id: string) {
+    const server = await this.getServerWithBeaconSecret(id);
+    const client = this.beaconPool.getOrCreate({
+      serverId: server.id,
+      endpoint: server.beaconEndpoint!,
+      key: server.beaconKey!,
+      timeoutMs: server.beaconRequestTimeoutMs ?? undefined,
+      maxRetry: server.beaconMaxRetry ?? undefined,
+    });
+    return { server, client };
+  }
 
   async pingManagedServer(id: string) {
     const server = await this.getServerById(id);
@@ -262,6 +277,21 @@ export class MinecraftServerService {
       }
     }
     return { server: this.stripSecret(server), detail };
+  }
+
+  async getBeaconStatus(id: string) {
+    const { server, client } = await this.prepareBeaconClient(id);
+    const statusPayload = await client.emit<any>('get_status', {});
+    const onlinePlayers = await client.emit<any>('list_online_players', {});
+    const connection = client.getConnectionStatus();
+    return {
+      server: this.stripSecret(server),
+      status: statusPayload,
+      onlinePlayers,
+      connection,
+      lastHeartbeatAt: new Date().toISOString(),
+      fromCache: false,
+    };
   }
 
   async getMcsmOutput(id: string, size?: number) {
@@ -497,21 +527,6 @@ export class MinecraftServerService {
     } as unknown;
   }
 
-  async getBeaconStatus(id: string) {
-    const { server, client } = await this.prepareBeaconClient(id);
-    const statusPayload = await client.emit<any>('get_status', {});
-    const onlinePlayers = await client.emit<any>('list_online_players', {});
-    const connection = client.getConnectionStatus();
-    return {
-      server: this.stripSecret(server),
-      status: statusPayload,
-      onlinePlayers,
-      connection,
-      lastHeartbeatAt: new Date().toISOString(),
-      fromCache: false,
-    };
-  }
-
   async getBeaconMtrLogs(
     id: string,
     query: {
@@ -521,6 +536,8 @@ export class MinecraftServerService {
       startDate?: string;
       endDate?: string;
       changeType?: string;
+      orderColumn?: string;
+      order?: string;
       page?: number;
       pageSize?: number;
     },
@@ -533,8 +550,10 @@ export class MinecraftServerService {
     if (query.startDate) payload.startDate = query.startDate;
     if (query.endDate) payload.endDate = query.endDate;
     if (query.changeType) payload.changeType = query.changeType;
+    if (query.orderColumn) payload.orderColumn = query.orderColumn;
+    if (query.order) payload.order = query.order;
     payload.page = query.page ?? 1;
-    payload.pageSize = query.pageSize ?? 50;
+    payload.pageSize = query.pageSize ?? 20;
     const result = await client.emit<any>('get_player_mtr_logs', payload);
     return { server: this.stripSecret(server), result };
   }
@@ -549,24 +568,44 @@ export class MinecraftServerService {
 
   async getBeaconPlayerAdvancements(
     id: string,
-    player: { playerUuid?: string; playerName?: string },
+    player: {
+      playerUuid?: string;
+      playerName?: string;
+      keys?: string[];
+      page?: number;
+      pageSize?: number;
+    },
   ) {
     const { server, client } = await this.prepareBeaconClient(id);
     const payload: Record<string, unknown> = {};
     if (player.playerUuid) payload.playerUuid = player.playerUuid;
     if (player.playerName) payload.playerName = player.playerName;
+    if (player.keys) payload.keys = player.keys;
+    if (player.page && player.page > 0) payload.page = player.page;
+    if (player.pageSize && player.pageSize > 0)
+      payload.pageSize = Math.min(player.pageSize, 1000);
     const result = await client.emit<any>('get_player_advancements', payload);
     return { server: this.stripSecret(server), result };
   }
 
   async getBeaconPlayerStats(
     id: string,
-    player: { playerUuid?: string; playerName?: string },
+    player: {
+      playerUuid?: string;
+      playerName?: string;
+      keys?: string[];
+      page?: number;
+      pageSize?: number;
+    },
   ) {
     const { server, client } = await this.prepareBeaconClient(id);
     const payload: Record<string, unknown> = {};
     if (player.playerUuid) payload.playerUuid = player.playerUuid;
     if (player.playerName) payload.playerName = player.playerName;
+    if (player.keys) payload.keys = player.keys;
+    if (player.page && player.page > 0) payload.page = player.page;
+    if (player.pageSize && player.pageSize > 0)
+      payload.pageSize = Math.min(player.pageSize, 1000);
     const result = await client.emit<any>('get_player_stats', payload);
     return { server: this.stripSecret(server), result };
   }

@@ -19,7 +19,7 @@ import type {
   LuckpermsPlayer,
   LuckpermsHealth,
 } from './luckperms.interfaces';
-import { MysqlLuckpermsLib } from '../lib/luckperms/luckperms-lib';
+import { MysqlLuckpermsLib } from '../lib/luckperms/luckperms.lib';
 import { PromLuckpermsMetricsRecorder } from './luckperms.metrics';
 import { externalError, LuckpermsError } from './luckperms.errors';
 

@@ -27,6 +27,14 @@ export class BeaconMtrLogsQueryDto {
   changeType?: string;
 
   @IsOptional()
+  @IsString()
+  orderColumn?: string; // timestamp | id
+
+  @IsOptional()
+  @IsString()
+  order?: string; // asc | desc
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Type(() => Number)
