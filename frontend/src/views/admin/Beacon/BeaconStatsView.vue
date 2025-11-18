@@ -18,6 +18,8 @@ const toast = useToast()
 const query = reactive({
   playerUuid: '',
   playerName: '',
+  page: 1,
+  pageSize: 50,
 })
 
 const data = ref<BeaconPlayerGenericResponse<BeaconPlayerStatsResult> | null>(
@@ -64,11 +66,30 @@ const filteredRows = computed(() => {
   const important = rows.value.filter((r) =>
     importantPrefixes.some((p) => r.key.startsWith(p)),
   )
-  return important.length > 0 ? important : rows.value
+  const base = important.length > 0 ? important : rows.value
+
+  const start = (query.page - 1) * query.pageSize
+  const end = start + query.pageSize
+  return base.slice(start, end)
 })
 
 const detailOpen = ref(false)
 const detailStats = computed(() => data.value?.result.stats ?? {})
+
+const total = computed(() => {
+  const stats = data.value?.result.stats ?? {}
+  const allRows = Object.entries(stats).map(([key, value]) => ({ key, value }))
+  const important = allRows.filter((r) =>
+    importantPrefixes.some((p) => r.key.startsWith(p)),
+  )
+  return (important.length > 0 ? important : allRows).length
+})
+
+const page = computed(() => query.page)
+const pageSize = computed(() => query.pageSize)
+const pageCount = computed(() =>
+  pageSize.value > 0 ? Math.max(1, Math.ceil(total.value / pageSize.value)) : 1,
+)
 
 const hasPlayerFilter = computed(
   () => query.playerUuid.trim() !== '' || query.playerName.trim() !== '',
@@ -112,13 +133,21 @@ async function refresh() {
 }
 
 function applyFilters() {
+  query.page = 1
   void refresh()
 }
 
 function resetFilters() {
   query.playerUuid = ''
   query.playerName = ''
+  query.page = 1
   void refresh()
+}
+
+async function goToPage(target: number) {
+  const clamped = Math.max(1, Math.min(target, pageCount.value))
+  query.page = clamped
+  await refresh()
 }
 
 onMounted(async () => {
@@ -235,17 +264,62 @@ onMounted(async () => {
         </tbody>
       </table>
       <div
-        class="flex items-center justify-end gap-2 border-t border-slate-200/70 px-4 py-3 text-xs text-slate-500 dark:border-slate-800/60 dark:text-slate-400"
+        v-if="hasQueried && total > 0"
+        class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-300"
       >
-        <UButton
-          color="neutral"
-          size="xs"
-          variant="outline"
-          :disabled="loading || !Object.keys(detailStats).length"
-          @click="detailOpen = true"
-        >
-          查看全部统计 JSON
-        </UButton>
+        <span>
+          第 {{ page }} / {{ pageCount }} 页，共 {{ total }} 条统计
+        </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="page <= 1 || loading"
+            @click="goToPage(1)"
+          >
+            首页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="page <= 1 || loading"
+            @click="goToPage(page - 1)"
+          >
+            上一页
+          </UButton>
+          <span class="text-xs text-slate-500 dark:text-slate-400">
+            每页 {{ pageSize }} 条
+          </span>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="page >= pageCount || loading"
+            @click="goToPage(page + 1)"
+          >
+            下一页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="page >= pageCount || loading"
+            @click="goToPage(pageCount)"
+          >
+            末页
+          </UButton>
+          <UButton
+            color="neutral"
+            size="xs"
+            variant="outline"
+            :disabled="loading || !Object.keys(detailStats).length"
+            @click="detailOpen = true"
+          >
+            查看全部统计 JSON
+          </UButton>
+        </div>
       </div>
     </div>
 

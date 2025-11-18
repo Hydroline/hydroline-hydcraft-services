@@ -18,6 +18,8 @@ const toast = useToast()
 const query = reactive({
   playerUuid: '',
   playerName: '',
+  page: 1,
+  pageSize: 50,
 })
 
 const data =
@@ -44,7 +46,7 @@ const activeServer = computed<MinecraftServer | null>(() => {
 
 const rows = computed(() => {
   const adv = data.value?.result.advancements ?? {}
-  return Object.entries(adv).map(([key, raw]) => {
+  const all = Object.entries(adv).map(([key, raw]) => {
     let parsed: unknown = null
     try {
       parsed = JSON.parse(raw as string)
@@ -53,7 +55,21 @@ const rows = computed(() => {
     }
     return { id: key, raw, parsed }
   })
+  const start = (query.page - 1) * query.pageSize
+  const end = start + query.pageSize
+  return all.slice(start, end)
 })
+
+const total = computed(() => {
+  const adv = data.value?.result.advancements ?? {}
+  return Object.keys(adv).length
+})
+
+const page = computed(() => query.page)
+const pageSize = computed(() => query.pageSize)
+const pageCount = computed(() =>
+  pageSize.value > 0 ? Math.max(1, Math.ceil(total.value / pageSize.value)) : 1,
+)
 
 const detailOpen = ref(false)
 const detailItem = ref<{ id: string; raw: unknown; parsed: unknown } | null>(
@@ -102,18 +118,26 @@ async function refresh() {
 }
 
 function applyFilters() {
+  query.page = 1
   void refresh()
 }
 
 function resetFilters() {
   query.playerUuid = ''
   query.playerName = ''
+  query.page = 1
   void refresh()
 }
 
 function openDetail(id: string, raw: unknown, parsed: unknown) {
   detailItem.value = { id, raw, parsed }
   detailOpen.value = true
+}
+
+async function goToPage(target: number) {
+  const clamped = Math.max(1, Math.min(target, pageCount.value))
+  query.page = clamped
+  await refresh()
 }
 
 onMounted(async () => {
@@ -247,6 +271,55 @@ onMounted(async () => {
           </tr>
         </tbody>
       </table>
+      <div
+        v-if="hasQueried && total > 0"
+        class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-300"
+      >
+        <span>
+          第 {{ page }} / {{ pageCount }} 页，共 {{ total }} 条成就
+        </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="page <= 1 || loading"
+            @click="goToPage(1)"
+          >
+            首页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="page <= 1 || loading"
+            @click="goToPage(page - 1)"
+          >
+            上一页
+          </UButton>
+          <span class="text-xs text-slate-500 dark:text-slate-400">
+            每页 {{ pageSize }} 条
+          </span>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="page >= pageCount || loading"
+            @click="goToPage(page + 1)"
+          >
+            下一页
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="page >= pageCount || loading"
+            @click="goToPage(pageCount)"
+          >
+            末页
+          </UButton>
+        </div>
+      </div>
     </div>
 
     <UModal
