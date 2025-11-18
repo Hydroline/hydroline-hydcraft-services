@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@headlessui/vue": "^1.7.23",
+    "@iconify-json/logos": "^1.2.10",
     "@iconify-json/lucide": "^1.2.71",
     "@iconify/vue": "^5.0.0",
     "@internationalized/date": "^3.10.0",

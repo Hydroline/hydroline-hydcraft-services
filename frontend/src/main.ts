@@ -4,6 +4,7 @@ import { createHead } from '@unhead/vue/client'
 import ui from '@nuxt/ui/vue-plugin'
 import { addCollection } from '@iconify/vue'
 import lucideIcons from '@iconify-json/lucide/icons.json'
+import logosIcons from '@iconify-json/logos/icons.json'
 
 import router from './router'
 import { useUiStore } from '@/stores/ui'
@@ -17,6 +18,7 @@ import App from './App.vue'
 import { THEME_KEY } from 'vue-echarts'
 
 addCollection(lucideIcons)
+addCollection(logosIcons)
 
 import { use as echartsUse, registerTheme } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'

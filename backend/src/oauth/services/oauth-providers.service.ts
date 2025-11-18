@@ -37,6 +37,7 @@ export class OAuthProvidersService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureDefaultMicrosoftProvider();
+    await this.ensureDefaultGoogleProvider();
   }
 
   private handleTableMissing(error: unknown) {
@@ -292,6 +293,13 @@ export class OAuthProvidersService implements OnModuleInit {
         redirectUri: process.env.MICROSOFT_OAUTH_REDIRECT_URI ?? undefined,
       };
     }
+    if (key === 'google') {
+      return {
+        clientId: process.env.GOOGLE_CLIENT_ID ?? undefined,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? undefined,
+        redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? undefined,
+      };
+    }
     return {};
   }
 
@@ -341,6 +349,48 @@ export class OAuthProvidersService implements OnModuleInit {
         },
       });
       this.logger.log('Bootstrapped Microsoft OAuth provider');
+    }
+  }
+
+  private async ensureDefaultGoogleProvider() {
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return;
+    }
+    let existing: { id: string } | null = null;
+    try {
+      existing = await this.prisma.oAuthProvider.findUnique({
+        where: { key: 'google' },
+      });
+      this.tablesReady = true;
+    } catch (error) {
+      if (this.handleTableMissing(error)) {
+        return;
+      }
+      throw error;
+    }
+
+    const defaultSettings: OAuthProviderSettings = {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      redirectUri:
+        process.env.GOOGLE_OAUTH_REDIRECT_URI ??
+        'http://localhost:3000/oauth/providers/google/callback',
+      scopes: ['openid', 'profile', 'email'],
+    };
+
+    if (!existing) {
+      await this.prisma.oAuthProvider.create({
+        data: {
+          key: 'google',
+          name: 'Google',
+          type: 'GOOGLE',
+          description: 'Login via Google OAuth 2.0',
+          enabled: true,
+          settings: defaultSettings as Prisma.InputJsonValue,
+        },
+      });
+      this.logger.log('Bootstrapped Google OAuth provider');
     }
   }
 

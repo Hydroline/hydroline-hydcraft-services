@@ -186,9 +186,7 @@ async function unbindProvider(providerKey: string) {
       >
         <div class="px-5 py-3 flex items-center justify-between gap-4">
           <div class="flex items-center gap-3">
-            <div
-              class="flex items-center justify-center rounded-2xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
-            >
+            <div class="flex items-center justify-center">
               <UIcon
                 :name="resolveProviderIcon(provider.type)"
                 class="h-5 w-5"
@@ -228,7 +226,7 @@ async function unbindProvider(providerKey: string) {
               v-else
               color="primary"
               size="sm"
-              variant="soft"
+              variant="ghost"
               :loading="loadingProvider === provider.key"
               @click="bindProvider(provider.key)"
             >
