@@ -11,7 +11,7 @@ import type {
 const serverStore = useMinecraftServerStore()
 const { items: servers } = storeToRefs(serverStore)
 
-const selectedServerId = ref<string | null>(null)
+const selectedServerId = ref<string | undefined>(undefined)
 const loading = ref(false)
 const toast = useToast()
 
@@ -120,7 +120,7 @@ onMounted(async () => {
   if (servers.value.length === 0) {
     await serverStore.fetchAll()
   }
-  selectedServerId.value = beaconServers.value[0]?.id ?? null
+  selectedServerId.value = beaconServers.value[0]?.id ?? undefined
 })
 </script>
 
