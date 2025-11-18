@@ -475,7 +475,7 @@ async function confirmForgotReset() {
                       <UInput
                         v-model="loginForm.email"
                         type="email"
-                        placeholder="you@example.com"
+                        placeholder="请输入邮箱"
                         required
                       />
                     </label>
@@ -525,7 +525,7 @@ async function confirmForgotReset() {
                       <UInput
                         v-model="loginForm.email"
                         type="email"
-                        placeholder="you@example.com"
+                        placeholder="请输入邮箱"
                         required
                       />
                     </label>
@@ -710,7 +710,7 @@ async function confirmForgotReset() {
                       <UInput
                         v-model="registerForm.email"
                         type="email"
-                        placeholder="you@example.com"
+                        placeholder="请输入邮箱"
                         required
                       />
                     </label>
@@ -928,7 +928,7 @@ async function confirmForgotReset() {
                 <UInput
                   v-model="forgotForm.email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="请输入邮箱"
                 />
               </label>
               <div class="flex items-center justify-end gap-2">

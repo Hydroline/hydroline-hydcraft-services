@@ -212,7 +212,7 @@ onMounted(() => {
                   <UInput
                     class="w-full"
                     v-model="resetForm.email"
-                    placeholder="you@example.com"
+                    placeholder="请输入邮箱"
                     type="email"
                   />
                 </label>

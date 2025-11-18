@@ -467,7 +467,7 @@ onBeforeUnmount(() => {
           <div class="flex flex-col gap-3 text-sm">
             <UInput
               v-model="addEmailDialog.email"
-              placeholder="you@example.com"
+              placeholder="请输入邮箱"
               type="email"
               class="w-full"
             />
