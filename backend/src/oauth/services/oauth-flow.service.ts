@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OAuthProvidersService } from './oauth-providers.service';
 import { OAuthStateService } from './oauth-state.service';
 import { OAuthLogService } from './oauth-log.service';
+import { Dispatcher, ProxyAgent, fetch } from 'undici';
 import {
   OAuthFlowMode,
   OAuthProviderSettings,
@@ -34,9 +35,18 @@ interface AccountProfilePayload extends Record<string, unknown> {
   avatarDataUri?: string | null;
 }
 
+type ProviderProfile = {
+  id: string;
+  mail?: string | null;
+  email?: string | null;
+  userPrincipalName?: string | null;
+  displayName?: string | null;
+};
+
 @Injectable()
 export class OAuthFlowService {
   private readonly logger = new Logger(OAuthFlowService.name);
+  private readonly dispatcher: Dispatcher | undefined;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -44,7 +54,14 @@ export class OAuthFlowService {
     private readonly stateService: OAuthStateService,
     private readonly logService: OAuthLogService,
     private readonly authService: AuthService,
-  ) {}
+  ) {
+    const proxy =
+      process.env.HTTPS_PROXY ||
+      process.env.https_proxy ||
+      process.env.HTTP_PROXY ||
+      process.env.http_proxy;
+    this.dispatcher = proxy ? new ProxyAgent(proxy) : undefined;
+  }
 
   async start(input: StartFlowInput, context: RequestContext) {
     const runtime = await this.providers.requireRuntimeProvider(
@@ -135,10 +152,12 @@ export class OAuthFlowService {
       input.code,
       input.providerKey,
     );
-    const [profile, avatarDataUri] = await Promise.all([
-      this.fetchMicrosoftProfile(token.access_token, runtime.settings),
-      this.fetchMicrosoftPhoto(token.access_token, runtime.settings),
-    ]);
+
+    const { profile, avatarDataUri } = await this.fetchProviderProfile(
+      input.providerKey,
+      token.access_token,
+      runtime.settings,
+    );
     const accountProfile = this.buildAccountProfile(profile, avatarDataUri);
 
     const resultPayload =
@@ -223,6 +242,7 @@ export class OAuthFlowService {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body,
+      dispatcher: this.dispatcher,
     });
     if (!response.ok) {
       const text = await response.text();
@@ -237,6 +257,29 @@ export class OAuthFlowService {
     };
   }
 
+  private async fetchProviderProfile(
+    providerKey: string,
+    accessToken: string,
+    settings: OAuthProviderSettings,
+  ): Promise<{ profile: ProviderProfile; avatarDataUri: string | null }> {
+    if (providerKey === 'google') {
+      return this.fetchGoogleProfile(accessToken, settings);
+    }
+    return this.fetchMicrosoftProviderProfile(accessToken, settings);
+  }
+
+  private async fetchMicrosoftProviderProfile(
+    accessToken: string,
+    settings: OAuthProviderSettings,
+  ): Promise<{ profile: ProviderProfile; avatarDataUri: string | null }> {
+    const profile = await this.fetchMicrosoftProfile(accessToken, settings);
+    const avatarDataUri = await this.fetchMicrosoftPhoto(
+      accessToken,
+      settings,
+    );
+    return { profile, avatarDataUri };
+  }
+
   private async fetchMicrosoftProfile(
     accessToken: string,
     settings: OAuthProviderSettings,
@@ -248,6 +291,7 @@ export class OAuthFlowService {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
+      dispatcher: this.dispatcher,
     });
     if (!response.ok) {
       const text = await response.text();
@@ -265,19 +309,61 @@ export class OAuthFlowService {
     };
   }
 
+  private async fetchGoogleProfile(
+    accessToken: string,
+    settings: OAuthProviderSettings,
+  ): Promise<{ profile: ProviderProfile; avatarDataUri: string | null }> {
+    const url =
+      (settings.graphUserUrl as string) ??
+      'https://www.googleapis.com/oauth2/v3/userinfo';
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      dispatcher: this.dispatcher,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new UnauthorizedException(`Failed to fetch Google profile: ${text}`);
+    }
+    const data = (await response.json()) as {
+      sub?: string;
+      id?: string;
+      email?: string | null;
+      name?: string | null;
+      given_name?: string | null;
+      family_name?: string | null;
+      picture?: string | null;
+    };
+    const profile: ProviderProfile = {
+      id: data.sub ?? data.id ?? '',
+      email: data.email ?? null,
+      mail: data.email ?? null,
+      displayName: (() => {
+        if (data.name) return data.name;
+        const combined = [data.given_name, data.family_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        return combined || null;
+      })(),
+      userPrincipalName: data.email ?? null,
+    };
+    if (!profile.id) {
+      throw new UnauthorizedException('Invalid Google profile payload');
+    }
+    return { profile, avatarDataUri: data.picture ?? null };
+  }
+
   private buildAccountProfile(
-    profile: {
-      id: string;
-      mail?: string | null;
-      userPrincipalName?: string;
-      displayName?: string | null;
-    },
+    profile: ProviderProfile,
     avatarDataUri?: string | null,
   ): AccountProfilePayload {
+    const email = profile.email ?? profile.mail ?? null;
     return {
       id: profile.id,
-      displayName: profile.displayName ?? null,
-      email: profile.mail ?? null,
+      displayName: profile.displayName ?? profile.userPrincipalName ?? email,
+      email,
       userPrincipalName: profile.userPrincipalName ?? null,
       avatarDataUri: avatarDataUri ?? null,
     };
@@ -295,6 +381,7 @@ export class OAuthFlowService {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
+        dispatcher: this.dispatcher,
       });
       if (!response.ok) {
         return null;
@@ -319,12 +406,7 @@ export class OAuthFlowService {
   private async handleLogin(
     provider: { id: string; key: string; type: string },
     state: OAuthStatePayload,
-    profile: {
-      id: string;
-      mail?: string | null;
-      userPrincipalName?: string;
-      displayName?: string | null;
-    },
+    profile: ProviderProfile,
     accountProfile: AccountProfilePayload,
     context: RequestContext,
   ): Promise<OAuthResultPayload> {
@@ -368,9 +450,10 @@ export class OAuthFlowService {
       };
     }
     const email =
+      profile.email ||
       profile.mail ||
       profile.userPrincipalName ||
-      `${externalId}@microsoft.local`;
+      `${externalId}@${provider.key}.local`;
     const registerResult = await this.authService.createOauthUser(
       {
         email,
@@ -393,7 +476,7 @@ export class OAuthFlowService {
       action: OAuthLogAction.REGISTER,
       status: OAuthLogStatus.SUCCESS,
       userId: registerResult.user.id,
-      message: 'Created user via Microsoft OAuth',
+      message: `Created user via ${provider.type ?? provider.key} OAuth`,
     });
     return {
       success: true,
@@ -406,7 +489,7 @@ export class OAuthFlowService {
   private async handleBinding(
     provider: { id: string; key: string; type: string },
     state: OAuthStatePayload,
-    profile: { id: string },
+    profile: ProviderProfile,
     accountProfile: AccountProfilePayload,
   ): Promise<OAuthResultPayload> {
     if (!state.userId) {
@@ -422,7 +505,7 @@ export class OAuthFlowService {
     });
     if (existing && existing.userId !== state.userId) {
       throw new BadRequestException(
-        'This Microsoft account is already bound to another user',
+        'This account is already bound to another user',
       );
     }
     await this.linkAccount(

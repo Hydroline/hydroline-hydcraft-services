@@ -125,7 +125,7 @@ async function bindProvider(providerKey: string) {
   }
   loadingProvider.value = providerKey
   try {
-    const callbackUrl = `${window.location.origin}/oauth/callback`
+    const callbackUrl = `${window.location.origin}/oauth/callback?redirect=${encodeURIComponent(window.location.href)}`
     const result = await oauthStore.startFlow(
       providerKey,
       {

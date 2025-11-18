@@ -22,7 +22,19 @@ const portalStore = usePortalStore()
 const status = ref<'PENDING' | 'SUCCESS' | 'ERROR'>('PENDING')
 const message = ref('正在完成授权，请稍候…')
 
+function resolveRedirect(input: unknown) {
+  if (typeof input !== 'string' || input.length === 0) return '/'
+  try {
+    const url = new URL(input, window.location.origin)
+    if (url.origin !== window.location.origin) return '/'
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return '/'
+  }
+}
+
 async function handleResult(providerKey: string, state: string) {
+  const redirectTarget = resolveRedirect(route.query.redirect)
   try {
     const result = (await oauthStore.fetchResult(
       providerKey,
@@ -34,9 +46,9 @@ async function handleResult(providerKey: string, state: string) {
       authStore.setUser(result.user)
       await portalStore.fetchHome(true)
       status.value = 'SUCCESS'
-      message.value = '登录成功，正在返回首页…'
+      message.value = '登录成功，正在跳转…'
       setTimeout(() => {
-        router.replace('/')
+        router.replace(redirectTarget)
       }, 1500)
       return
     }
@@ -45,6 +57,9 @@ async function handleResult(providerKey: string, state: string) {
       await portalStore.fetchHome(true)
       status.value = 'SUCCESS'
       message.value = '绑定成功'
+      setTimeout(() => {
+        router.replace(redirectTarget)
+      }, 800)
       return
     }
     throw new Error('未能获取有效的授权结果')
@@ -110,7 +125,7 @@ onMounted(() => {
           v-if="status !== 'PENDING'"
           color="primary"
           variant="soft"
-          @click="router.replace('/')"
+          @click="router.replace(resolveRedirect(route.query.redirect))"
         >
           返回首页
         </UButton>
