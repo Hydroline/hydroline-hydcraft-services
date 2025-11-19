@@ -1,4 +1,5 @@
 import { OAuthProviderSettings } from '../../oauth/types/provider.types';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
 export interface OAuthProxyResponse {
   ok: boolean;
@@ -15,6 +16,21 @@ export function getProxyConfig() {
   return { proxyUrl, proxyKey };
 }
 
+async function fetchWithProxy(url: string, init: RequestInit): Promise<Response> {
+  const systemProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+
+  if (systemProxy) {
+    const dispatcher = new ProxyAgent(systemProxy);
+    // @ts-ignore - undici types might slightly differ from global fetch types
+    return undiciFetch(url, {
+      ...init,
+      dispatcher,
+    }) as unknown as Promise<Response>;
+  }
+
+  return fetch(url, init);
+}
+
 export async function oauthProxyFetch(
   targetUrl: string,
   init: RequestInit,
@@ -25,7 +41,7 @@ export async function oauthProxyFetch(
 
   if (!useProxy) {
     try {
-      return await fetch(targetUrl, init);
+      return await fetchWithProxy(targetUrl, init);
     } catch (error) {
       throw new Error(
         `Direct OAuth request failed (Target: ${targetUrl}): ${
@@ -47,7 +63,7 @@ export async function oauthProxyFetch(
   };
 
   try {
-    const response = await fetch(proxyUrl, {
+    const response = await fetchWithProxy(proxyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
