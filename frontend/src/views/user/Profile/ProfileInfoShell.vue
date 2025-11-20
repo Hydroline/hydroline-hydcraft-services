@@ -34,10 +34,10 @@ const activeId = computed<SectionKey>(() => {
 })
 
 function gotoSection(id: SectionKey) {
-  if (id === 'basic') router.push({ name: 'profile.info.basic' })
-  else if (id === 'minecraft') router.push({ name: 'profile.info.minecraft' })
-  else if (id === 'sessions') router.push({ name: 'profile.info.sessions' })
-  else router.push({ name: 'profile.info.security' })
+  if (id === 'basic') router.push({ name: 'profile.basic' })
+  else if (id === 'minecraft') router.push({ name: 'profile.minecraft' })
+  else if (id === 'sessions') router.push({ name: 'profile.sessions' })
+  else router.push({ name: 'profile.security' })
 }
 
 const avatarUrl = computed<string | null>(() => {

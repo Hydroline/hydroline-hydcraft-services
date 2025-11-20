@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
+import { Motion } from 'motion-v'
 import dayjs from 'dayjs'
 import { apiFetch } from '@/utils/api'
 
@@ -18,7 +19,7 @@ interface PublicServerStatusItem {
     } | null
   } | null
   ping?: Pick<MinecraftPingResult, 'edition' | 'response'> | null
-  mcsmConnected?: boolean
+  mcsm?: { status?: number } | null
 }
 
 interface PublicServerStatusResponse {
@@ -29,7 +30,7 @@ const props = defineProps<{
   intervalMs?: number
 }>()
 
-const intervalMs = computed(() => props.intervalMs ?? 5 * 60 * 1000)
+const intervalMs = computed(() => props.intervalMs ?? 1 * 60 * 1000)
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -48,6 +49,36 @@ const now = ref(dayjs())
 const nowReal = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
 let pollingTimer: ReturnType<typeof setInterval> | null = null
+let toggleTimer: ReturnType<typeof setInterval> | null = null
+
+const showTime = ref(false)
+const serversHeaderContainer = ref<HTMLElement | null>(null)
+
+function animateWidthChange(action: () => void) {
+  const el = serversHeaderContainer.value
+  if (!el) {
+    action()
+    return
+  }
+  const oldWidth = el.getBoundingClientRect().width
+  action()
+  nextTick(() => {
+    const el2 = serversHeaderContainer.value
+    if (!el2) return
+    const newWidth = el2.getBoundingClientRect().width
+    if (oldWidth === newWidth) return
+    el2.style.width = oldWidth + 'px'
+    el2.style.transition = 'width 0.35s ease'
+    void el2.offsetWidth
+    el2.style.width = newWidth + 'px'
+    const cleanup = () => {
+      el2.style.transition = ''
+      el2.style.width = ''
+      el2.removeEventListener('transitionend', cleanup)
+    }
+    el2.addEventListener('transitionend', cleanup)
+  })
+}
 
 function startClock() {
   if (timer) return
@@ -114,11 +145,21 @@ function stopPolling() {
 onMounted(() => {
   startClock()
   startPolling()
+
+  toggleTimer = setInterval(() => {
+    animateWidthChange(() => {
+      showTime.value = !showTime.value
+    })
+  }, 5000)
 })
 
 onBeforeUnmount(() => {
   stopClock()
   stopPolling()
+  if (toggleTimer) {
+    clearInterval(toggleTimer)
+    toggleTimer = null
+  }
 })
 
 function onlineLabel(item: PublicServerStatusItem) {
@@ -133,12 +174,73 @@ function latencyLabel(item: PublicServerStatusItem) {
   return `${latency} ms`
 }
 
+function mcsmStatusLabel(item: PublicServerStatusItem) {
+  const status = item.mcsm?.status
+  switch (status) {
+    case -1:
+      return '忙碌'
+    case 0:
+      return '已停止'
+    case 1:
+      return '停止中'
+    case 2:
+      return '启动中'
+    case 3:
+      return '运行中'
+    default:
+      return '未配置'
+  }
+}
+
+function mcsmStatusIcon(item: PublicServerStatusItem) {
+  const status = item.mcsm?.status
+  switch (status) {
+    case -1:
+      return 'i-lucide-hourglass'
+    case 0:
+      return 'i-lucide-square'
+    case 1:
+      return 'i-lucide-power'
+    case 2:
+      return 'i-lucide-rocket'
+    case 3:
+      return 'i-lucide-zap'
+    default:
+      return 'i-lucide-plug-zap'
+  }
+}
+
 function motdText(item: PublicServerStatusItem) {
   const resp = item.ping?.response as
     | MinecraftPingResult['response']
     | undefined
   if (!resp) return ''
   return ''
+}
+
+function serverClockDisplay(item: PublicServerStatusItem) {
+  const worldMinutes = item.beacon?.clock?.worldMinutes
+  if (worldMinutes == null) return ''
+  const local = localClocks.value[item.id]
+  let mcMinutes = worldMinutes
+  if (local && !local.locked) {
+    const diff = nowReal.value - local.baseRealMs
+    mcMinutes = Math.floor(local.baseMcMinutes + diff / 833.333)
+  }
+  const minutesInDay = 24 * 60
+  mcMinutes = ((mcMinutes % minutesInDay) + minutesInDay) % minutesInDay
+  const hh = Math.floor(mcMinutes / 60)
+    .toString()
+    .padStart(2, '0')
+  const mm = (mcMinutes % 60).toString().padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
+function displayHeaderLabel(item: PublicServerStatusItem) {
+  if (showTime.value && item.beacon?.clock?.worldMinutes != null) {
+    return serverClockDisplay(item)
+  }
+  return onlineLabel(item)
 }
 
 const totalCapacity = computed(() => {
@@ -174,16 +276,48 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
     <div
       class="flex items-center gap-2 font-mono rounded-full border border-slate-200/70 px-3 py-1.5 text-xs text-slate-500 dark:border-slate-700 hover:bg-slate-200/40 dark:hover:bg-slate-700/40 transition duration-300 cursor-pointer"
     >
-      <div class="flex flex-wrap items-center gap-3 select-none">
+      <div
+        ref="serversHeaderContainer"
+        class="flex items-center gap-3 select-none whitespace-nowrap"
+      >
         <template v-if="servers.length">
-          <template v-for="(item, index) in servers" :key="item.id">
-            <div class="flex items-center gap-1">
-              <UIcon name="i-lucide-server" class="h-3 w-3 text-slate-400" />
+          <template
+            v-for="(item, index) in servers"
+            :key="item.id + (showTime ? '-time' : '-online')"
+          >
+            <Motion
+              as="div"
+              class="flex items-center gap-1"
+              :initial="{ opacity: 0, filter: 'blur(6px)', y: 8 }"
+              :animate="{ opacity: 1, filter: 'blur(0px)', y: 0 }"
+              :transition="{ duration: 0.35, ease: 'easeInOut' }"
+            >
+              <UIcon
+                :name="
+                  showTime && item.beacon?.clock?.worldMinutes != null
+                    ? 'i-lucide-clock'
+                    : 'i-lucide-server'
+                "
+                class="h-3 w-3 text-slate-400"
+              />
               <span class="font-medium text-slate-900 dark:text-white">
                 {{ item.displayName }}
               </span>
-              <span>{{ onlineLabel(item) }}</span>
-            </div>
+              <span
+                :class="[
+                  showTime && item.beacon?.clock?.locked
+                    ? 'text-rose-500 dark:text-rose-400'
+                    : 'text-slate-500 dark:text-slate-400',
+                ]"
+              >
+                {{ displayHeaderLabel(item) }}
+              </span>
+              <UIcon
+                v-if="showTime && item.beacon?.clock?.locked"
+                name="i-lucide-lock"
+                class="h-3 w-3 text-rose-500 dark:text-rose-400"
+              />
+            </Motion>
             <div
               v-if="index < servers.length - 1"
               class="w-0.5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-500"
@@ -201,7 +335,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
     <template #content>
       <div class="w-80 p-4 space-y-3">
         <h3 class="mb-1 font-medium text-slate-900 dark:text-white">
-          服务端运行情况
+          服务端状态
         </h3>
 
         <div v-if="servers.length" class="space-y-3">
@@ -243,19 +377,23 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
                 </div>
                 <div class="flex items-center gap-1 text-[11px] text-slate-500">
                   <UIcon
-                    :name="
-                      item.mcsmConnected ? 'i-lucide-zap' : 'i-lucide-plug-zap'
-                    "
+                    :name="mcsmStatusIcon(item)"
                     :class="[
                       'h-3 w-3',
-                      item.mcsmConnected
+                      item.mcsm?.status === 3
                         ? 'text-emerald-500'
-                        : 'text-slate-400',
+                        : item.mcsm?.status === 2
+                          ? 'text-amber-500'
+                          : item.mcsm?.status === 1
+                            ? 'text-orange-500'
+                            : item.mcsm?.status === 0
+                              ? 'text-slate-400'
+                              : 'text-slate-400',
                     ]"
                   />
                   <span>
-                    {{ latencyLabel(item) }} ·
-                    {{ onlineLabel(item) }}
+                    {{ latencyLabel(item) }} · {{ onlineLabel(item) }} ·
+                    {{ mcsmStatusLabel(item) }}
                   </span>
                 </div>
               </div>

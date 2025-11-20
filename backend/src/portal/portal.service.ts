@@ -285,9 +285,27 @@ export class PortalService {
         }
 
         // MCSM 连接状态（通过元数据/最近一次状态记录或配置来粗略判断）
-        const mcsmConnected = Boolean(
+        const mcsmConfigured = Boolean(
           server.mcsmPanelUrl && server.mcsmInstanceUuid,
         );
+        let mcsm: { status?: number } | null = null;
+        if (mcsmConfigured) {
+          try {
+            const mcsmStatus = await this.minecraftServers.getMcsmStatus(
+              server.id,
+            );
+            if (mcsmStatus?.detail && typeof mcsmStatus.detail.status === 'number') {
+              mcsm = { status: mcsmStatus.detail.status };
+            } else {
+              mcsm = { status: undefined };
+            }
+          } catch (e) {
+            this.logger.debug(
+              `MCSM status fetch failed for server ${server.id}: ${String(e)}`,
+            );
+            mcsm = { status: undefined };
+          }
+        }
 
         // 将最近一次 ping 记录映射为公共结构（不暴露 raw），并在必要时用作 Beacon 的兜底
         let ping: {
@@ -322,7 +340,7 @@ export class PortalService {
           edition: server.edition,
           beacon: beaconClock ? { clock: beaconClock } : null,
           ping,
-          mcsmConnected,
+          mcsm,
         };
       }),
     );

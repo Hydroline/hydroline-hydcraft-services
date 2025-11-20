@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
@@ -12,6 +12,8 @@ import AuthDialog from '@/components/dialogs/AuthDialog.vue'
 import HydrlabSvg from '@/assets/resources/hydrlab_logo.svg'
 import HydrolineSvg from '@/assets/resources/hydroline_logo.svg'
 import MinecraftServerClockPopover from './components/MinecraftServerClockPopover.vue'
+import DesktopSidebar from './components/DesktopSidebar.vue'
+import MobileSidebar from './components/MobileSidebar.vue'
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()
@@ -28,12 +30,19 @@ const toggleDesktopSidebar = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
 
-const mainNav = computed(() => {
-  const links = [
+type NavItem = {
+  name: string
+  to: string
+  icon: string
+  requiresAuth?: boolean
+}
+
+const mainNav = computed<NavItem[]>(() => {
+  const links: NavItem[] = [
     { name: '仪表盘', to: '/', icon: 'i-lucide-home' },
     {
       name: '玩家档案',
-      to: '/profile',
+      to: '/player',
       icon: 'i-lucide-user-round',
     },
   ]
@@ -71,9 +80,16 @@ const userAvatarUrl = computed(() => {
   return user.profile?.avatarUrl ?? user.image ?? null
 })
 
-const userEmail = computed(() => {
-  const user = authStore.user as { email?: string } | null
-  return user?.email
+const userDisplayLabel = computed(() => {
+  const displayName = authStore.displayName
+  if (typeof displayName === 'string' && displayName.trim().length > 0) {
+    return displayName
+  }
+  const email = (authStore.user as { email?: string } | null)?.email
+  if (typeof email === 'string' && email.trim().length > 0) {
+    return email
+  }
+  return '用户'
 })
 
 watch(
@@ -87,19 +103,17 @@ function openLogin() {
   uiStore.openLoginDialog()
 }
 
-// 页面头部导航由 HomeView 自行渲染，这里无需派生 navigationLinks
-
 const userDropdownItems = computed(() => [
   [
     {
       label: '用户信息',
       icon: 'i-lucide-id-card',
-      click: () => routerPush('/profile/info'),
+      click: () => routerPush('/profile'),
     },
     {
       label: '用户偏好设置',
       icon: 'i-lucide-sliders-horizontal',
-      click: () => routerPush('/profile/preferences'),
+      click: () => routerPush('/preferences'),
     },
   ],
   [
@@ -161,99 +175,20 @@ const routerPush = (path: string) => {
     <AuthDialog />
 
     <!-- Desktop Sidebar -->
-    <aside
-      class="fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-slate-200 bg-white/80 backdrop-blur-xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-950/80 lg:flex"
-      :class="[isSidebarCollapsed ? 'w-16' : 'w-64']"
-    >
-      <div class="border-b border-slate-200/60 dark:border-slate-800/60">
-        <div class="flex justify-center w-16 h-16 p-3">
-          <UButton
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            class="hidden lg:block rounded-lg w-full h-full"
-            @click="toggleDesktopSidebar"
-          >
-            <UIcon
-              :name="
-                isSidebarCollapsed
-                  ? 'i-lucide-panel-left-open'
-                  : 'i-lucide-panel-left-close'
-              "
-              class="h-4 w-4 m-auto"
-            />
-          </UButton>
-        </div>
-      </div>
-
-      <nav class="flex-1 overflow-y-auto overflow-x-hidden space-y-1 p-3">
-        <RouterLink
-          v-for="item in mainNav"
-          :key="item.to"
-          :to="item.to"
-          class="group flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors"
-          :class="[
-            route.path === item.to
-              ? 'bg-primary-50 text-primary-600 dark:bg-primary-950/30 dark:text-primary-400'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
-            isSidebarCollapsed ? 'justify-center px-2' : '',
-          ]"
-        >
-          <UTooltip :text="item.name">
-            <UIcon :name="item.icon" class="h-5 w-4 shrink-0" />
-            <span
-              class="whitespace-nowrap transition-all duration-300"
-              :class="[
-                isSidebarCollapsed
-                  ? 'hidden w-0 opacity-0'
-                  : 'w-auto opacity-100',
-              ]"
-            >
-              {{ item.name }}
-            </span>
-          </UTooltip>
-        </RouterLink>
-      </nav>
-    </aside>
+    <DesktopSidebar
+      :is-sidebar-collapsed="isSidebarCollapsed"
+      :main-nav="mainNav"
+      :current-path="route.path"
+      @toggle="toggleDesktopSidebar"
+    />
 
     <!-- Mobile Sidebar (Drawer) -->
-    <transition name="slide-fade">
-      <aside
-        v-if="menuOpen"
-        class="fixed inset-y-0 left-0 z-50 w-72 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:bg-slate-950/95 lg:hidden"
-      >
-        <div class="mb-6 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <HydrolineSvg class="h-6 text-primary-500" />
-            <span class="font-bold">HydCraft</span>
-          </div>
-          <UButton
-            icon="i-lucide-x"
-            variant="ghost"
-            size="xs"
-            class="flex justify-center items-center h-9 w-9"
-            @click="menuOpen = false"
-          />
-        </div>
-        <nav class="space-y-2">
-          <RouterLink
-            v-for="item in mainNav"
-            :key="item.to"
-            :to="item.to"
-            class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition"
-            :class="[
-              route.path === item.to
-                ? 'bg-primary-100/80 text-primary-600 dark:bg-primary-500/20 dark:text-primary-100'
-                : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white',
-            ]"
-            @click="menuOpen = false"
-          >
-            <UIcon :name="item.icon" class="text-base h-fit" />
-            {{ item.name }}
-          </RouterLink>
-        </nav>
-      </aside>
-    </transition>
+    <MobileSidebar
+      :menu-open="menuOpen"
+      :main-nav="mainNav"
+      :current-path="route.path"
+      @close="menuOpen = false"
+    />
 
     <!-- Main Content Wrapper -->
     <div
@@ -321,11 +256,11 @@ const routerPush = (path: string) => {
                 <span
                   class="hidden text-slate-700 dark:text-slate-200 sm:block"
                 >
-                  {{ authStore.displayName ?? authStore.user?.email ?? '用户' }}
+                  {{ userDisplayLabel }}
                 </span>
                 <UserAvatar
                   :src="userAvatarUrl"
-                  :name="authStore.displayName ?? authStore.user?.email"
+                  :name="userDisplayLabel"
                   size="sm"
                 />
               </UButton>
@@ -383,38 +318,15 @@ const routerPush = (path: string) => {
         </div>
       </header>
 
-      <transition name="slide-fade">
-        <aside
-          v-if="menuOpen"
-          class="fixed inset-y-0 left-0 z-100 w-72 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:bg-slate-950/95"
-        >
-          <div class="mb-6 flex items-center justify-between">
-            <UButton
-              icon="i-lucide-x"
-              variant="ghost"
-              size="xs"
-              class="flex justify-center items-center h-9 w-9"
-              @click="menuOpen = false"
-            />
-          </div>
-          <nav class="space-y-2">
-            <RouterLink
-              v-for="item in mainNav"
-              :key="item.to"
-              :to="item.to"
-              class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition"
-              :class="[
-                route.path === item.to
-                  ? 'bg-primary-100/80 text-primary-600 dark:bg-primary-500/20 dark:text-primary-100'
-                  : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white',
-              ]"
-            >
-              <UIcon :name="item.icon" class="text-base h-fit" />
-              {{ item.name }}
-            </RouterLink>
-          </nav>
-        </aside>
-      </transition>
+      <MobileSidebar
+        :menu-open="menuOpen"
+        :main-nav="mainNav"
+        :current-path="route.path"
+        z-index-class="z-100"
+        :show-brand-header="false"
+        :close-on-navigate="false"
+        @close="menuOpen = false"
+      />
 
       <main class="pt-4">
         <RouterView />

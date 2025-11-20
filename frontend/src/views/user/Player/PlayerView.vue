@@ -42,7 +42,8 @@ const luckpermsMap = computed(() => {
 })
 
 const authmeBindings = computed<NormalizedLuckpermsBinding[]>(() => {
-  const raw = (auth.user as Record<string, unknown> | null)?.authmeBindings ?? []
+  const raw =
+    (auth.user as Record<string, unknown> | null)?.authmeBindings ?? []
   if (!Array.isArray(raw)) return []
   return normalizeLuckpermsBindings(raw, {
     luckpermsMap: luckpermsMap.value,
@@ -62,23 +63,25 @@ function resolveGroupLabel(
   }
   return displayName || name || ''
 }
-
 </script>
 
 <template>
   <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pb-16 pt-8">
-    <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <header
+      class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+    >
       <div class="flex flex-col gap-1">
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
           玩家档案
         </h1>
         <p class="text-sm text-slate-600 dark:text-slate-300">
-          在这里浏览 Minecraft 绑定、状态事件等档案数据。若需修改账户资料，请使用“用户信息”页面。
+          在这里浏览 Minecraft
+          绑定、状态事件等档案数据。若需修改账户资料，请使用“用户信息”页面。
         </p>
       </div>
       <RouterLink
         v-if="isAuthenticated"
-        to="/profile/info"
+        to="/profile"
         class="inline-flex items-center gap-2 rounded-full border border-primary-200 px-4 py-1.5 text-sm font-medium text-primary-600 transition hover:border-primary-300 hover:text-primary-500 dark:border-primary-500/40 dark:text-primary-200"
       >
         <UIcon name="i-lucide-id-card" class="h-4 w-4" />
@@ -187,12 +190,18 @@ function resolveGroupLabel(
         >
           <div class="flex items-center gap-3">
             <img
-              :src="'https://mc-heads.net/avatar/' + (binding.realname || binding.username) + '/48'"
+              :src="
+                'https://mc-heads.net/avatar/' +
+                (binding.realname || binding.username) +
+                '/48'
+              "
               :alt="binding.realname || binding.username"
               class="h-12 w-12 rounded-md border border-slate-200 object-cover dark:border-slate-700"
             />
             <div class="flex flex-col">
-              <span class="text-base font-semibold text-slate-800 dark:text-slate-100">
+              <span
+                class="text-base font-semibold text-slate-800 dark:text-slate-100"
+              >
                 {{ binding.realname || binding.username }}
               </span>
               <span class="text-xs text-slate-500 dark:text-slate-400">
@@ -201,7 +210,9 @@ function resolveGroupLabel(
             </div>
           </div>
           <div class="mt-3">
-            <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <p
+              class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            >
               权限组
             </p>
             <div
@@ -231,10 +242,7 @@ function resolveGroupLabel(
                 {{ resolveGroupLabel(group.name, group.displayName) }}
               </UBadge>
             </div>
-            <p
-              v-else
-              class="mt-2 text-sm text-slate-500 dark:text-slate-400"
-            >
+            <p v-else class="mt-2 text-sm text-slate-500 dark:text-slate-400">
               暂未同步到 LuckPerms 权限数据。
             </p>
           </div>

@@ -8,12 +8,12 @@
     />
     <div class="space-y-2">
       <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-        页面未找到
+        页面不存在
       </h1>
       <p class="text-sm text-slate-600 dark:text-slate-300">
-        您访问的内容暂不可用，返回首页继续探索。
+        您访问的内容暂不可用，返回首页继续探索
       </p>
     </div>
-    <UButton to="/" color="primary">返回首页</UButton>
+    <UButton variant="soft" to="/" color="primary">返回首页</UButton>
   </div>
 </template>

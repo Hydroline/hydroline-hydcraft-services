@@ -11,57 +11,80 @@ export const userRoutes: RouteRecordRaw[] = [
         path: '',
         name: 'home',
         component: () => import('@/views/user/Home/HomeView.vue'),
-        meta: { layout: 'user' },
+        meta: { layout: 'user', title: '仪表盘', icon: 'i-lucide-home' },
+      },
+      {
+        path: 'player',
+        name: 'player',
+        component: () => import('@/views/user/Player/PlayerView.vue'),
+        meta: {
+          layout: 'user',
+          title: '玩家档案',
+          icon: 'i-lucide-user-round',
+        },
       },
       {
         path: 'profile',
         name: 'profile',
-        component: () => import('@/views/user/Profile/ProfileView.vue'),
-        meta: { layout: 'user' },
-      },
-      {
-        path: 'profile/info',
-        name: 'profile.info',
         component: () => import('@/views/user/Profile/ProfileInfoShell.vue'),
         meta: { layout: 'user' },
         children: [
-          { path: '', redirect: { name: 'profile.info.basic' } },
+          { path: '', redirect: { name: 'profile.basic' } },
           {
             path: 'basic',
-            name: 'profile.info.basic',
+            name: 'profile.basic',
             component: () =>
               import('@/views/user/Profile/ProfileInfoBasicView.vue'),
-            meta: { layout: 'user' },
+            meta: {
+              layout: 'user',
+              title: '用户信息',
+              icon: 'i-lucide-id-card',
+            },
           },
           {
             path: 'minecraft',
-            name: 'profile.info.minecraft',
+            name: 'profile.minecraft',
             component: () =>
               import('@/views/user/Profile/ProfileInfoMinecraftView.vue'),
-            meta: { layout: 'user' },
+            meta: {
+              layout: 'user',
+              title: '服务器账户',
+              icon: 'i-lucide-server',
+            },
           },
           {
             path: 'sessions',
-            name: 'profile.info.sessions',
+            name: 'profile.sessions',
             component: () =>
               import('@/views/user/Profile/ProfileInfoSessionsView.vue'),
-            meta: { layout: 'user' },
+            meta: {
+              layout: 'user',
+              title: '登录设备管理',
+              icon: 'i-lucide-smartphone',
+            },
           },
           {
             path: 'security',
-            name: 'profile.info.security',
+            name: 'profile.security',
             component: () =>
               import('@/views/user/Profile/ProfileInfoSecurityView.vue'),
-            meta: { layout: 'user' },
+            meta: {
+              layout: 'user',
+              title: '隐私与安全',
+              icon: 'i-lucide-shield-check',
+            },
           },
         ],
       },
       {
-        path: 'profile/preferences',
-        name: 'profile.preferences',
-        component: () =>
-          import('@/views/user/Profile/ProfilePreferencesView.vue'),
-        meta: { layout: 'user' },
+        path: '/preferences',
+        name: 'preferences',
+        component: () => import('@/views/user/Preferences/PreferencesView.vue'),
+        meta: {
+          layout: 'user',
+          title: '偏好设置',
+          icon: 'i-lucide-sliders-horizontal',
+        },
       },
       {
         path: 'error/404',
@@ -156,6 +179,7 @@ export const adminRoutes: RouteRecordRaw[] = [
           layout: 'admin',
         },
       },
+
       // 服务端信息 / Hydroline Beacon
       {
         path: 'beacon/mtr-logs',
@@ -218,7 +242,6 @@ export const adminRoutes: RouteRecordRaw[] = [
           import('@/views/admin/Verification/VerificationConsole.vue'),
         meta: {
           requiresAuth: true,
-          // 允许具备用户查看或管理权限的人员访问本页（页面内部根据权限控制是否可编辑开关）
           requiresPermissions: ['config.view.verification'],
           layout: 'admin',
         },
@@ -293,7 +316,7 @@ const router = createRouter({
       redirect: '/error/404',
     },
   ],
-  // 保持用户体验一致：导航到新页面时滚动到顶部；浏览器后退/前进时恢复之前的位置。
+
   scrollBehavior(to, _from, savedPosition) {
     if (savedPosition) {
       return savedPosition
