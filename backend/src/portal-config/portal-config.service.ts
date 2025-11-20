@@ -135,7 +135,9 @@ export class PortalConfigService {
       input.attachmentId,
     );
     if (!attachment.isPublic) {
-      throw new BadRequestException('Background image attachment must be set to public access');
+      throw new BadRequestException(
+        'Background image attachment must be set to public access',
+      );
     }
 
     const background: PortalHomeBackgroundConfig = {
@@ -173,7 +175,9 @@ export class PortalConfigService {
         input.attachmentId,
       );
       if (!attachment.isPublic) {
-        throw new BadRequestException('Background image attachment must be set to public access');
+        throw new BadRequestException(
+          'Background image attachment must be set to public access',
+        );
       }
       target.attachmentId = input.attachmentId;
     }
@@ -208,7 +212,9 @@ export class PortalConfigService {
     const config = await this.getRawConfig();
     const map = new Map(config.hero.backgrounds.map((item) => [item.id, item]));
     if (order.length !== config.hero.backgrounds.length) {
-      throw new BadRequestException('Order list size does not match background count');
+      throw new BadRequestException(
+        'Order list size does not match background count',
+      );
     }
     const next: PortalHomeBackgroundConfig[] = [];
     for (const id of order) {
@@ -297,7 +303,9 @@ export class PortalConfigService {
     const config = await this.getRawConfig();
     const map = new Map(config.navigation.map((item) => [item.id, item]));
     if (order.length !== config.navigation.length) {
-      throw new BadRequestException('Order list size does not match navigation item count');
+      throw new BadRequestException(
+        'Order list size does not match navigation item count',
+      );
     }
     const next: PortalNavigationConfigItem[] = [];
     for (const id of order) {

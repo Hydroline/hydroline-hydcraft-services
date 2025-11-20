@@ -64,10 +64,7 @@ export class OAuthAdminController {
   @Delete('providers/:providerId')
   @ApiOperation({ summary: '删除 Provider' })
   @RequirePermissions(PERMISSIONS.OAUTH_MANAGE_PROVIDERS)
-  removeProvider(
-    @Param('providerId') providerId: string,
-    @Req() req: Request,
-  ) {
+  removeProvider(@Param('providerId') providerId: string, @Req() req: Request) {
     return this.providersService.removeProvider(providerId, req.user?.id);
   }
 
@@ -76,7 +73,8 @@ export class OAuthAdminController {
   @RequirePermissions(PERMISSIONS.OAUTH_VIEW_ACCOUNTS)
   async listAccounts(@Query() query: ListOauthAccountsDto) {
     const page = query.page && query.page > 0 ? query.page : 1;
-    const sizeInput = query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
+    const sizeInput =
+      query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
     const pageSize = Math.min(sizeInput, 100);
     const skip = (page - 1) * pageSize;
     const where: any = {};

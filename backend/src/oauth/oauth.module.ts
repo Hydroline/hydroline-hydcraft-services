@@ -16,7 +16,11 @@ import { OAuthProxyTestController } from './controllers/oauth-proxy-test.control
     forwardRef(() => AuthModule),
     forwardRef(() => ConfigModule),
   ],
-  controllers: [OAuthAdminController, OAuthPublicController, OAuthProxyTestController],
+  controllers: [
+    OAuthAdminController,
+    OAuthPublicController,
+    OAuthProxyTestController,
+  ],
   providers: [
     OAuthProvidersService,
     OAuthLogService,

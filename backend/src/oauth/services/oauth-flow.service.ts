@@ -220,7 +220,7 @@ export class OAuthFlowService {
     const body = new URLSearchParams({
       client_id: clientId,
       scope: Array.isArray(settings.scopes)
-        ? (settings.scopes as string[]).join(' ')
+        ? settings.scopes.join(' ')
         : 'openid profile email offline_access User.Read',
       code,
       redirect_uri: redirectUri,
@@ -228,13 +228,17 @@ export class OAuthFlowService {
       client_secret: clientSecret ?? '',
     });
 
-    const response = await oauthProxyFetch(tokenUrl.replace('{tenant}', tenant), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+    const response = await oauthProxyFetch(
+      tokenUrl.replace('{tenant}', tenant),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body,
       },
-      body,
-    }, settings);
+      settings,
+    );
     if (!response.ok) {
       const text = await response.text();
       throw new UnauthorizedException(`Token exchange failed: ${text}`);
@@ -264,10 +268,7 @@ export class OAuthFlowService {
     settings: OAuthProviderSettings,
   ): Promise<{ profile: ProviderProfile; avatarDataUri: string | null }> {
     const profile = await this.fetchMicrosoftProfile(accessToken, settings);
-    const avatarDataUri = await this.fetchMicrosoftPhoto(
-      accessToken,
-      settings,
-    );
+    const avatarDataUri = await this.fetchMicrosoftPhoto(accessToken, settings);
     return { profile, avatarDataUri };
   }
 
@@ -278,11 +279,15 @@ export class OAuthFlowService {
     const url =
       (settings.graphUserUrl as string) ??
       'https://graph.microsoft.com/v1.0/me';
-    const response = await oauthProxyFetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    const response = await oauthProxyFetch(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    }, settings);
+      settings,
+    );
     if (!response.ok) {
       const text = await response.text();
       throw new UnauthorizedException(
@@ -306,14 +311,20 @@ export class OAuthFlowService {
     const url =
       (settings.graphUserUrl as string) ??
       'https://www.googleapis.com/oauth2/v3/userinfo';
-    const response = await oauthProxyFetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    const response = await oauthProxyFetch(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    }, settings);
+      settings,
+    );
     if (!response.ok) {
       const text = await response.text();
-      throw new UnauthorizedException(`Failed to fetch Google profile: ${text}`);
+      throw new UnauthorizedException(
+        `Failed to fetch Google profile: ${text}`,
+      );
     }
     const data = (await response.json()) as {
       sub?: string;
@@ -370,11 +381,15 @@ export class OAuthFlowService {
       (settings.graphPhotoUrl as string) ??
       'https://graph.microsoft.com/v1.0/me/photo/$value';
     try {
-      const response = await oauthProxyFetch(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
+      const response = await oauthProxyFetch(
+        url,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         },
-      }, settings);
+        settings,
+      );
       if (!response.ok) {
         return null;
       }

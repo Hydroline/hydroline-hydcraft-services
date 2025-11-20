@@ -85,11 +85,53 @@ export class BeaconLibService implements OnModuleInit {
   }
 
   /**
-   * 提供一个简单的只读缓存读取接口，供门户 Header 等调用方从
-   * 已有的 WS 连接中获取最近一次 get_status payload。
+   * 直接通过现有 WS 连接调用指定服务器的 get_server_time。
+   * 若连接不存在或未就绪，返回 null，不抛出错误。
    */
-  getCachedStatus(serverId: string) {
-    return this.pool.getStatusSnapshot(serverId);
+  async fetchServerTimeNow(serverId: string) {
+    const client = this.pool.getClientOrNull(serverId);
+    if (!client) return null;
+    try {
+      const payload = await client.emit<unknown>(
+        'get_server_time',
+        {},
+        {
+          timeoutMs: this.defaultTimeoutMs,
+        },
+      );
+      return payload;
+    } catch (e) {
+      this.logger.debug(
+        `fetchServerTimeNow failed for ${serverId}: ${String(e)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 直接通过现有 WS 连接调用指定服务器的 get_status。
+   */
+  async fetchStatusNow(serverId: string) {
+    const client = this.pool.getClientOrNull(serverId);
+    if (!client) return null;
+    try {
+      const payload = await client.emit<unknown>(
+        'get_status',
+        {},
+        {
+          timeoutMs: this.defaultTimeoutMs,
+        },
+      );
+      return payload;
+    } catch (e) {
+      this.logger.debug(`fetchStatusNow failed for ${serverId}: ${String(e)}`);
+      return null;
+    }
+  }
+
+  private get defaultTimeoutMs() {
+    // 与客户端默认超时建议保持一致
+    return 8000;
   }
 
   private isUsableConfig(s: BeaconServerRecord): boolean {

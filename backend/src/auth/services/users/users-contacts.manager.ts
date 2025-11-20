@@ -230,7 +230,9 @@ export async function removeContact(
       where: { userId, channelId: existing.channelId },
     });
     if (remainingCount <= 1) {
-      throw new BadRequestException('At least one email contact must be retained');
+      throw new BadRequestException(
+        'At least one email contact must be retained',
+      );
     }
   }
   await ctx.prisma.$transaction(async (tx) => {
@@ -332,7 +334,9 @@ export async function sendEmailVerificationCode(
         ? `${error.name}: ${error.message}`
         : String(error);
     ctx.logger.warn(`Failed to send email verification: ${reason}`);
-    throw new BadRequestException('Verification code sent failed, please try again later');
+    throw new BadRequestException(
+      'Verification code sent failed, please try again later',
+    );
   }
   return { success: true } as const;
 }
@@ -516,7 +520,9 @@ export async function setPrimaryEmailContact(
     throw new BadRequestException('Can only set email as primary contact');
   }
   if (contact.verification !== ContactVerificationStatus.VERIFIED) {
-    throw new BadRequestException('Email must be verified before setting as primary');
+    throw new BadRequestException(
+      'Email must be verified before setting as primary',
+    );
   }
   await ctx.prisma.$transaction(async (tx) => {
     await tx.userContact.updateMany({
@@ -677,8 +683,7 @@ async function migrateLegacyProfilePhoneContact(
   }
 
   const extra = profile.extra as Record<string, unknown>;
-  const rawPhone =
-    typeof extra.phone === 'string' ? extra.phone.trim() : '';
+  const rawPhone = typeof extra.phone === 'string' ? extra.phone.trim() : '';
   const rawCountry =
     typeof extra.phoneCountry === 'string'
       ? extra.phoneCountry.trim().toUpperCase()
@@ -698,7 +703,9 @@ async function migrateLegacyProfilePhoneContact(
       normalizedValue = composePhoneValue(dialCode, normalizedNumber);
     } catch (error) {
       const reason =
-        error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error);
       ctx.logger.warn(`跳过迁移历史手机号 ${rawPhone}: ${reason}`);
     }
   }
@@ -789,7 +796,9 @@ async function deliverPhoneVerificationCode(
   });
   const email = userInfo?.email?.trim();
   if (!email) {
-    throw new BadRequestException('Cannot send verification code, please bind email first');
+    throw new BadRequestException(
+      'Cannot send verification code, please bind email first',
+    );
   }
   const displayName =
     userInfo?.profile?.displayName?.trim() ?? userInfo?.name?.trim() ?? email;
@@ -811,7 +820,9 @@ async function deliverPhoneVerificationCode(
         ? `${error.name}: ${error.message}`
         : String(error);
     ctx.logger.warn(`Failed to send phone verification email: ${reason}`);
-    throw new BadRequestException('Verification code sent failed, please try again later');
+    throw new BadRequestException(
+      'Verification code sent failed, please try again later',
+    );
   }
   return { success: true, datetime, currentYear: String(year) } as const;
 }
@@ -1141,7 +1152,9 @@ export async function setPrimaryPhoneContact(
     verificationEnabled &&
     contact.verification !== ContactVerificationStatus.VERIFIED
   ) {
-    throw new BadRequestException('Phone must be verified before setting as primary');
+    throw new BadRequestException(
+      'Phone must be verified before setting as primary',
+    );
   }
 
   await ctx.prisma.$transaction(async (tx) => {

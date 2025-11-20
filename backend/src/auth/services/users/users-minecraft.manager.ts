@@ -19,11 +19,15 @@ export async function addMinecraftProfile(
       })
     : null;
   if (binding && binding.userId !== userId) {
-    throw new BadRequestException('AuthMe binding does not belong to this user');
+    throw new BadRequestException(
+      'AuthMe binding does not belong to this user',
+    );
   }
 
   if (!binding && !dto.nickname) {
-    throw new BadRequestException('Must provide either a nickname or an AuthMe binding');
+    throw new BadRequestException(
+      'Must provide either a nickname or an AuthMe binding',
+    );
   }
 
   const authmeUuid = dto.authmeUuid ?? binding?.authmeUuid ?? null;
@@ -69,7 +73,9 @@ export async function updateMinecraftProfile(
       })
     : null;
   if (binding && binding.userId !== userId) {
-    throw new BadRequestException('AuthMe binding does not belong to this user');
+    throw new BadRequestException(
+      'AuthMe binding does not belong to this user',
+    );
   }
 
   if (!binding && dto.authmeBindingId) {
@@ -77,7 +83,9 @@ export async function updateMinecraftProfile(
   }
 
   if (!binding && !dto.nickname && !target.nickname) {
-    throw new BadRequestException('Must provide either a nickname or an AuthMe binding');
+    throw new BadRequestException(
+      'Must provide either a nickname or an AuthMe binding',
+    );
   }
 
   const updated = await ctx.prisma.userMinecraftProfile.update({
@@ -94,7 +102,7 @@ export async function updateMinecraftProfile(
       metadata:
         dto.metadata !== undefined
           ? toJson(dto.metadata)
-          : target.metadata ?? Prisma.JsonNull,
+          : (target.metadata ?? Prisma.JsonNull),
     },
   });
 

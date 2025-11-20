@@ -67,7 +67,9 @@ export class OAuthPublicController {
       context: buildRequestContext(req),
     });
     const target = new URL(
-      (result.redirectUri || process.env.APP_PUBLIC_BASE_URL || 'http://localhost:3100') as string,
+      result.redirectUri ||
+        process.env.APP_PUBLIC_BASE_URL ||
+        'http://localhost:3100',
     );
     target.searchParams.set('provider', providerKey);
     target.searchParams.set('state', state);

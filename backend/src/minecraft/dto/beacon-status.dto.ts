@@ -5,4 +5,3 @@ export class BeaconStatusQueryDto {
   @IsString()
   scope?: string;
 }
-

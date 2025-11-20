@@ -60,7 +60,7 @@ export class ContactChannelsService {
         metadata:
           dto.metadata !== undefined
             ? this.toJson(dto.metadata)
-            : channel.metadata ?? Prisma.JsonNull,
+            : (channel.metadata ?? Prisma.JsonNull),
       },
     });
   }

@@ -62,9 +62,9 @@ export class OAuthProvidersService implements OnModuleInit {
     }
     const payload = value as Record<string, unknown>;
     const scopes = Array.isArray(payload.scopes)
-      ? (payload.scopes.filter(
+      ? payload.scopes.filter(
           (item): item is string => typeof item === 'string',
-        ) as string[])
+        )
       : undefined;
     return {
       tenantId: this.toString(payload.tenantId),

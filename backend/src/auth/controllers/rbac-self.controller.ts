@@ -40,7 +40,9 @@ export class RbacSelfController {
         link.role?.name === 'Administrator',
     );
     if (!isAdmin) {
-      throw new ForbiddenException('Only administrators can self-assign permissions');
+      throw new ForbiddenException(
+        'Only administrators can self-assign permissions',
+      );
     }
     return this.rolesService.selfAssignPermissions(
       user.id,

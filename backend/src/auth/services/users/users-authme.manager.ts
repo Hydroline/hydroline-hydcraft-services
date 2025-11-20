@@ -65,7 +65,7 @@ export async function updateAuthmeBinding(
         metadata:
           dto.metadata !== undefined
             ? toJsonValue(dto.metadata)
-            : binding.metadata ?? Prisma.JsonNull,
+            : (binding.metadata ?? Prisma.JsonNull),
       },
     });
 

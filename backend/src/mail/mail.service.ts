@@ -144,9 +144,7 @@ export class MailService {
           defaultSubject: manifestEntry?.defaultSubject,
         });
       }
-      return templates.sort((a, b) =>
-        a.label.localeCompare(b.label, 'zh-CN'),
-      );
+      return templates.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
     } catch (error) {
       this.logger.error(`列出邮件模板失败: ${String(error)}`);
       return [];

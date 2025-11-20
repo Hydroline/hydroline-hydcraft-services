@@ -62,9 +62,9 @@ export class McsmClient {
   ): Promise<T> {
     const controller = new AbortController();
     const timeout = this.config.timeoutMs ?? 10000;
-    const abortTimer = delay(timeout, null, { signal: controller.signal }).catch(
-      () => null,
-    );
+    const abortTimer = delay(timeout, null, {
+      signal: controller.signal,
+    }).catch(() => null);
 
     try {
       const url = new URL(path, this.config.baseUrl);

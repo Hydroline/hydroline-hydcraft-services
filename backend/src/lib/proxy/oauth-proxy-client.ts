@@ -17,7 +17,10 @@ export function getProxyConfig() {
   return { proxyUrl, proxyKey };
 }
 
-async function fetchWithProxy(url: string, init: RequestInit): Promise<Response> {
+async function fetchWithProxy(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
   const systemProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
 
   if (systemProxy) {
@@ -68,8 +71,10 @@ async function unwrapProxyResponse(response: Response): Promise<Response> {
 
   // Ensure content-type consistent with upstream if provided; otherwise infer
   if (!headers.has('content-type')) {
-    if (packet.bodyType === 'json') headers.set('content-type', 'application/json');
-    else if (packet.bodyType === 'text') headers.set('content-type', 'text/plain; charset=utf-8');
+    if (packet.bodyType === 'json')
+      headers.set('content-type', 'application/json');
+    else if (packet.bodyType === 'text')
+      headers.set('content-type', 'text/plain; charset=utf-8');
   }
 
   if (packet.bodyType === 'binary') {

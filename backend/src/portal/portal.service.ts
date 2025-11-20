@@ -129,6 +129,30 @@ export class PortalService {
     private readonly beaconLib: BeaconLibService,
   ) {}
 
+  /**
+   * 将 Minecraft 世界时间 tick (0-23999) 粗略映射为 HH:mm 字符串。
+   * Minecraft 一天 24000 tick，游戏内 6:00 对应 tick=0，这里做一个常见换算：
+   * tick 0 -> 06:00，tick 6000 -> 12:00，tick 18000 -> 00:00。
+   */
+  private formatMcWorldTime(timeTicks: number): {
+    text: string;
+    minutes: number;
+  } {
+    const TICKS_PER_DAY = 24000;
+    const MINUTES_PER_MC_DAY = 24 * 60;
+    const minutesPerTick = MINUTES_PER_MC_DAY / TICKS_PER_DAY; // 1 tick ~= 0.06 分钟
+    // Minecraft tick=0 是 6:00，先平移 6 小时
+    const totalMinutes =
+      (timeTicks * minutesPerTick + 6 * 60) % MINUTES_PER_MC_DAY;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = Math.floor(totalMinutes % 60);
+    const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
+    return {
+      text: `${pad(hours)}:${pad(minutes)}`,
+      minutes: Math.floor(totalMinutes),
+    };
+  }
+
   async getHomePortal(userId?: string) {
     let config: {
       hero: {
@@ -206,34 +230,66 @@ export class PortalService {
           orderBy: { createdAt: 'desc' },
         });
 
-        // 根据 Beacon WS 连接中的最近一次 get_status 快照，推导时钟显示与锁定状态
-        let beaconClock: { displayTime?: string; locked?: boolean } | null = null;
+        // 直接通过 Beacon WS 调用 get_server_time / get_status 推导时钟与在线信息
+        let beaconClock: { displayTime?: string; locked?: boolean } | null =
+          null;
+        let beaconOnlinePlayers: number | null = null;
+        let beaconMaxPlayers: number | null = null;
+
         try {
-          const beaconSnapshot = this.beaconLib.getCachedStatus(server.id);
-          if (beaconSnapshot && beaconSnapshot.status) {
-            const anyStatus = beaconSnapshot.status as any;
-            const locked = Boolean(anyStatus.time_locked ?? anyStatus.locked);
+          const [timePayload, statusPayload] = await Promise.all([
+            this.beaconLib.fetchServerTimeNow(server.id),
+            this.beaconLib.fetchStatusNow(server.id),
+          ]);
+
+          if (timePayload && (timePayload as any).success) {
+            const anyTime = timePayload as any;
+            const doCycle = anyTime.do_daylight_cycle;
+            const locked =
+              doCycle === 'false' || doCycle === false || doCycle === '0';
+
+            const timeTicks: number | null =
+              typeof anyTime.time === 'number' ? anyTime.time : null;
+
             let displayTime: string | undefined;
-            if (typeof anyStatus.display_time === 'string') {
-              displayTime = anyStatus.display_time;
-            } else if (typeof anyStatus.time === 'string') {
-              displayTime = anyStatus.time;
+            let worldMinutes: number | undefined;
+            if (timeTicks != null) {
+              const formatted = this.formatMcWorldTime(timeTicks);
+              displayTime = formatted.text;
+              worldMinutes = formatted.minutes;
             }
+
             beaconClock = {
               displayTime,
               locked,
-            };
+              // 前端用于本地 tick 驱动的规范化世界分钟数（0-1439）
+              worldMinutes,
+            } as any;
+          }
+
+          if (statusPayload && (statusPayload as any).success) {
+            const anyStatus = statusPayload as any;
+            if (typeof anyStatus.online_player_count === 'number') {
+              beaconOnlinePlayers = anyStatus.online_player_count;
+            }
+            if (typeof anyStatus.server_max_players === 'number') {
+              beaconMaxPlayers = anyStatus.server_max_players;
+            }
           }
         } catch (e) {
           this.logger.debug(
-            `Beacon clock lookup failed for server ${server.id}: ${String(e)}`,
+            `Beacon realtime status failed for server ${server.id}: ${String(
+              e,
+            )}`,
           );
         }
 
         // MCSM 连接状态（通过元数据/最近一次状态记录或配置来粗略判断）
-        const mcsmConnected = Boolean(server.mcsmPanelUrl && server.mcsmInstanceUuid);
+        const mcsmConnected = Boolean(
+          server.mcsmPanelUrl && server.mcsmInstanceUuid,
+        );
 
-        // 将最近一次 ping 记录映射为公共结构（不暴露 raw）
+        // 将最近一次 ping 记录映射为公共结构（不暴露 raw），并在必要时用作 Beacon 的兜底
         let ping: {
           edition: 'JAVA' | 'BEDROCK';
           response: {
@@ -244,13 +300,15 @@ export class PortalService {
         } | null = null;
 
         if (lastPing) {
+          const fallbackOnline = lastPing.onlinePlayers;
+          const fallbackMax = lastPing.maxPlayers;
           ping = {
             edition: lastPing.edition as 'JAVA' | 'BEDROCK',
             response: {
               latency: lastPing.latency,
               players: {
-                online: lastPing.onlinePlayers,
-                max: lastPing.maxPlayers,
+                online: beaconOnlinePlayers ?? fallbackOnline,
+                max: beaconMaxPlayers ?? fallbackMax,
               },
               motdText: lastPing.motd,
             },

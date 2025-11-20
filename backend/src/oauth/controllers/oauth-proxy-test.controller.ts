@@ -1,7 +1,10 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OAuthProvidersService } from '../services/oauth-providers.service';
-import { getProxyConfig, oauthProxyFetch } from '../../lib/proxy/oauth-proxy-client';
+import {
+  getProxyConfig,
+  oauthProxyFetch,
+} from '../../lib/proxy/oauth-proxy-client';
 
 @ApiTags('OAuth Proxy 测试')
 @Controller('auth/oauth')
@@ -14,14 +17,15 @@ export class OAuthProxyTestController {
     @Param('providerId') providerId: string,
     @Query('url') url?: string,
   ) {
-    const provider = await this.providers.listProviders().then((items) =>
-      items.find((p) => p.id === providerId),
-    );
+    const provider = await this.providers
+      .listProviders()
+      .then((items) => items.find((p) => p.id === providerId));
     if (!provider) {
       return { ok: false, error: 'Provider not found' };
     }
     const env = getProxyConfig();
-    const targetUrl = url || provider.settings.tokenUrl || provider.settings.authorizeUrl;
+    const targetUrl =
+      url || provider.settings.tokenUrl || provider.settings.authorizeUrl;
     if (!targetUrl) {
       return { ok: false, error: 'No target URL provided or configured', env };
     }

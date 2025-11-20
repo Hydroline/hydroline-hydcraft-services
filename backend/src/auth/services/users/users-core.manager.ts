@@ -555,7 +555,9 @@ export async function updateCurrentUser(
       const lastChanged = current.nameChangedAt?.getTime?.() ?? null;
       const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
       if (lastChanged && Date.now() - lastChanged < THIRTY_DAYS_MS) {
-        throw new BadRequestException('Username can only be changed once every 30 days');
+        throw new BadRequestException(
+          'Username can only be changed once every 30 days',
+        );
       }
       userUpdate.nameChangedAt = new Date();
     }
@@ -845,7 +847,9 @@ export async function updateOwnPassword(
   await ensureUser(ctx, userId);
   const trimmed = password.trim();
   if (trimmed.length < 8) {
-    throw new BadRequestException('Password must be at least 8 characters long');
+    throw new BadRequestException(
+      'Password must be at least 8 characters long',
+    );
   }
   const hashed = await hashPassword(trimmed);
   const accountIdentifier = generateRandomString(32, 'a-z', 'A-Z', '0-9');

@@ -8,12 +8,9 @@ interface BeaconPoolEntry {
   key: string;
   timeoutMs?: number;
   maxRetry?: number;
-  lastStatusFetchedAt?: number;
   attempts: number;
   retryTimer?: NodeJS.Timeout | null;
   lastAttemptAt?: number;
-  // 最近一次 get_status payload 缓存
-  lastStatusPayload?: unknown;
 }
 
 @Injectable()
@@ -36,33 +33,6 @@ export class HydrolineBeaconPoolService {
         );
         this.scheduleNextAttempt(entry);
       }
-
-      // 若已连接且距离上次拉取状态超过 30 秒，则尝试轻量刷新一次 get_status
-      const now = Date.now();
-      const last = entry.lastStatusFetchedAt ?? 0;
-      if (status.connected && now - last > 30000) {
-        this.fetchStatusSnapshot(entry).catch((err) => {
-          this.logger.debug(
-            `Health check: fetchStatusSnapshot failed for ${entry.serverId}: ${String(
-              err,
-            )}`,
-          );
-        });
-      }
-    }
-  }
-
-  private async fetchStatusSnapshot(entry: BeaconPoolEntry) {
-    try {
-      const payload = await entry.client.emit<unknown>('get_status', {}, {
-        timeoutMs: entry.timeoutMs ?? 8000,
-      });
-      entry.lastStatusPayload = payload;
-      entry.lastStatusFetchedAt = Date.now();
-    } catch (e) {
-      entry.lastStatusPayload = undefined;
-      entry.lastStatusFetchedAt = Date.now();
-      throw e;
     }
   }
 
@@ -162,14 +132,9 @@ export class HydrolineBeaconPoolService {
     return entry.client.getConnectionStatus();
   }
 
-  getStatusSnapshot(serverId: string) {
+  getClientOrNull(serverId: string): HydrolineBeaconClient | null {
     const entry = this.pool.get(serverId);
-    if (!entry) return null;
-    return {
-      connection: entry.client.getConnectionStatus(),
-      status: entry.lastStatusPayload,
-      lastFetchedAt: entry.lastStatusFetchedAt ?? null,
-    };
+    return entry?.client ?? null;
   }
 
   remove(serverId: string) {

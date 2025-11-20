@@ -16,6 +16,7 @@ interface PublicServerStatusItem {
     clock?: {
       displayTime?: string
       locked?: boolean
+      worldMinutes?: number
     } | null
   } | null
   ping?: Pick<MinecraftPingResult, 'edition' | 'response'> | null
@@ -38,8 +39,18 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const servers = ref<PublicServerStatusItem[]>([])
 
+type LocalClock = {
+  serverId: string
+  baseRealMs: number
+  baseMcMinutes: number
+  locked: boolean
+}
+
+const localClocks = ref<Record<string, LocalClock>>({})
+
 // 本地时钟动画：用 beacon 返回的 tick 时间或服务器时间为基准，每秒 +50ms（Minecraft tick）
 const now = ref(dayjs())
+const nowReal = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
 let pollingTimer: ReturnType<typeof setInterval> | null = null
 
@@ -47,6 +58,7 @@ function startClock() {
   if (timer) return
   timer = setInterval(() => {
     now.value = dayjs()
+    nowReal.value = Date.now()
   }, 1000)
 }
 
@@ -65,6 +77,22 @@ async function fetchStatus() {
       '/portal/header/minecraft-status',
     )
     servers.value = res.servers || []
+
+    const nowMs = Date.now()
+    const map: Record<string, LocalClock> = { ...localClocks.value }
+    for (const item of servers.value) {
+      const worldMinutes = item.beacon?.clock?.worldMinutes
+      const locked = Boolean(item.beacon?.clock?.locked)
+      if (typeof worldMinutes === 'number') {
+        map[item.id] = {
+          serverId: item.id,
+          baseRealMs: nowMs,
+          baseMcMinutes: worldMinutes,
+          locked,
+        }
+      }
+    }
+    localClocks.value = map
   } catch (e) {
     error.value = (e as Error).message
     servers.value = []
@@ -100,15 +128,32 @@ onBeforeUnmount(() => {
 
 // 计算展示用时间（从 beacon tick / timeLocked 推导），这里先简单展示 beacon.time
 function formatServerTime(item: PublicServerStatusItem) {
+  const minutes = currentDisplayMinutes(item)
+  if (minutes != null) {
+    const h = Math.floor(minutes / 60)
+    const m = Math.floor(minutes % 60)
+    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
+    return `${pad(h)}:${pad(m)}`
+  }
   if (item.beacon?.clock?.displayTime) {
     return item.beacon.clock.displayTime
   }
-  // 后端未提供具体时间时，用当前时间占位
   return now.value.format('HH:mm')
 }
 
 function isTimeLocked(item: PublicServerStatusItem) {
   return Boolean(item.beacon?.clock?.locked)
+}
+
+function currentDisplayMinutes(item: PublicServerStatusItem): number | null {
+  const clock = localClocks.value[item.id]
+  if (!clock) return null
+  if (clock.locked) return clock.baseMcMinutes
+  const deltaMs = nowReal.value - clock.baseRealMs
+  // 视觉效果：现实 1 秒 ≈ 世界 1 分钟
+  const deltaMinutes = deltaMs / 1000
+  const total = (clock.baseMcMinutes + deltaMinutes) % (24 * 60)
+  return total
 }
 
 function onlineLabel(item: PublicServerStatusItem) {
@@ -152,6 +197,14 @@ const overallOnlinePercent = computed(() => {
   if (!max) return 0
   return Math.min(100, Math.round((online / max) * 100))
 })
+
+function serverOnlinePercent(item: PublicServerStatusItem) {
+  const players = item.ping?.response.players
+  const online = players?.online ?? 0
+  const max = players?.max ?? 0
+  if (!max) return 0
+  return Math.min(100, Math.round((online / max) * 100))
+}
 </script>
 
 <template>
@@ -243,14 +296,13 @@ const overallOnlinePercent = computed(() => {
 
               <div class="mt-1">
                 <UProgress
-                  :value="(() => {
-                    const players = item.ping?.response.players
-                    const online = players?.online ?? 0
-                    const max = players?.max ?? 0
-                    if (!max) return 0
-                    return Math.min(100, Math.round((online / max) * 100))
-                  })()"
-                  size="2xs"
+                  :value="serverOnlinePercent(item)"
+                  size="xs"
+                  class="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800"
+                  :ui="{
+                    track: 'rounded-full',
+                    indicator: 'bg-sky-500 dark:bg-sky-400 rounded-full',
+                  }"
                 />
               </div>
 

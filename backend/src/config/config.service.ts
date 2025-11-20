@@ -13,7 +13,8 @@ export class ConfigService {
 
   async listNamespaces(query?: QueryNamespacesDto) {
     const page = query?.page && query.page > 0 ? query.page : 1;
-    const sizeInput = query?.pageSize && query.pageSize > 0 ? query.pageSize : 10;
+    const sizeInput =
+      query?.pageSize && query.pageSize > 0 ? query.pageSize : 10;
     const pageSize = Math.min(sizeInput, 50);
     const skip = (page - 1) * pageSize;
 

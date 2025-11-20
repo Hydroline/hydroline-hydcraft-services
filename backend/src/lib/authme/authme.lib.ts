@@ -14,7 +14,10 @@ import {
 } from '../../authme/authme.interfaces';
 import { AuthmeMetricsRecorder } from '../../authme/authme.metrics';
 import { externalError } from '../../authme/authme.errors';
-import { normalizePasswordSegments, verifyShaPassword } from './authme.password';
+import {
+  normalizePasswordSegments,
+  verifyShaPassword,
+} from './authme.password';
 
 export interface LoggerLike {
   debug?(message: string, meta?: Record<string, unknown>): void;

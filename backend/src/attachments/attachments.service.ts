@@ -125,10 +125,10 @@ export class AttachmentsService implements OnModuleInit {
 
     await this.ensureUniqueFolder(parent?.id ?? null, dto.name);
 
-    const folderVisibilityMode = this.toFolderVisibilityMode(dto.visibilityMode);
-    const folderVisibilityRoles = this.normalizeStringList(
-      dto.visibilityRoles,
+    const folderVisibilityMode = this.toFolderVisibilityMode(
+      dto.visibilityMode,
     );
+    const folderVisibilityRoles = this.normalizeStringList(dto.visibilityRoles);
     const folderVisibilityLabels = this.normalizeStringList(
       dto.visibilityLabels,
     );
@@ -195,11 +195,11 @@ export class AttachmentsService implements OnModuleInit {
     const nextVisibilityRoles =
       dto.visibilityRoles !== undefined
         ? this.normalizeStringList(dto.visibilityRoles)
-        : folder.visibilityRoles ?? [];
+        : (folder.visibilityRoles ?? []);
     const nextVisibilityLabels =
       dto.visibilityLabels !== undefined
         ? this.normalizeStringList(dto.visibilityLabels)
-        : folder.visibilityLabels ?? [];
+        : (folder.visibilityLabels ?? []);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const record = await tx.attachmentFolder.update({
@@ -260,7 +260,9 @@ export class AttachmentsService implements OnModuleInit {
       throw new BadRequestException('Folder is not empty: contains subfolders');
     }
     if (attachments > 0) {
-      throw new BadRequestException('Folder is not empty: contains attachments');
+      throw new BadRequestException(
+        'Folder is not empty: contains attachments',
+      );
     }
 
     await this.prisma.attachmentFolder.delete({ where: { id: folderId } });
@@ -590,15 +592,15 @@ export class AttachmentsService implements OnModuleInit {
           dto.visibilityMode,
           dto.isPublic ?? undefined,
         )
-      : attachment.visibilityMode ?? AttachmentVisibilityMode.INHERIT;
+      : (attachment.visibilityMode ?? AttachmentVisibilityMode.INHERIT);
     const nextVisibilityRoles =
       dto.visibilityRoles !== undefined
         ? this.normalizeStringList(dto.visibilityRoles)
-        : attachment.visibilityRoles ?? [];
+        : (attachment.visibilityRoles ?? []);
     const nextVisibilityLabels =
       dto.visibilityLabels !== undefined
         ? this.normalizeStringList(dto.visibilityLabels)
-        : attachment.visibilityLabels ?? [];
+        : (attachment.visibilityLabels ?? []);
 
     const folderContext = targetFolderContext
       ? {
@@ -826,7 +828,7 @@ export class AttachmentsService implements OnModuleInit {
         hash,
         isPublic: params.isPublic ?? true,
         visibilityMode:
-          params.isPublic ?? true
+          (params.isPublic ?? true)
             ? AttachmentVisibilityMode.PUBLIC
             : AttachmentVisibilityMode.RESTRICTED,
         visibilityRoles: [],
@@ -960,7 +962,7 @@ export class AttachmentsService implements OnModuleInit {
           deleted: true,
         };
 
-    const metadata = attachment.metadata as Prisma.JsonValue | null;
+    const metadata = attachment.metadata;
     const description =
       metadata && typeof metadata === 'object' && metadata !== null
         ? (metadata as Record<string, unknown>)['description']
@@ -1157,11 +1159,11 @@ export class AttachmentsService implements OnModuleInit {
         resolvedMode,
         resolvedRoles:
           resolvedMode === AttachmentVisibilityMode.RESTRICTED
-            ? folder.visibilityRoles ?? []
+            ? (folder.visibilityRoles ?? [])
             : [],
         resolvedLabels:
           resolvedMode === AttachmentVisibilityMode.RESTRICTED
-            ? folder.visibilityLabels ?? []
+            ? (folder.visibilityLabels ?? [])
             : [],
         source: 'folder' as const,
         folderId: folder.id,
@@ -1208,8 +1210,7 @@ export class AttachmentsService implements OnModuleInit {
         visibilityMode: AttachmentVisibilityMode.INHERIT,
       },
       data: {
-        isPublic:
-          folder.visibilityMode !== AttachmentVisibilityMode.RESTRICTED,
+        isPublic: folder.visibilityMode !== AttachmentVisibilityMode.RESTRICTED,
       },
     });
   }
