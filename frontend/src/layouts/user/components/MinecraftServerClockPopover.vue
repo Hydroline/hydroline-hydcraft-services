@@ -5,8 +5,6 @@ import { apiFetch } from '@/utils/api'
 
 import type { MinecraftPingResult } from '@/types/minecraft'
 
-// 约定后端公共接口返回结构（参考后台 ServerStatus 逻辑做精简聚合）
-// 实际类型请根据后端 /types/minecraft.ts 对应结构调整
 interface PublicServerStatusItem {
   id: string
   displayName: string
@@ -25,11 +23,9 @@ interface PublicServerStatusItem {
 
 interface PublicServerStatusResponse {
   servers: PublicServerStatusItem[]
-  // 可选：后端当前时间等公共字段
 }
 
 const props = defineProps<{
-  // 轮询间隔（毫秒），默认 5 分钟
   intervalMs?: number
 }>()
 
@@ -48,7 +44,6 @@ type LocalClock = {
 
 const localClocks = ref<Record<string, LocalClock>>({})
 
-// 本地时钟动画：用 beacon 返回的 tick 时间或服务器时间为基准，每秒 +50ms（Minecraft tick）
 const now = ref(dayjs())
 const nowReal = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
@@ -126,36 +121,6 @@ onBeforeUnmount(() => {
   stopPolling()
 })
 
-// 计算展示用时间（从 beacon tick / timeLocked 推导），这里先简单展示 beacon.time
-function formatServerTime(item: PublicServerStatusItem) {
-  const minutes = currentDisplayMinutes(item)
-  if (minutes != null) {
-    const h = Math.floor(minutes / 60)
-    const m = Math.floor(minutes % 60)
-    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
-    return `${pad(h)}:${pad(m)}`
-  }
-  if (item.beacon?.clock?.displayTime) {
-    return item.beacon.clock.displayTime
-  }
-  return now.value.format('HH:mm')
-}
-
-function isTimeLocked(item: PublicServerStatusItem) {
-  return Boolean(item.beacon?.clock?.locked)
-}
-
-function currentDisplayMinutes(item: PublicServerStatusItem): number | null {
-  const clock = localClocks.value[item.id]
-  if (!clock) return null
-  if (clock.locked) return clock.baseMcMinutes
-  const deltaMs = nowReal.value - clock.baseRealMs
-  // 视觉效果：现实 1 秒 ≈ 世界 1 分钟
-  const deltaMinutes = deltaMs / 1000
-  const total = (clock.baseMcMinutes + deltaMinutes) % (24 * 60)
-  return total
-}
-
 function onlineLabel(item: PublicServerStatusItem) {
   const players = item.ping?.response.players
   if (!players) return '暂无在线数据'
@@ -173,9 +138,6 @@ function motdText(item: PublicServerStatusItem) {
     | MinecraftPingResult['response']
     | undefined
   if (!resp) return ''
-  // 简化提取文本，Java / Bedrock 后端可提前解析
-  // 这里不再访问未知字段，后端统一填充 motdText
-  return ''
   return ''
 }
 
@@ -209,39 +171,32 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
 
 <template>
   <UPopover mode="hover" :popper="{ placement: 'bottom-start' }">
-    <UButton
-      color="neutral"
-      variant="ghost"
-      size="xs"
-      class="flex items-center gap-2 rounded-full px-3 py-1.5 font-mono text-sm"
+    <div
+      class="flex items-center gap-2 font-mono rounded-full border border-slate-200/70 px-3 py-1.5 text-xs text-slate-500 dark:border-slate-700 hover:bg-slate-200/40 dark:hover:bg-slate-700/40 transition duration-300 cursor-pointer"
     >
-      <UIcon name="i-lucide-clock" class="h-4 w-4" />
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-3 select-none">
         <template v-if="servers.length">
-          <div
-            v-for="item in servers"
-            :key="item.id"
-            class="relative inline-flex items-center gap-1"
-          >
-            <span class="inline-flex items-center gap-1">
-              <UIcon name="i-lucide-clock" class="h-3 w-3 text-slate-400" />
-              <span>{{ formatServerTime(item) }}</span>
-            </span>
-            <span class="text-xs text-slate-400">
-              ({{ item.displayName }})
-            </span>
-            <UIcon
-              v-if="isTimeLocked(item)"
-              name="i-lucide-lock"
-              class="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500"
+          <template v-for="(item, index) in servers" :key="item.id">
+            <div class="flex items-center gap-1">
+              <UIcon name="i-lucide-server" class="h-3 w-3 text-slate-400" />
+              <span class="font-medium text-slate-900 dark:text-white">
+                {{ item.displayName }}
+              </span>
+              <span>{{ onlineLabel(item) }}</span>
+            </div>
+            <div
+              v-if="index < servers.length - 1"
+              class="w-0.5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-500"
             />
-          </div>
+          </template>
         </template>
-        <span v-else-if="loading">加载中...</span>
-        <span v-else-if="error">状态异常</span>
-        <span v-else>暂无服务器</span>
+        <span v-else-if="loading" class="text-xs text-slate-400"
+          >加载中...</span
+        >
+        <span v-else-if="error" class="text-xs text-rose-500">状态异常</span>
+        <span v-else class="text-xs text-slate-400">暂无服务器</span>
       </div>
-    </UButton>
+    </div>
 
     <template #content>
       <div class="w-80 p-4 space-y-3">
@@ -254,11 +209,19 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
             <div class="flex justify-between text-xs text-slate-500">
               <span>整体在线率</span>
               <span>
-                {{ totalCapacity.online }} / {{ totalCapacity.max }}
-                ({{ overallOnlinePercent }}%)
+                {{ totalCapacity.online }} / {{ totalCapacity.max }} ({{
+                  overallOnlinePercent
+                }}%)
               </span>
             </div>
-            <UProgress :value="overallOnlinePercent" size="xs" />
+            <div
+              class="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+            >
+              <div
+                class="h-full bg-primary transition-[width] duration-300 ease-out"
+                :style="{ width: overallOnlinePercent + '%' }"
+              />
+            </div>
           </div>
 
           <div class="space-y-2">
@@ -274,12 +237,15 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
                     >{{ item.displayName }}</span
                   >
                   <span class="text-[10px] text-slate-500">
-                    {{ item.code }} · {{ item.edition === 'BEDROCK' ? '基岩' : 'Java' }}
+                    {{ item.code }} ·
+                    {{ item.edition === 'BEDROCK' ? '基岩' : 'Java' }}
                   </span>
                 </div>
                 <div class="flex items-center gap-1 text-[11px] text-slate-500">
                   <UIcon
-                    :name="item.mcsmConnected ? 'i-lucide-zap' : 'i-lucide-plug-zap'"
+                    :name="
+                      item.mcsmConnected ? 'i-lucide-zap' : 'i-lucide-plug-zap'
+                    "
                     :class="[
                       'h-3 w-3',
                       item.mcsmConnected
@@ -295,15 +261,14 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
               </div>
 
               <div class="mt-1">
-                <UProgress
-                  :value="serverOnlinePercent(item)"
-                  size="xs"
-                  class="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800"
-                  :ui="{
-                    track: 'rounded-full',
-                    indicator: 'bg-sky-500 dark:bg-sky-400 rounded-full',
-                  }"
-                />
+                <div
+                  class="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+                >
+                  <div
+                    class="h-full bg-primary transition-[width] duration-300 ease-out"
+                    :style="{ width: serverOnlinePercent(item) + '%' }"
+                  />
+                </div>
               </div>
 
               <p
@@ -316,10 +281,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
           </div>
         </div>
 
-        <p
-          v-else
-          class="text-xs text-slate-500 dark:text-slate-400"
-        >
+        <p v-else class="text-xs text-slate-500 dark:text-slate-400">
           暂无服务器状态数据。
         </p>
       </div>
