@@ -146,7 +146,11 @@ const handleToggle = () => {
               isSidebarCollapsed ? 'justify-center px-2' : '',
             ]"
           >
-            <UTooltip :text="item.name">
+            <UTooltip
+              :text="item.name"
+              class="outline-0"
+              :content="{ side: 'right' }"
+            >
               <Motion
                 v-if="item.isFallback"
                 :key="`${item.icon}-${item.name}`"

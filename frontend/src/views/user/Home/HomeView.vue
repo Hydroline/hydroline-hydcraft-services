@@ -4,13 +4,12 @@ import { storeToRefs } from 'pinia'
 import { usePortalStore } from '@/stores/portal'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
-import UserAvatar from '@/components/common/UserAvatar.vue'
 import HydrolineTextBold from '@/assets/resources/hydroline_text_bold.svg'
 import fallbackHeroImage from '@/assets/images/image_home_background_240730.webp'
+import { Motion } from 'motion-v'
 
 const portalStore = usePortalStore()
 const uiStore = useUiStore()
-const authStore = useAuthStore()
 
 const { home } = storeToRefs(portalStore)
 const { heroInView } = storeToRefs(uiStore)
@@ -19,6 +18,7 @@ const heroRef = ref<HTMLElement | null>(null)
 const observer = ref<IntersectionObserver | null>(null)
 const cycleTimer = ref<number | null>(null)
 const scrolled = ref(false)
+const heroImageLoaded = ref(false)
 
 const navigationLinks = computed(() => home.value?.navigation ?? [])
 const cardIds = computed(() => home.value?.cards ?? [])
@@ -46,50 +46,13 @@ const activeHeroDescription = computed(() =>
 const showHeroIndicators = computed(() => navigationLinks.value.length > 1)
 
 const heroBackdropStyle = computed(() => {
-  if (heroInView.value) {
+  if (!heroImageLoaded.value || heroInView.value) {
     return {}
   }
   return {
     opacity: '0.15',
     transform: 'translateY(-3rem)',
     filter: 'blur(8px) saturate(2)',
-  }
-})
-
-const profileCardVisible = computed(() => cardIds.value.includes('profile'))
-
-const profileCardData = computed(() => {
-  if (
-    !profileCardVisible.value ||
-    !authStore.isAuthenticated ||
-    !authStore.user
-  ) {
-    return null
-  }
-  const user = authStore.user as Record<string, any>
-  const roles =
-    (user.roles as
-      | Array<{ role?: { id: string; name?: string } }>
-      | undefined) ?? []
-  return {
-    displayName:
-      authStore.displayName ??
-      user.profile?.displayName ??
-      user.name ??
-      user.email ??
-      'Hydroline 用户',
-    email: user.email ?? '',
-    roles: roles
-      .map((entry) =>
-        entry.role
-          ? {
-              id: entry.role.id,
-              name: entry.role.name ?? entry.role.id,
-            }
-          : null,
-      )
-      .filter((value): value is { id: string; name: string } => Boolean(value)),
-    avatarUrl: user.profile?.avatarUrl ?? user.image ?? null,
   }
 })
 
@@ -201,6 +164,14 @@ onMounted(async () => {
 })
 
 watch(
+  () => activeHeroImage.value,
+  () => {
+    heroImageLoaded.value = false
+  },
+  { immediate: true },
+)
+
+watch(
   heroBackgrounds,
   (list) => {
     carouselState.heroIndex = 0
@@ -232,6 +203,14 @@ onBeforeUnmount(() => {
   uiStore.setHeroInView(true)
   uiStore.setHeroActiveDescription('')
 })
+
+function handleHeroImageLoaded() {
+  heroImageLoaded.value = true
+}
+
+function handleHeroImageErrored() {
+  heroImageLoaded.value = true
+}
 </script>
 
 <template>
@@ -244,10 +223,27 @@ onBeforeUnmount(() => {
         class="fixed inset-0 left-16 bottom-24 z-0 flex flex-col justify-center items-center transition duration-300"
         :style="heroBackdropStyle"
       >
-        <img
+        <Motion
+          :key="activeHeroImage"
+          as="img"
           :src="activeHeroImage"
           :alt="activeHeroDescription"
-          class="bg-image block h-full w-full select-none transition duration-350 object-cover object-top"
+          class="bg-image block h-full w-full select-none object-cover object-top"
+          :initial="{
+            opacity: 0.2,
+            scale: 1.03,
+            filter: 'blur(18px) saturate(1.4)',
+          }"
+          :animate="{
+            opacity: heroImageLoaded ? 1 : 0.2,
+            scale: heroImageLoaded ? 1 : 1.03,
+            filter: heroImageLoaded
+              ? 'blur(0px) saturate(1)'
+              : 'blur(18px) saturate(1.4)',
+          }"
+          :transition="{ duration: 0.6, ease: 'easeOut' }"
+          @load="handleHeroImageLoaded"
+          @error="handleHeroImageErrored"
         />
       </div>
 
@@ -355,7 +351,12 @@ onBeforeUnmount(() => {
 
 .bg-image {
   mask:
-    linear-gradient(to bottom, rgba(255, 255, 255, 1) 40%, rgba(255, 255, 255, 0.25) 70%, transparent 95%),
+    linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 1) 40%,
+      rgba(255, 255, 255, 0.25) 70%,
+      transparent 95%
+    ),
     linear-gradient(
       to right,
       transparent,
