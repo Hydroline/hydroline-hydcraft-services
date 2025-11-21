@@ -76,6 +76,8 @@ async function initialize() {
       servers: Array<{ id: string; displayName: string }>
     }>('/portal/header/minecraft-status')
     serverOptions.value = publicServers.servers ?? []
+  } catch (error) {
+    console.error('Failed to initialize player view', error)
   } finally {
     loading.value = false
   }

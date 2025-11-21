@@ -235,10 +235,10 @@ const routerPush = (path: string) => {
         </div>
 
         <div class="flex items-center justify-center text-center">
-          <div v-if="isMainPage" class="flex items-center justify-center">
+          <div class="flex items-center justify-center">
             <AnimatePresence mode="wait">
               <Motion
-                v-if="!isScrolled"
+                v-if="isMainPage && !isScrolled"
                 :key="headerTitle"
                 as="p"
                 class="text-lg text-slate-400 dark:text-white/50"
@@ -250,7 +250,7 @@ const routerPush = (path: string) => {
                 {{ headerTitle }}
               </Motion>
               <Motion
-                v-else
+                v-else-if="isMainPage"
                 key="header-logo"
                 as="div"
                 class="flex items-center"
