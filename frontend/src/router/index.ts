@@ -24,6 +24,16 @@ export const userRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'rank',
+        name: 'rank',
+        component: () => import('@/views/user/Rank/RankView.vue'),
+        meta: {
+          layout: 'user',
+          title: '排行榜',
+          icon: 'i-lucide-trophy',
+        },
+      },
+      {
         path: 'profile',
         name: 'profile',
         component: () => import('@/views/user/Profile/ProfileInfoShell.vue'),

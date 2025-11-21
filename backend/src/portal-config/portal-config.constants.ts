@@ -27,6 +27,26 @@ export const PORTAL_CARD_REGISTRY: PortalCardRegistryEntry[] = [
     name: '文档中心',
     description: '访问知识文档与指南资源。',
   },
+  {
+    id: 'dashboard-server',
+    name: '服务器概览卡片',
+    description: '仪表盘主区域的服务器情况卡片，可控制可见性。',
+  },
+  {
+    id: 'dashboard-assets',
+    name: '名下资产卡片',
+    description: '仪表盘“名下数据”区域的可见性配置。',
+  },
+  {
+    id: 'dashboard-application',
+    name: '申请流程卡片',
+    description: '仪表盘“申请流程”区域的可见性配置。',
+  },
+  {
+    id: 'dashboard-metrics',
+    name: '动态服务器指标',
+    description: '控制首页动态服务器指标卡片是否展示。',
+  },
 ];
 
 export const DEFAULT_PORTAL_HOME_CONFIG: PortalHomeConfig = {
@@ -59,6 +79,30 @@ export const DEFAULT_PORTAL_HOME_CONFIG: PortalHomeConfig = {
       allowedRoles: [],
       allowedUsers: [],
       allowGuests: false,
+    },
+    'dashboard-server': {
+      enabled: true,
+      allowedRoles: [],
+      allowedUsers: [],
+      allowGuests: true,
+    },
+    'dashboard-assets': {
+      enabled: true,
+      allowedRoles: [],
+      allowedUsers: [],
+      allowGuests: false,
+    },
+    'dashboard-application': {
+      enabled: true,
+      allowedRoles: [],
+      allowedUsers: [],
+      allowGuests: false,
+    },
+    'dashboard-metrics': {
+      enabled: true,
+      allowedRoles: [],
+      allowedUsers: [],
+      allowGuests: true,
     },
   },
 };

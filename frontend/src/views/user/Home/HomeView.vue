@@ -19,9 +19,19 @@ const observer = ref<IntersectionObserver | null>(null)
 const cycleTimer = ref<number | null>(null)
 const scrolled = ref(false)
 const heroImageLoaded = ref(false)
+const heroPreviewOpen = ref(false)
 
 const navigationLinks = computed(() => home.value?.navigation ?? [])
 const cardIds = computed(() => home.value?.cards ?? [])
+const dashboard = computed(() => home.value?.dashboard ?? null)
+const serverOverview = computed(() => dashboard.value?.serverOverview ?? null)
+const ownershipOverview = computed(
+  () => dashboard.value?.ownershipOverview ?? null,
+)
+const applicationOverview = computed(
+  () => dashboard.value?.applicationOverview ?? null,
+)
+const serverCards = computed(() => home.value?.serverCards ?? [])
 
 const heroSubtitle = computed(() => home.value?.hero.subtitle ?? null)
 const heroBackgrounds = computed(() => home.value?.hero.background ?? [])
@@ -57,7 +67,9 @@ const heroBackdropStyle = computed(() => {
 })
 
 const secondaryCards = computed(() =>
-  cardIds.value.filter((cardId) => cardId !== 'profile'),
+  cardIds.value.filter(
+    (cardId) => cardId !== 'profile' && !cardId.startsWith('dashboard-'),
+  ),
 )
 
 const cardMetadata: Record<string, { title: string; description: string }> = {
@@ -211,6 +223,21 @@ function handleHeroImageLoaded() {
 function handleHeroImageErrored() {
   heroImageLoaded.value = true
 }
+
+function formatNumberCompact(value: number | null | undefined) {
+  if (value == null) return '0'
+  return new Intl.NumberFormat('zh-CN').format(value)
+}
+
+function formatPercentage(value: number | null | undefined) {
+  if (value == null) return '0%'
+  return `${Math.round(value)}%`
+}
+
+function formatLatency(value: number | null | undefined) {
+  if (value == null) return '—'
+  return `${value} ms`
+}
 </script>
 
 <template>
@@ -220,31 +247,37 @@ function handleHeroImageErrored() {
       class="relative flex min-h-[60vh] flex-col items-center justify-center px-4 py-24 text-center"
     >
       <div
-        class="fixed inset-0 left-16 bottom-24 z-0 flex flex-col justify-center items-center transition duration-300"
+        class="fixed inset-0 left-16 bottom-24 z-0 flex flex-col items-center justify-center transition duration-300"
         :style="heroBackdropStyle"
       >
-        <Motion
-          :key="activeHeroImage"
-          as="img"
-          :src="activeHeroImage"
-          :alt="activeHeroDescription"
-          class="bg-image block h-full w-full select-none object-cover object-top"
-          :initial="{
-            opacity: 0.2,
-            scale: 1.03,
-            filter: 'blur(18px) saturate(1.4)',
-          }"
-          :animate="{
-            opacity: heroImageLoaded ? 1 : 0.2,
-            scale: heroImageLoaded ? 1 : 1.03,
-            filter: heroImageLoaded
-              ? 'blur(0px) saturate(1)'
-              : 'blur(18px) saturate(1.4)',
-          }"
-          :transition="{ duration: 0.6, ease: 'easeOut' }"
-          @load="handleHeroImageLoaded"
-          @error="handleHeroImageErrored"
-        />
+        <button
+          type="button"
+          class="bg-image relative block h-full w-full cursor-zoom-in select-none overflow-hidden rounded-2xl text-left focus:outline-none"
+          @click="heroPreviewOpen = true"
+        >
+          <Motion
+            :key="activeHeroImage"
+            as="img"
+            :src="activeHeroImage"
+            :alt="activeHeroDescription"
+            class="block h-full w-full object-cover object-top"
+            :initial="{
+              opacity: 0.2,
+              scale: 1.03,
+              filter: 'blur(18px) saturate(1.4)',
+            }"
+            :animate="{
+              opacity: heroImageLoaded ? 1 : 0.2,
+              scale: heroImageLoaded ? 1 : 1.03,
+              filter: heroImageLoaded
+                ? 'blur(0px) saturate(1)'
+                : 'blur(18px) saturate(1.4)',
+            }"
+            :transition="{ duration: 0.6, ease: 'easeOut' }"
+            @load="handleHeroImageLoaded"
+            @error="handleHeroImageErrored"
+          />
+        </button>
       </div>
 
       <Transition name="fade-slide" mode="out-in">
@@ -305,7 +338,173 @@ function handleHeroImageErrored() {
     </section>
 
     <section class="relative z-10 -mt-12 px-4">
-      <div class="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-5">
+      <div class="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <div class="grid gap-4 md:grid-cols-3">
+          <UCard
+            v-if="serverOverview"
+            class="rounded-2xl border border-slate-200/70 bg-white/90 shadow-sm backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70"
+          >
+            <template #header>
+              <div class="flex flex-col gap-1">
+                <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  服务器情况
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  上次更新：{{ serverOverview.lastUpdatedAt }}
+                </p>
+              </div>
+            </template>
+            <dl class="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">
+                  在线玩家
+                </dt>
+                <dd class="text-2xl font-semibold text-slate-900 dark:text-white">
+                  {{ formatNumberCompact(serverOverview.onlinePlayers) }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">
+                  承载容量
+                </dt>
+                <dd class="text-2xl font-semibold text-slate-900 dark:text-white">
+                  {{ formatNumberCompact(serverOverview.maxPlayers) }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">
+                  健康服务器
+                </dt>
+                <dd class="text-xl font-semibold text-slate-900 dark:text-white">
+                  {{ serverOverview.healthyServers }}/{{ serverOverview.totalServers }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">
+                  平均延迟
+                </dt>
+                <dd class="text-xl font-semibold text-slate-900 dark:text-white">
+                  {{ formatLatency(serverOverview.averageLatencyMs) }}
+                </dd>
+              </div>
+            </dl>
+          </UCard>
+
+          <UCard
+            v-if="ownershipOverview"
+            class="rounded-2xl border border-slate-200/70 bg-white/90 shadow-sm backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70"
+          >
+            <template #header>
+              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                名下数据
+              </p>
+            </template>
+            <div class="grid grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-200">
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">AuthMe 绑定</p>
+                <p class="text-xl font-semibold">
+                  {{ formatNumberCompact(ownershipOverview.authmeBindings) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Minecraft 档案</p>
+                <p class="text-xl font-semibold">
+                  {{ formatNumberCompact(ownershipOverview.minecraftProfiles) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">公司/铁路</p>
+                <p class="text-xl font-semibold">
+                  {{ formatNumberCompact(ownershipOverview.companyCount + ownershipOverview.railwayCount) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">角色授权</p>
+                <p class="text-xl font-semibold">
+                  {{ formatNumberCompact(ownershipOverview.roleAssignments) }}
+                </p>
+              </div>
+            </div>
+          </UCard>
+
+          <UCard
+            v-if="applicationOverview"
+            class="rounded-2xl border border-slate-200/70 bg-white/90 shadow-sm backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70"
+          >
+            <template #header>
+              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                申请流程
+              </p>
+            </template>
+            <div class="space-y-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500 dark:text-slate-400">待处理</span>
+                <span class="text-lg font-semibold text-slate-900 dark:text-white">
+                  {{ applicationOverview.pendingContacts }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500 dark:text-slate-400">活跃会话</span>
+                <span class="text-lg font-semibold text-slate-900 dark:text-white">
+                  {{ applicationOverview.activeSessions }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500 dark:text-slate-400">资料完整度</span>
+                <span class="text-lg font-semibold text-slate-900 dark:text-white">
+                  {{
+                    formatPercentage(applicationOverview.profileCompleteness)
+                  }}
+                </span>
+              </div>
+            </div>
+          </UCard>
+        </div>
+
+        <div
+          v-if="serverCards.length"
+          class="grid gap-4 md:grid-cols-2"
+        >
+          <UCard
+            v-for="card in serverCards"
+            :key="card.id"
+            class="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70"
+          >
+            <div class="flex items-start justify-between">
+              <div>
+                <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {{ card.title }}
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  {{ card.description }}
+                </p>
+              </div>
+              <UBadge v-if="card.badge" size="sm" color="primary" variant="soft">
+                {{ card.badge }}
+              </UBadge>
+            </div>
+            <div class="mt-4 flex items-baseline justify-between">
+              <span class="text-3xl font-semibold text-slate-900 dark:text-white">
+                {{ card.value }}
+                <span class="text-base font-normal text-slate-500 dark:text-slate-400">{{
+                  card.unit
+                }}</span>
+              </span>
+              <span
+                class="text-sm font-medium"
+                :class="{
+                  'text-emerald-500': card.trend === 'up',
+                  'text-amber-500': card.trend === 'flat',
+                  'text-rose-500': card.trend === 'down',
+                }"
+              >
+                {{ card.trendLabel }}
+              </span>
+            </div>
+          </UCard>
+        </div>
+
+        <div class="grid gap-6 md:grid-cols-5">
         <div class="md:col-span-3">
           <!-- 等东西 -->
           <Transition name="fade-slide" mode="out-in"> </Transition>
@@ -332,9 +531,22 @@ function handleHeroImageErrored() {
             </div>
           </UCard>
         </div>
+        </div>
       </div>
     </section>
   </div>
+  <UModal v-model:open="heroPreviewOpen" :ui="{ content: 'w-full max-w-4xl' }">
+    <div class="space-y-2">
+      <img
+        :src="activeHeroImage"
+        :alt="activeHeroDescription"
+        class="rounded-2xl object-cover"
+      />
+      <p class="text-sm text-slate-600 dark:text-slate-300">
+        {{ activeHeroDescription || 'Hydroline Portal 背景图' }}
+      </p>
+    </div>
+  </UModal>
 </template>
 
 <style scoped>

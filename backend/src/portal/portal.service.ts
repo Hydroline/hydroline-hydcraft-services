@@ -1,8 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ContactVerificationStatus,
+  LifecycleEventType,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PortalConfigService } from '../portal-config/portal-config.service';
 import { MinecraftServerService } from '../minecraft/minecraft-server.service';
 import { BeaconLibService } from '../lib/hydroline-beacon';
+import { IpLocationService } from '../lib/ip2region/ip-location.service';
 import {
   DEFAULT_PORTAL_HOME_CONFIG,
   PORTAL_CARD_REGISTRY,
@@ -79,6 +85,136 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[idx]}`;
 }
 
+const MINUTE_MS = 60 * 1000;
+const DEFAULT_LOGIN_MAP_RANGE_DAYS = 30;
+
+type PortalDashboardCard = {
+  id: string;
+  title: string;
+  description?: string | null;
+  value: string;
+  unit?: string | null;
+  trend?: 'up' | 'down' | 'flat';
+  trendLabel?: string | null;
+  badge?: string | null;
+};
+
+type PortalServerSnapshot = {
+  id: string;
+  displayName: string;
+  edition: string;
+  lastPingAt: Date | null;
+  onlinePlayers: number | null;
+  maxPlayers: number | null;
+  latency: number | null;
+};
+
+type PortalServerOverview = {
+  totalServers: number;
+  healthyServers: number;
+  onlinePlayers: number;
+  maxPlayers: number;
+  averageLatencyMs: number | null;
+  busiestServer: {
+    id: string;
+    name: string;
+    onlinePlayers: number;
+    latency: number | null;
+  } | null;
+  lastUpdatedAt: string;
+};
+
+type PortalOwnershipOverview = {
+  companyCount: number;
+  railwayCount: number;
+  authmeBindings: number;
+  minecraftProfiles: number;
+  roleAssignments: number;
+};
+
+type PortalApplicationOverview = {
+  pendingContacts: number;
+  activeSessions: number;
+  securityHolds: number;
+  profileCompleteness: number;
+  profileCompletenessLabel: string;
+};
+
+type PortalDashboardPayload = {
+  serverOverview: PortalServerOverview;
+  ownershipOverview: PortalOwnershipOverview;
+  applicationOverview: PortalApplicationOverview;
+  updatedAt: string;
+};
+
+type PlayerLoginCluster = {
+  id: string;
+  count: number;
+  lastSeenAt: string;
+  province: string | null;
+  city: string | null;
+  country: string | null;
+  isp: string | null;
+  sampleIp: string | null;
+};
+
+type RankCategory = {
+  id: string;
+  name: string;
+  description: string;
+  unit: string;
+  source: 'sessions' | 'authmeHistory' | 'attachments';
+};
+
+const RANK_CATEGORIES: RankCategory[] = [
+  {
+    id: 'login-count',
+    name: '上线次数',
+    description: '根据用户 session 记录估算的上线次数',
+    unit: '次',
+    source: 'sessions',
+  },
+  {
+    id: 'authme-events',
+    name: '账号操作',
+    description: 'AuthMe 绑定历史事件数量',
+    unit: '条',
+    source: 'authmeHistory',
+  },
+  {
+    id: 'attachment-uploads',
+    name: '附件贡献',
+    description: '上传到附件库的文件数量',
+    unit: '个',
+    source: 'attachments',
+  },
+];
+
+const RANK_PERIODS: Record<string, number | null> = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+  all: null,
+};
+
+const RANK_SOURCES = {
+  sessions: {
+    table: 'sessions',
+    userColumn: 'user_id',
+    dateColumn: 'created_at',
+  },
+  authmeHistory: {
+    table: 'authme_binding_history',
+    userColumn: 'user_id',
+    dateColumn: 'created_at',
+  },
+  attachments: {
+    table: 'attachments',
+    userColumn: 'owner_id',
+    dateColumn: 'created_at',
+  },
+} as const;
+
 function buildTrend(current: number, previous: number) {
   if (previous === 0 && current === 0) {
     return { trend: 'flat' as const, label: '0%' };
@@ -127,6 +263,7 @@ export class PortalService {
     private readonly portalConfigService: PortalConfigService,
     private readonly minecraftServers: MinecraftServerService,
     private readonly beaconLib: BeaconLibService,
+    private readonly ipLocationService: IpLocationService,
   ) {}
 
   /**
@@ -194,6 +331,11 @@ export class PortalService {
     }
 
     const cards = this.computeAccessibleCards(config.cardsConfig, userContext);
+    const serverSnapshots = await this.collectServerSnapshots();
+    const [dashboard, serverCards] = await Promise.all([
+      this.buildDashboardPayload(userContext, serverSnapshots),
+      this.buildServerCards(serverSnapshots),
+    ]);
 
     return {
       hero: {
@@ -202,7 +344,529 @@ export class PortalService {
       },
       navigation: config.navigation,
       cards,
+      dashboard,
+      serverCards,
     };
+  }
+
+  private async collectServerSnapshots(): Promise<PortalServerSnapshot[]> {
+    const servers = await this.prisma.minecraftServer.findMany({
+      where: { isActive: true },
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    if (!servers.length) {
+      return [];
+    }
+    const snapshots = await Promise.all(
+      servers.map(async (server) => {
+        const ping = await this.prisma.minecraftServerPingRecord.findFirst({
+          where: { serverId: server.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        return {
+          id: server.id,
+          displayName: server.displayName,
+          edition: server.edition,
+          lastPingAt: ping?.createdAt ?? null,
+          onlinePlayers: ping?.onlinePlayers ?? null,
+          maxPlayers: ping?.maxPlayers ?? null,
+          latency: ping?.latency ?? null,
+        };
+      }),
+    );
+    return snapshots;
+  }
+
+  private async buildDashboardPayload(
+    userContext: PortalUserAccessContext | null,
+    snapshots: PortalServerSnapshot[],
+  ): Promise<PortalDashboardPayload> {
+    const serverOverview = this.summarizeServerSnapshots(snapshots);
+    if (!userContext) {
+      return {
+        serverOverview,
+        ownershipOverview: {
+          companyCount: 0,
+          railwayCount: 0,
+          authmeBindings: 0,
+          minecraftProfiles: 0,
+          roleAssignments: 0,
+        },
+        applicationOverview: {
+          pendingContacts: 0,
+          activeSessions: 0,
+          securityHolds: 0,
+          profileCompleteness: 0,
+          profileCompletenessLabel: '访客',
+        },
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    const [ownershipOverview, applicationOverview] = await Promise.all([
+      this.computeOwnershipOverview(userContext.id),
+      this.computeApplicationOverview(userContext.id),
+    ]);
+    return {
+      serverOverview,
+      ownershipOverview,
+      applicationOverview,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private summarizeServerSnapshots(
+    snapshots: PortalServerSnapshot[],
+  ): PortalServerOverview {
+    const nowIso = new Date().toISOString();
+    if (!snapshots.length) {
+      return {
+        totalServers: 0,
+        healthyServers: 0,
+        onlinePlayers: 0,
+        maxPlayers: 0,
+        averageLatencyMs: null,
+        busiestServer: null,
+        lastUpdatedAt: nowIso,
+      };
+    }
+    const now = Date.now();
+    let onlinePlayers = 0;
+    let maxPlayers = 0;
+    const latencies: number[] = [];
+    let healthiest = 0;
+    let busiest: PortalServerSnapshot | null = null;
+    for (const snapshot of snapshots) {
+      const online = snapshot.onlinePlayers ?? 0;
+      const max = snapshot.maxPlayers ?? 0;
+      onlinePlayers += online;
+      maxPlayers += max;
+      if (
+        snapshot.latency != null &&
+        snapshot.lastPingAt &&
+        now - snapshot.lastPingAt.getTime() <= 10 * MINUTE_MS
+      ) {
+        healthiest += 1;
+        latencies.push(snapshot.latency);
+      } else if (snapshot.latency != null) {
+        latencies.push(snapshot.latency);
+      }
+      if (!busiest || (online > (busiest.onlinePlayers ?? 0))) {
+        busiest = snapshot;
+      }
+    }
+    const averageLatencyMs = latencies.length
+      ? Math.round(
+          latencies.reduce((sum, value) => sum + value, 0) / latencies.length,
+        )
+      : null;
+    return {
+      totalServers: snapshots.length,
+      healthyServers: healthiest,
+      onlinePlayers,
+      maxPlayers,
+      averageLatencyMs,
+      busiestServer: busiest
+        ? {
+            id: busiest.id,
+            name: busiest.displayName,
+            onlinePlayers: busiest.onlinePlayers ?? 0,
+            latency: busiest.latency,
+          }
+        : null,
+      lastUpdatedAt: nowIso,
+    };
+  }
+
+  private async computeOwnershipOverview(
+    userId: string,
+  ): Promise<PortalOwnershipOverview> {
+    const [bindings, minecraftProfiles, roles] = await Promise.all([
+      this.prisma.userAuthmeBinding.count({ where: { userId } }),
+      this.prisma.userMinecraftProfile.count({ where: { userId } }),
+      this.prisma.userRole.count({ where: { userId } }),
+    ]);
+    return {
+      companyCount: 0,
+      railwayCount: 0,
+      authmeBindings: bindings,
+      minecraftProfiles,
+      roleAssignments: roles,
+    };
+  }
+
+  private async computeApplicationOverview(
+    userId: string,
+  ): Promise<PortalApplicationOverview> {
+    const now = new Date();
+    const [user, pendingContacts, activeSessions] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          passwordNeedsReset: true,
+          profile: {
+            select: {
+              displayName: true,
+              piic: true,
+              timezone: true,
+              locale: true,
+              primaryMinecraftProfileId: true,
+              primaryAuthmeBindingId: true,
+            },
+          },
+        },
+      }),
+      this.prisma.userContact.count({
+        where: {
+          userId,
+          verification: { not: ContactVerificationStatus.VERIFIED },
+        },
+      }),
+      this.prisma.session.count({
+        where: { userId, expiresAt: { gt: now } },
+      }),
+    ]);
+    const completeness = this.computeProfileCompleteness(user?.profile ?? null);
+    return {
+      pendingContacts,
+      activeSessions,
+      securityHolds: user?.passwordNeedsReset ? 1 : 0,
+      profileCompleteness: completeness.score,
+      profileCompletenessLabel: completeness.label,
+    };
+  }
+
+  private computeProfileCompleteness(
+    profile:
+      | {
+          displayName?: string | null;
+          piic?: string | null;
+          timezone?: string | null;
+          locale?: string | null;
+          primaryMinecraftProfileId?: string | null;
+          primaryAuthmeBindingId?: string | null;
+        }
+      | null,
+  ) {
+    const fields = [
+      Boolean(profile?.displayName),
+      Boolean(profile?.piic),
+      Boolean(profile?.timezone),
+      Boolean(profile?.locale),
+      Boolean(profile?.primaryMinecraftProfileId),
+      Boolean(profile?.primaryAuthmeBindingId),
+    ];
+    const filled = fields.filter(Boolean).length;
+    const score = fields.length
+      ? Math.round((filled / fields.length) * 100)
+      : 0;
+    return {
+      score,
+      label: `${filled}/${fields.length}`,
+    };
+  }
+
+  private normalizeProfileExtra(extra: unknown) {
+    if (!extra || typeof extra !== 'object') {
+      return {};
+    }
+    const record = extra as Record<string, unknown>;
+    return {
+      addressLine1: this.toNullableString(record.addressLine1),
+      addressLine2: this.toNullableString(record.addressLine2),
+      city: this.toNullableString(record.city),
+      state: this.toNullableString(record.state),
+      postalCode: this.toNullableString(record.postalCode),
+      country: this.toNullableString(record.country),
+      regionCountry: this.toNullableString(record.regionCountry),
+      regionProvince: this.toNullableString(record.regionProvince),
+      regionCity: this.toNullableString(record.regionCity),
+      regionDistrict: this.toNullableString(record.regionDistrict),
+    };
+  }
+
+  private toNullableString(value: unknown) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : null;
+    }
+    return null;
+  }
+
+  private normalizeRegionKey(location: Awaited<
+    ReturnType<IpLocationService['lookup']>
+  >) {
+    if (!location) {
+      return null;
+    }
+    return (
+      this.toNullableString(location.city) ??
+      this.toNullableString(location.province) ??
+      this.toNullableString(location.country)
+    );
+  }
+
+  private resolvePeriodStart(period?: string) {
+    const days =
+      period && Object.prototype.hasOwnProperty.call(RANK_PERIODS, period)
+        ? RANK_PERIODS[period]
+        : RANK_PERIODS['30d'];
+    if (!days) {
+      return undefined;
+    }
+    if (typeof days !== 'number') {
+      return undefined;
+    }
+    return new Date(Date.now() - days * DAY_MS);
+  }
+
+  private resolveRankCategory(categoryId: string): RankCategory {
+    return (
+      RANK_CATEGORIES.find((entry) => entry.id === categoryId) ??
+      RANK_CATEGORIES[0]
+    );
+  }
+
+  private buildRankWhereClause(
+    config: (typeof RANK_SOURCES)[keyof typeof RANK_SOURCES],
+    since?: Date,
+    extras: Prisma.Sql[] = [],
+  ) {
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`${Prisma.raw(`"${config.userColumn}"`)} IS NOT NULL`,
+    ];
+    if (since) {
+      conditions.push(
+        Prisma.sql`${Prisma.raw(`"${config.dateColumn}"`)} >= ${since}`,
+      );
+    }
+    if (extras.length) {
+      conditions.push(...extras);
+    }
+    if (!conditions.length) {
+      return Prisma.sql``;
+    }
+    return Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+  }
+
+  private async aggregateRankSource(
+    source: RankCategory['source'],
+    options: { since?: Date; skip: number; take: number },
+  ) {
+    const config = RANK_SOURCES[source];
+    const table = Prisma.raw(`"${config.table}"`);
+    const userColumn = Prisma.raw(`"${config.userColumn}"`);
+    const whereSql = this.buildRankWhereClause(config, options.since);
+    const query = Prisma.sql`
+      SELECT ${userColumn} AS "userId", COUNT(*)::bigint AS "value"
+      FROM ${table}
+      ${whereSql}
+      GROUP BY ${userColumn}
+      ORDER BY "value" DESC, ${userColumn} ASC
+      LIMIT ${options.take} OFFSET ${options.skip}
+    `;
+    const rows = await this.prisma.$queryRaw<
+      Array<{ userId: string; value: bigint }>
+    >(query);
+    const totalQuery = Prisma.sql`
+      SELECT COUNT(*)::bigint AS "total"
+      FROM (
+        SELECT 1
+        FROM ${table}
+        ${whereSql}
+        GROUP BY ${userColumn}
+      ) AS counted
+    `;
+    const totalRows = await this.prisma.$queryRaw<
+      Array<{ total: bigint }>
+    >(totalQuery);
+    const total = Number(totalRows[0]?.total ?? 0);
+    return {
+      total,
+      items: rows,
+    };
+  }
+
+  private async fetchRankValue(
+    source: RankCategory['source'],
+    userId: string,
+    since?: Date,
+  ) {
+    const config = RANK_SOURCES[source];
+    const table = Prisma.raw(`"${config.table}"`);
+    const whereSql = this.buildRankWhereClause(config, since, [
+      Prisma.sql`${Prisma.raw(`"${config.userColumn}"`)} = ${userId}`,
+    ]);
+    const query = Prisma.sql`
+      SELECT COUNT(*)::bigint AS "value"
+      FROM ${table}
+      ${whereSql}
+    `;
+    const rows = await this.prisma.$queryRaw<Array<{ value: bigint }>>(query);
+    return Number(rows[0]?.value ?? 0);
+  }
+
+  private async fetchRankAheadCount(
+    source: RankCategory['source'],
+    userId: string,
+    since: Date | undefined,
+    value: number,
+  ) {
+    const config = RANK_SOURCES[source];
+    const table = Prisma.raw(`"${config.table}"`);
+    const userColumn = Prisma.raw(`"${config.userColumn}"`);
+    const baseWhere = this.buildRankWhereClause(config, since);
+    const baseQuery = Prisma.sql`
+      SELECT ${userColumn} AS "uid", COUNT(*)::bigint AS "value"
+      FROM ${table}
+      ${baseWhere}
+      GROUP BY ${userColumn}
+    `;
+    const aheadQuery = Prisma.sql`
+      SELECT COUNT(*)::bigint AS "ahead"
+      FROM (${baseQuery}) AS ranked
+      WHERE "value" > ${value} OR ("value" = ${value} AND "uid" < ${userId})
+    `;
+    const rows = await this.prisma.$queryRaw<Array<{ ahead: bigint }>>(
+      aheadQuery,
+    );
+    return Number(rows[0]?.ahead ?? 0);
+  }
+
+  private async fetchLeaderboardUsers(userIds: string[]) {
+    if (!userIds.length) {
+      return new Map<string, { id: string; displayName: string | null; email: string | null; minecraftName: string | null }>();
+    }
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        profile: {
+          select: {
+            displayName: true,
+            primaryMinecraftProfile: {
+              select: { nickname: true },
+            },
+          },
+        },
+      },
+    });
+    const map = new Map<
+      string,
+      { id: string; displayName: string | null; email: string | null; minecraftName: string | null }
+    >();
+    for (const user of users) {
+      map.set(user.id, {
+        id: user.id,
+        displayName:
+          user.profile?.displayName ?? user.name ?? user.email ?? null,
+        email: user.email,
+        minecraftName:
+          user.profile?.primaryMinecraftProfile?.nickname ?? null,
+      });
+    }
+    return map;
+  }
+
+  private buildPagination(total: number, page: number, pageSize: number) {
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    return {
+      total,
+      page,
+      pageSize,
+      pageCount,
+    };
+  }
+
+  private async buildServerCards(
+    snapshots: PortalServerSnapshot[],
+  ): Promise<PortalDashboardCard[]> {
+    const overview = this.summarizeServerSnapshots(snapshots);
+    const serverIds = snapshots.map((snapshot) => snapshot.id);
+    let uptimeRatio = 0;
+    if (serverIds.length) {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const [totalSamples, healthySamples] = await Promise.all([
+        this.prisma.minecraftServerPingRecord.count({
+          where: { serverId: { in: serverIds }, createdAt: { gte: since } },
+        }),
+        this.prisma.minecraftServerPingRecord.count({
+          where: {
+            serverId: { in: serverIds },
+            createdAt: { gte: since },
+            latency: { not: null },
+          },
+        }),
+      ]);
+      uptimeRatio = totalSamples > 0 ? healthySamples / totalSamples : 0;
+    }
+    const occupancy =
+      overview.maxPlayers > 0
+        ? overview.onlinePlayers / overview.maxPlayers
+        : 0;
+    const cards: PortalDashboardCard[] = [];
+    cards.push({
+      id: 'server-online',
+      title: '在线玩家',
+      description: '当前在线玩家总数',
+      value: formatNumber(overview.onlinePlayers),
+      unit: '人',
+      trend: occupancy >= 0.5 ? 'up' : occupancy >= 0.2 ? 'flat' : 'down',
+      trendLabel: `${Math.round(occupancy * 100)}%`,
+      badge: overview.busiestServer?.name ?? null,
+    });
+    cards.push({
+      id: 'server-latency',
+      title: '平均延迟',
+      description: '最近一次 Ping 的平均值',
+      value:
+        overview.averageLatencyMs != null
+          ? formatNumber(overview.averageLatencyMs)
+          : 'N/A',
+      unit: overview.averageLatencyMs != null ? 'ms' : '',
+      trend:
+        overview.averageLatencyMs == null
+          ? 'flat'
+          : overview.averageLatencyMs <= 120
+            ? 'up'
+            : overview.averageLatencyMs <= 200
+              ? 'flat'
+              : 'down',
+      trendLabel:
+        overview.averageLatencyMs != null
+          ? `${overview.averageLatencyMs} ms`
+          : '无数据',
+    });
+    cards.push({
+      id: 'server-health',
+      title: '健康服务器',
+      description: '10 分钟内仍在线的服务器数量',
+      value: `${overview.healthyServers}/${overview.totalServers}`,
+      trend:
+        overview.totalServers === 0
+          ? 'flat'
+          : overview.healthyServers === overview.totalServers
+            ? 'up'
+            : overview.healthyServers === 0
+              ? 'down'
+              : 'flat',
+      trendLabel:
+        overview.totalServers === 0
+          ? '0%'
+          : `${Math.round(
+              (overview.healthyServers / overview.totalServers) * 100,
+            )}%`,
+    });
+    cards.push({
+      id: 'server-uptime',
+      title: '24 小时可用性',
+      description: '近 24 小时成功采样占比',
+      value: `${Math.round(uptimeRatio * 100)}%`,
+      trend: uptimeRatio >= 0.95 ? 'up' : uptimeRatio >= 0.8 ? 'flat' : 'down',
+      trendLabel: uptimeRatio ? `${(uptimeRatio * 100).toFixed(1)}%` : '---',
+    });
+    return cards;
   }
 
   /**
@@ -346,6 +1010,636 @@ export class PortalService {
     );
 
     return { servers: results };
+  }
+
+  async getPlayerSummary(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+        createdAt: true,
+        joinDate: true,
+        lastLoginAt: true,
+        lastLoginIp: true,
+        profile: {
+          select: {
+            piic: true,
+            displayName: true,
+            primaryMinecraftProfileId: true,
+            primaryAuthmeBindingId: true,
+            gender: true,
+            extra: true,
+          },
+        },
+        contacts: {
+          select: {
+            id: true,
+            value: true,
+            verification: true,
+            channel: {
+              select: {
+                key: true,
+                displayName: true,
+              },
+            },
+          },
+        },
+        minecraftIds: {
+          select: {
+            id: true,
+            nickname: true,
+            isPrimary: true,
+            authmeBindingId: true,
+            verifiedAt: true,
+          },
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        },
+        authmeBindings: {
+          select: {
+            id: true,
+            authmeUsername: true,
+            authmeRealname: true,
+            authmeUuid: true,
+            boundAt: true,
+            status: true,
+            notes: true,
+            boundByIp: true,
+          },
+          orderBy: { boundAt: 'asc' },
+        },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException('用户不存在');
+    }
+    const location = await this.ipLocationService.lookup(user.lastLoginIp);
+    const ownership = await this.computeOwnershipOverview(userId);
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image ?? null,
+      createdAt: user.createdAt.toISOString(),
+      joinDate: user.joinDate?.toISOString() ?? null,
+      lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+      lastLoginIp: user.lastLoginIp ?? null,
+      lastLoginLocation: location?.display ?? null,
+      displayName: user.profile?.displayName ?? null,
+      piic: user.profile?.piic ?? null,
+      gender: user.profile?.gender ?? null,
+      profileExtra: this.normalizeProfileExtra(user.profile?.extra),
+      contacts: user.contacts.map((contact) => ({
+        id: contact.id,
+        value: contact.value,
+        channel: contact.channel?.displayName ?? contact.channel?.key ?? '',
+        verified: contact.verification === 'VERIFIED',
+      })),
+      minecraftProfiles: user.minecraftIds.map((profile) => ({
+        id: profile.id,
+        nickname: profile.nickname,
+        isPrimary: profile.isPrimary,
+        authmeBindingId: profile.authmeBindingId,
+        verifiedAt: profile.verifiedAt?.toISOString() ?? null,
+      })),
+      authmeBindings: await Promise.all(
+        user.authmeBindings.map(async (binding) => {
+          const bindLocation = await this.ipLocationService.lookup(
+            binding.boundByIp ?? null,
+          );
+          return {
+            id: binding.id,
+            username: binding.authmeUsername,
+            realname: binding.authmeRealname,
+            uuid: binding.authmeUuid,
+            boundAt: binding.boundAt.toISOString(),
+            status: binding.status,
+            lastKnownLocation: bindLocation?.display ?? null,
+          };
+        }),
+      ),
+      ownership,
+    };
+  }
+
+  async getPlayerLoginMap(
+    userId: string,
+    params: { from?: Date; to?: Date },
+  ) {
+    const to = params.to ?? new Date();
+    const from =
+      params.from ??
+      new Date(to.getTime() - DEFAULT_LOGIN_MAP_RANGE_DAYS * DAY_MS);
+
+    const sessions = await this.prisma.session.findMany({
+      where: {
+        userId,
+        createdAt: {
+          gte: from,
+          lte: to,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: {
+        createdAt: true,
+        ipAddress: true,
+      },
+    });
+
+    const buckets = new Map<
+      string,
+      { count: number; lastSeen: Date }
+    >();
+    for (const session of sessions) {
+      const ip = this.toNullableString(session.ipAddress);
+      if (!ip) continue;
+      const bucket = buckets.get(ip) ?? {
+        count: 0,
+        lastSeen: session.createdAt,
+      };
+      bucket.count += 1;
+      if (session.createdAt > bucket.lastSeen) {
+        bucket.lastSeen = session.createdAt;
+      }
+      buckets.set(ip, bucket);
+    }
+
+    const clusters: PlayerLoginCluster[] = [];
+    await Promise.all(
+      Array.from(buckets.entries()).map(async ([ip, meta]) => {
+        const location = await this.ipLocationService.lookup(ip);
+        clusters.push({
+          id: this.normalizeRegionKey(location) ?? ip,
+          count: meta.count,
+          lastSeenAt: meta.lastSeen.toISOString(),
+          province: location?.province ?? null,
+          city: location?.city ?? null,
+          country: location?.country ?? null,
+          isp: location?.isp ?? null,
+          sampleIp: ip,
+        });
+      }),
+    );
+
+    clusters.sort((a, b) => b.count - a.count);
+
+    return {
+      range: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+      },
+      totalEntries: sessions.length,
+      clusters,
+    };
+  }
+
+  async getPlayerActions(
+    userId: string,
+    params: { page?: number; pageSize?: number },
+  ) {
+    const page = Math.max(params.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(params.pageSize ?? 20, 1), 50);
+    const where: Prisma.AuthmeBindingHistoryWhereInput = {
+      OR: [
+        { userId },
+        {
+          binding: {
+            userId,
+          },
+        },
+      ],
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.authmeBindingHistory.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          operator: {
+            select: {
+              id: true,
+              email: true,
+              profile: { select: { displayName: true } },
+            },
+          },
+          binding: {
+            select: {
+              id: true,
+              authmeUsername: true,
+            },
+          },
+        },
+      }),
+      this.prisma.authmeBindingHistory.count({ where }),
+    ]);
+
+    return {
+      pagination: this.buildPagination(total, page, pageSize),
+      items: items.map((entry) => ({
+        id: entry.id,
+        action: entry.action,
+        createdAt: entry.createdAt.toISOString(),
+        reason: entry.reason ?? null,
+        operator: entry.operator
+          ? {
+              id: entry.operator.id,
+              email: entry.operator.email,
+              displayName:
+                entry.operator.profile?.displayName ?? entry.operator.email,
+            }
+          : null,
+        binding: entry.binding
+          ? {
+              id: entry.binding.id,
+              username: entry.binding.authmeUsername,
+            }
+          : null,
+        payload: entry.payload ?? null,
+      })),
+    };
+  }
+
+  async getPlayerAssets(userId: string) {
+    const [bindings, minecraftProfiles, roles, ownership] = await Promise.all([
+      this.prisma.userAuthmeBinding.findMany({
+        where: { userId },
+        orderBy: { boundAt: 'asc' },
+      }),
+      this.prisma.userMinecraftProfile.findMany({
+        where: { userId },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.userRole.findMany({
+        where: { userId },
+        include: {
+          role: true,
+        },
+      }),
+      this.computeOwnershipOverview(userId),
+    ]);
+
+    return {
+      ownership,
+      bindings: bindings.map((binding) => ({
+        id: binding.id,
+        username: binding.authmeUsername,
+        realname: binding.authmeRealname,
+        uuid: binding.authmeUuid,
+        status: binding.status,
+        boundAt: binding.boundAt.toISOString(),
+      })),
+      minecraftProfiles: minecraftProfiles.map((profile) => ({
+        id: profile.id,
+        nickname: profile.nickname,
+        authmeBindingId: profile.authmeBindingId,
+        isPrimary: profile.isPrimary,
+        source: profile.source,
+        verifiedAt: profile.verifiedAt?.toISOString() ?? null,
+      })),
+      roles: roles.map((entry) => ({
+        id: entry.roleId,
+        key: entry.role?.key ?? '',
+        name: entry.role?.name ?? '',
+      })),
+      companies: [],
+      railways: [],
+    };
+  }
+
+  async getPlayerRegion(userId: string) {
+    const profile = await this.prisma.userProfile.findUnique({
+      where: { userId },
+      select: {
+        extra: true,
+        user: {
+          select: {
+            lastLoginIp: true,
+            lastLoginAt: true,
+          },
+        },
+      },
+    });
+    const extra = this.normalizeProfileExtra(profile?.extra);
+    const lastLoginLocation = await this.ipLocationService.lookup(
+      profile?.user?.lastLoginIp ?? null,
+    );
+
+    return {
+      region: {
+        country: extra.regionCountry ?? extra.country ?? null,
+        province: extra.regionProvince ?? extra.state ?? null,
+        city: extra.regionCity ?? extra.city ?? null,
+        district: extra.regionDistrict ?? null,
+        addressLine1: extra.addressLine1 ?? null,
+        addressLine2: extra.addressLine2 ?? null,
+        postalCode: extra.postalCode ?? null,
+      },
+      lastLogin: {
+        at: profile?.user?.lastLoginAt?.toISOString() ?? null,
+        ip: profile?.user?.lastLoginIp ?? null,
+        location: lastLoginLocation?.display ?? null,
+      },
+    };
+  }
+
+  async getPlayerMinecraftData(userId: string) {
+    const [bindings, minecraftProfiles, roles] = await Promise.all([
+      this.prisma.userAuthmeBinding.findMany({
+        where: { userId },
+        orderBy: { boundAt: 'asc' },
+      }),
+      this.prisma.userMinecraftProfile.findMany({
+        where: { userId },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.userRole.findMany({
+        where: { userId },
+        include: { role: true },
+      }),
+    ]);
+    return {
+      bindings: bindings.map((binding) => ({
+        id: binding.id,
+        username: binding.authmeUsername,
+        realname: binding.authmeRealname,
+        uuid: binding.authmeUuid,
+        status: binding.status,
+        boundAt: binding.boundAt.toISOString(),
+      })),
+      minecraftProfiles: minecraftProfiles.map((profile) => ({
+        id: profile.id,
+        nickname: profile.nickname,
+        source: profile.source,
+        isPrimary: profile.isPrimary,
+      })),
+      permissionRoles: roles.map((entry) => ({
+        id: entry.roleId,
+        key: entry.role?.key ?? '',
+        name: entry.role?.name ?? '',
+      })),
+    };
+  }
+
+  async getPlayerStats(userId: string, period: string | undefined) {
+    const since = this.resolvePeriodStart(period);
+    const [sessions, bindingEvents, attachments] = await Promise.all([
+      this.prisma.session.findMany({
+        where: {
+          userId,
+          createdAt: since ? { gte: since } : undefined,
+        },
+        select: {
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.authmeBindingHistory.count({
+        where: {
+          userId,
+          createdAt: since ? { gte: since } : undefined,
+        },
+      }),
+      this.prisma.attachment.count({
+        where: {
+          ownerId: userId,
+          createdAt: since ? { gte: since } : undefined,
+        },
+      }),
+    ]);
+    const now = Date.now();
+    const playSeconds = sessions.reduce((total, session) => {
+      const end = session.updatedAt?.getTime() ?? now;
+      const duration = Math.max(0, (end - session.createdAt.getTime()) / 1000);
+      return total + duration;
+    }, 0);
+    const activeDays = new Set(
+      sessions.map((session) => session.createdAt.toISOString().slice(0, 10)),
+    ).size;
+
+    return {
+      period: period ?? '30d',
+      generatedAt: new Date().toISOString(),
+      metrics: [
+        {
+          id: 'playtime',
+          label: '上线时长',
+          value: Math.round(playSeconds),
+          unit: 'seconds',
+        },
+        {
+          id: 'login-count',
+          label: '上线次数',
+          value: sessions.length,
+          unit: 'times',
+        },
+        {
+          id: 'binding-events',
+          label: '绑定历史事件',
+          value: bindingEvents,
+          unit: 'events',
+        },
+        {
+          id: 'attachment-uploads',
+          label: '附件上传',
+          value: attachments,
+          unit: 'files',
+        },
+        {
+          id: 'active-days',
+          label: '活跃天数',
+          value: activeDays,
+          unit: 'days',
+        },
+      ],
+    };
+  }
+
+  async submitAuthmeResetRequest(userId: string, reason?: string | null) {
+    const bindingCount = await this.prisma.userAuthmeBinding.count({
+      where: { userId },
+    });
+    if (bindingCount === 0) {
+      throw new BadRequestException('未找到有效的 AuthMe 绑定');
+    }
+    const event = await this.prisma.userLifecycleEvent.create({
+      data: {
+        userId,
+        eventType: LifecycleEventType.OTHER,
+        occurredAt: new Date(),
+        source: 'portal.player.authme-reset',
+        notes: this.toNullableString(reason),
+        metadata: {
+          reason: this.toNullableString(reason),
+        },
+      },
+    });
+    return { success: true, requestId: event.id };
+  }
+
+  async submitAuthmeForceLogin(userId: string, reason?: string | null) {
+    const bindingCount = await this.prisma.userAuthmeBinding.count({
+      where: { userId },
+    });
+    if (bindingCount === 0) {
+      throw new BadRequestException('未找到有效的 AuthMe 绑定');
+    }
+    const event = await this.prisma.userLifecycleEvent.create({
+      data: {
+        userId,
+        eventType: LifecycleEventType.OTHER,
+        occurredAt: new Date(),
+        source: 'portal.player.force-login',
+        notes: this.toNullableString(reason),
+        metadata: {
+          reason: this.toNullableString(reason),
+        },
+      },
+    });
+    return { success: true, requestId: event.id };
+  }
+
+  async submitPermissionChangeRequest(
+    userId: string,
+    payload: { targetGroup: string; reason?: string },
+  ) {
+    const sanitized = this.toNullableString(payload.targetGroup);
+    if (!sanitized) {
+      throw new BadRequestException('请选择目标权限组');
+    }
+    const log = await this.prisma.adminAuditLog.create({
+      data: {
+        actorId: userId,
+        action: 'portal.player.permission.request',
+        targetType: 'permission-group',
+        targetId: sanitized,
+        payload: {
+          reason: this.toNullableString(payload.reason),
+        },
+      },
+    });
+    return { success: true, requestId: log.id };
+  }
+
+  async submitServerRestartRequest(
+    userId: string,
+    payload: { serverId: string; reason: string },
+  ) {
+    const server = await this.prisma.minecraftServer.findUnique({
+      where: { id: payload.serverId },
+      select: { id: true, displayName: true },
+    });
+    if (!server) {
+      throw new NotFoundException('服务器不存在');
+    }
+    const log = await this.prisma.adminAuditLog.create({
+      data: {
+        actorId: userId,
+        action: 'portal.player.server.restart-request',
+        targetType: 'minecraft-server',
+        targetId: server.id,
+        payload: {
+          reason: this.toNullableString(payload.reason),
+          serverName: server.displayName,
+        },
+      },
+    });
+    return { success: true, requestId: log.id };
+  }
+
+  getRankCategories() {
+    return RANK_CATEGORIES;
+  }
+
+  async getRankLeaderboard(
+    categoryId: string,
+    period: string | undefined,
+    params: { page?: number; pageSize?: number },
+  ) {
+    const category = this.resolveRankCategory(categoryId);
+    const since = this.resolvePeriodStart(period);
+    const page = Math.max(params.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(params.pageSize ?? 20, 1), 50);
+    const skip = (page - 1) * pageSize;
+    const { total, items } = await this.aggregateRankSource(
+      category.source,
+      {
+        since,
+        skip,
+        take: pageSize,
+      },
+    );
+    const userMap = await this.fetchLeaderboardUsers(
+      items.map((item) => item.userId),
+    );
+    const leaderboard = items.map((item, index) => ({
+      rank: skip + index + 1,
+      value: Number(item.value),
+      user: userMap.get(item.userId) ?? {
+        id: item.userId,
+        displayName: null,
+        email: null,
+        minecraftName: null,
+      },
+    }));
+    return {
+      category,
+      period: period ?? '30d',
+      pagination: this.buildPagination(total, page, pageSize),
+      items: leaderboard,
+    };
+  }
+
+  async getRankContextForUser(
+    categoryId: string,
+    period: string | undefined,
+    userId: string,
+  ) {
+    const category = this.resolveRankCategory(categoryId);
+    const since = this.resolvePeriodStart(period);
+    const value = await this.fetchRankValue(category.source, userId, since);
+    if (value === 0) {
+      return {
+        category,
+        period: period ?? '30d',
+        me: null,
+        around: [],
+      };
+    }
+    const ahead = await this.fetchRankAheadCount(
+      category.source,
+      userId,
+      since,
+      value,
+    );
+    const rank = ahead + 1;
+    const windowSkip = Math.max(rank - 3, 0);
+    const { items } = await this.aggregateRankSource(category.source, {
+      since,
+      skip: windowSkip,
+      take: 5,
+    });
+    const userMap = await this.fetchLeaderboardUsers(
+      items.map((item) => item.userId),
+    );
+    return {
+      category,
+      period: period ?? '30d',
+      me: { rank, value },
+      around: items.map((item, index) => ({
+        rank: windowSkip + index + 1,
+        value: Number(item.value),
+        user: userMap.get(item.userId) ?? {
+          id: item.userId,
+          displayName: null,
+          email: null,
+          minecraftName: null,
+        },
+      })),
+    };
   }
 
   async getAdminOverview(operatorId: string | null) {
