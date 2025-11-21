@@ -21,6 +21,7 @@ const scrolled = ref(false)
 const heroImageLoaded = ref(false)
 const homeLoaded = ref(false)
 const heroPreviewOpen = ref(false)
+const heroParallaxOffset = reactive({ x: 0, y: 0 })
 
 const navigationLinks = computed(() => home.value?.navigation ?? [])
 const cardIds = computed(() => home.value?.cards ?? [])
@@ -155,6 +156,21 @@ onMounted(async () => {
   updateScrollState()
   window.addEventListener('scroll', updateScrollState, { passive: true })
 
+  window.addEventListener('mousemove', (event: MouseEvent) => {
+    const vw = window.innerWidth || 1
+    const vh = window.innerHeight || 1
+
+    const relX = event.clientX / vw
+    const relY = event.clientY / vh
+
+    const maxOffset = 16
+    const offsetX = (relX - 0.5) * maxOffset * -1
+    const offsetY = (relY - 0.5) * maxOffset * -1
+
+    heroParallaxOffset.x = offsetX
+    heroParallaxOffset.y = offsetY
+  })
+
   if (heroRef.value) {
     observer.value = new IntersectionObserver(
       (entries) => {
@@ -227,6 +243,11 @@ function handleHeroImageErrored() {
   heroImageLoaded.value = true
 }
 
+function resetHeroParallax() {
+  heroParallaxOffset.x = 0
+  heroParallaxOffset.y = 0
+}
+
 function formatNumberCompact(value: number | null | undefined) {
   if (value == null) return '0'
   return new Intl.NumberFormat('zh-CN').format(value)
@@ -268,6 +289,8 @@ function formatLatency(value: number | null | undefined) {
               opacity: 0.2,
               scale: 1.03,
               filter: 'blur(18px) saturate(1.4)',
+              translateX: 0,
+              translateY: 0,
             }"
             :animate="{
               opacity: heroImageLoaded ? 1 : 0.2,
@@ -275,8 +298,10 @@ function formatLatency(value: number | null | undefined) {
               filter: heroImageLoaded
                 ? 'blur(0px) saturate(1)'
                 : 'blur(18px) saturate(1.4)',
+              translateX: heroParallaxOffset.x,
+              translateY: heroParallaxOffset.y,
             }"
-            :transition="{ duration: 0.6, ease: 'easeOut' }"
+            :transition="{ duration: 0.45, ease: 'easeOut' }"
             @load="handleHeroImageLoaded"
             @error="handleHeroImageErrored"
           />
@@ -291,6 +316,8 @@ function formatLatency(value: number | null | undefined) {
               opacity: 0.2,
               scale: 1.03,
               filter: 'blur(18px) saturate(1.4)',
+              translateX: 0,
+              translateY: 0,
             }"
             :animate="{
               opacity: heroImageLoaded ? 1 : 0.2,
@@ -298,8 +325,10 @@ function formatLatency(value: number | null | undefined) {
               filter: heroImageLoaded
                 ? 'blur(0px) saturate(1)'
                 : 'blur(18px) saturate(1.4)',
+              translateX: heroParallaxOffset.x,
+              translateY: heroParallaxOffset.y,
             }"
-            :transition="{ duration: 0.6, ease: 'easeOut' }"
+            :transition="{ duration: 0.45, ease: 'easeOut' }"
             @load="handleHeroImageLoaded"
             @error="handleHeroImageErrored"
           />
