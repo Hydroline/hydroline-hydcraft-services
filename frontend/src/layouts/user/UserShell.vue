@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
+import { AnimatePresence, Motion } from 'motion-v'
 import { storeToRefs } from 'pinia'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
@@ -25,6 +26,20 @@ const { heroInView, heroActiveDescription } = storeToRefs(uiStore)
 
 const menuOpen = ref(false)
 const isSidebarCollapsed = ref(true)
+const isScrolled = ref(false)
+
+const handleScroll = () => {
+  isScrolled.value = window.scrollY > 80
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll)
+  handleScroll()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
+})
 
 const toggleDesktopSidebar = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
@@ -199,8 +214,8 @@ const routerPush = (path: string) => {
         class="sticky top-0 z-40 grid h-16 grid-cols-[1fr_auto_1fr] items-center px-4 border-b transition-all duration-300"
         :class="{
           'backdrop-blur-xl bg-white/60 dark:bg-slate-950/70 border-slate-200/60 dark:border-slate-800/60':
-            !isMainPage,
-          'border-transparent backdrop-blur-none': isMainPage,
+            !isMainPage || isScrolled,
+          'border-transparent backdrop-blur-none': isMainPage && !isScrolled,
           'backdrop-blur-xl! bg-white/60! dark:bg-slate-950/70! border-slate-200/60! dark:border-slate-800/60!':
             isMainPage && !isSidebarCollapsed,
         }"
@@ -221,26 +236,32 @@ const routerPush = (path: string) => {
 
         <div class="flex items-center justify-center text-center">
           <div v-if="isMainPage" class="flex items-center justify-center">
-            <Transition
-              mode="out-in"
-              enter-active-class="transition-opacity duration-150 ease-out"
-              leave-active-class="transition-opacity duration-150 ease-in"
-              enter-from-class="opacity-0"
-              leave-to-class="opacity-0"
-            >
-              <p
-                v-if="heroInView"
-                key="header-title"
+            <AnimatePresence mode="wait">
+              <Motion
+                v-if="!isScrolled"
+                :key="headerTitle"
+                as="p"
                 class="text-lg text-slate-400 dark:text-white/50"
+                :initial="{ opacity: 0, filter: 'blur(4px)' }"
+                :animate="{ opacity: 1, filter: 'blur(0px)' }"
+                :exit="{ opacity: 0, filter: 'blur(4px)' }"
+                :transition="{ duration: 0.2 }"
               >
                 {{ headerTitle }}
-              </p>
-              <HydrolineSvg
+              </Motion>
+              <Motion
                 v-else
                 key="header-logo"
-                class="h-6 text-slate-500 dark:text-white/75"
-              />
-            </Transition>
+                as="div"
+                class="flex items-center"
+                :initial="{ opacity: 0, filter: 'blur(4px)' }"
+                :animate="{ opacity: 1, filter: 'blur(0px)' }"
+                :exit="{ opacity: 0, filter: 'blur(4px)' }"
+                :transition="{ duration: 0.2 }"
+              >
+                <HydrolineSvg class="h-6 text-slate-500 dark:text-white/75" />
+              </Motion>
+            </AnimatePresence>
           </div>
         </div>
 

@@ -171,11 +171,16 @@ async function submitRestartRequest() {
 
 function markerStyle(cluster: PlayerLoginCluster) {
   const key =
-    cluster.province || cluster.city || cluster.country || cluster.id || 'default'
-  const mapped =
-    regionPositions[key] ??
-    regionPositions[key.replace(/省|市|自治区|特别行政区/g, '')] ??
-    { x: 55, y: 35 }
+    cluster.province ||
+    cluster.city ||
+    cluster.country ||
+    cluster.id ||
+    'default'
+  const mapped = regionPositions[key] ??
+    regionPositions[key.replace(/省|市|自治区|特别行政区/g, '')] ?? {
+      x: 55,
+      y: 35,
+    }
   return {
     left: `${mapped.x}%`,
     top: `${mapped.y}%`,
@@ -253,13 +258,19 @@ function formatMetricValue(value: number, unit: string) {
                 </p>
               </div>
             </div>
-            <dl class="grid grid-cols-1 gap-3 text-sm text-slate-700 dark:text-slate-200">
+            <dl
+              class="grid grid-cols-1 gap-3 text-sm text-slate-700 dark:text-slate-200"
+            >
               <div>
-                <dt class="text-xs text-slate-500 dark:text-slate-400">注册时间</dt>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">
+                  注册时间
+                </dt>
                 <dd>{{ formatDateTime(summary.createdAt) }}</dd>
               </div>
               <div>
-                <dt class="text-xs text-slate-500 dark:text-slate-400">最近登录</dt>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">
+                  最近登录
+                </dt>
                 <dd>
                   {{ formatDateTime(summary.lastLoginAt) }}
                   <span
@@ -278,7 +289,9 @@ function formatMetricValue(value: number, unit: string) {
         <UCard class="bg-white/85 shadow-sm backdrop-blur dark:bg-slate-900/70">
           <template #header>
             <div class="flex items-center justify-between">
-              <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              <p
+                class="text-sm font-semibold text-slate-800 dark:text-slate-100"
+              >
                 登录地图
               </p>
               <span class="text-xs text-slate-500 dark:text-slate-400">
@@ -286,8 +299,12 @@ function formatMetricValue(value: number, unit: string) {
               </span>
             </div>
           </template>
-          <div class="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-100 to-slate-200 p-4 dark:border-slate-800/70 dark:from-slate-800 dark:to-slate-900">
-            <div class="relative h-56 overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_top,_#cbd5f5,_transparent_60%),radial-gradient(circle_at_bottom,_#f1f5ff,_transparent_55%)] dark:bg-[radial-gradient(circle_at_top,_#1e293b,_transparent_60%),radial-gradient(circle_at_bottom,_#0f172a,_transparent_55%)]">
+          <div
+            class="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-100 to-slate-200 p-4 dark:border-slate-800/70 dark:from-slate-800 dark:to-slate-900"
+          >
+            <div
+              class="relative h-56 overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_top,_#cbd5f5,_transparent_60%),radial-gradient(circle_at_bottom,_#f1f5ff,_transparent_55%)] dark:bg-[radial-gradient(circle_at_top,_#1e293b,_transparent_60%),radial-gradient(circle_at_bottom,_#0f172a,_transparent_55%)]"
+            >
               <div
                 v-for="cluster in loginClusters"
                 :key="cluster.id"
@@ -297,14 +314,21 @@ function formatMetricValue(value: number, unit: string) {
                 {{ cluster.count }}
               </div>
             </div>
-            <ul class="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+            <ul
+              class="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300"
+            >
               <li
                 v-for="cluster in loginClusters.slice(0, 4)"
                 :key="cluster.id"
                 class="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 shadow-sm dark:bg-slate-900/60"
               >
                 <span>
-                  {{ cluster.city || cluster.province || cluster.country || '未知' }}
+                  {{
+                    cluster.city ||
+                    cluster.province ||
+                    cluster.country ||
+                    '未知'
+                  }}
                 </span>
                 <span class="font-semibold text-slate-900 dark:text-white">
                   {{ cluster.count }}
@@ -332,12 +356,18 @@ function formatMetricValue(value: number, unit: string) {
               <p class="text-xs text-slate-500 dark:text-slate-400">
                 {{ formatDateTime(item.createdAt) }}
               </p>
-              <p v-if="item.reason" class="text-xs text-slate-600 dark:text-slate-300">
+              <p
+                v-if="item.reason"
+                class="text-xs text-slate-600 dark:text-slate-300"
+              >
                 {{ item.reason }}
               </p>
             </div>
             <UButton
-              v-if="actions?.pagination.pageCount && actions.pagination.page < actions.pagination.pageCount"
+              v-if="
+                actions?.pagination.pageCount &&
+                actions.pagination.page < actions.pagination.pageCount
+              "
               block
               variant="ghost"
               color="neutral"
@@ -346,7 +376,10 @@ function formatMetricValue(value: number, unit: string) {
               查看更多
             </UButton>
           </div>
-          <p v-else class="text-center text-sm text-slate-500 dark:text-slate-400">
+          <p
+            v-else
+            class="text-center text-sm text-slate-500 dark:text-slate-400"
+          >
             暂无操作记录
           </p>
         </UCard>
@@ -361,19 +394,25 @@ function formatMetricValue(value: number, unit: string) {
           </template>
           <div v-if="ownership" class="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p class="text-xs text-slate-500 dark:text-slate-400">AuthMe 绑定</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                AuthMe 绑定
+              </p>
               <p class="text-2xl font-semibold text-slate-900 dark:text-white">
                 {{ ownership.authmeBindings }}
               </p>
             </div>
             <div>
-              <p class="text-xs text-slate-500 dark:text-slate-400">Minecraft 档案</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                Minecraft 档案
+              </p>
               <p class="text-2xl font-semibold text-slate-900 dark:text-white">
                 {{ ownership.minecraftProfiles }}
               </p>
             </div>
             <div>
-              <p class="text-xs text-slate-500 dark:text-slate-400">公司/铁路</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                公司/铁路
+              </p>
               <p class="text-2xl font-semibold text-slate-900 dark:text-white">
                 {{ ownership.companyCount + ownership.railwayCount }}
               </p>
@@ -391,7 +430,9 @@ function formatMetricValue(value: number, unit: string) {
         <UCard class="bg-white/85 shadow-sm backdrop-blur dark:bg-slate-900/70">
           <template #header>
             <div class="flex items-center justify-between">
-              <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              <p
+                class="text-sm font-semibold text-slate-800 dark:text-slate-100"
+              >
                 服务器账户
               </p>
               <UBadge color="primary" variant="soft">
@@ -429,7 +470,9 @@ function formatMetricValue(value: number, unit: string) {
         <UCard class="bg-white/85 shadow-sm backdrop-blur dark:bg-slate-900/70">
           <template #header>
             <div class="flex items-center justify-between">
-              <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              <p
+                class="text-sm font-semibold text-slate-800 dark:text-slate-100"
+              >
                 统计信息
               </p>
               <USelectMenu
@@ -467,18 +510,10 @@ function formatMetricValue(value: number, unit: string) {
             </p>
           </template>
           <div class="grid gap-3 md:grid-cols-2">
-            <UButton
-              color="primary"
-              variant="soft"
-              @click="handleAuthmeReset"
-            >
+            <UButton color="primary" variant="soft" @click="handleAuthmeReset">
               AuthMe 密码重置
             </UButton>
-            <UButton
-              color="primary"
-              variant="ghost"
-              @click="handleForceLogin"
-            >
+            <UButton color="primary" variant="ghost" @click="handleForceLogin">
               强制登陆
             </UButton>
             <UButton
@@ -500,59 +535,96 @@ function formatMetricValue(value: number, unit: string) {
       </div>
     </div>
 
-    <UModal v-model:open="permissionDialog.open" :ui="{ content: 'w-full max-w-md' }">
-      <div class="space-y-4">
-        <p class="text-lg font-semibold text-slate-900 dark:text-white">
-          权限组调整申请
-        </p>
-        <div class="space-y-2">
-          <label class="text-sm text-slate-600 dark:text-slate-300">目标权限组</label>
-          <UInput v-model="permissionDialog.targetGroup" placeholder="例如：builder" />
+    <UModal
+      v-model:open="permissionDialog.open"
+      :ui="{ content: 'w-full max-w-md' }"
+    >
+      <template #content>
+        <div class="space-y-4">
+          <p class="text-lg font-semibold text-slate-900 dark:text-white">
+            权限组调整申请
+          </p>
+          <div class="space-y-2">
+            <label class="text-sm text-slate-600 dark:text-slate-300"
+              >目标权限组</label
+            >
+            <UInput
+              v-model="permissionDialog.targetGroup"
+              placeholder="例如：builder"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm text-slate-600 dark:text-slate-300"
+              >说明</label
+            >
+            <UTextarea
+              v-model="permissionDialog.reason"
+              placeholder="补充说明"
+            />
+          </div>
+          <div class="flex justify-end gap-3">
+            <UButton
+              variant="ghost"
+              color="neutral"
+              @click="permissionDialog.open = false"
+            >
+              取消
+            </UButton>
+            <UButton color="primary" @click="submitPermissionChange">
+              提交
+            </UButton>
+          </div>
         </div>
-        <div class="space-y-2">
-          <label class="text-sm text-slate-600 dark:text-slate-300">说明</label>
-          <UTextarea v-model="permissionDialog.reason" placeholder="补充说明" />
-        </div>
-        <div class="flex justify-end gap-3">
-          <UButton variant="ghost" color="neutral" @click="permissionDialog.open = false">
-            取消
-          </UButton>
-          <UButton color="primary" @click="submitPermissionChange">
-            提交
-          </UButton>
-        </div>
-      </div>
+      </template>
     </UModal>
 
-    <UModal v-model:open="restartDialog.open" :ui="{ content: 'w-full max-w-md' }">
-      <div class="space-y-4">
-        <p class="text-lg font-semibold text-slate-900 dark:text-white">
-          炸服重启申请
-        </p>
-        <div class="space-y-2">
-          <label class="text-sm text-slate-600 dark:text-slate-300">服务器</label>
-          <USelectMenu
-            v-model="restartDialog.serverId"
-            :options="serverOptions.map((server) => ({
-              label: server.displayName,
-              value: server.id,
-            }))"
-            placeholder="选择服务器"
-          />
+    <UModal
+      v-model:open="restartDialog.open"
+      :ui="{ content: 'w-full max-w-md' }"
+    >
+      <template #content>
+        <div class="space-y-4">
+          <p class="text-lg font-semibold text-slate-900 dark:text-white">
+            炸服重启申请
+          </p>
+          <div class="space-y-2">
+            <label class="text-sm text-slate-600 dark:text-slate-300"
+              >服务器</label
+            >
+            <USelectMenu
+              v-model="restartDialog.serverId"
+              :options="
+                serverOptions.map((server) => ({
+                  label: server.displayName,
+                  value: server.id,
+                }))
+              "
+              placeholder="选择服务器"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm text-slate-600 dark:text-slate-300"
+              >说明</label
+            >
+            <UTextarea
+              v-model="restartDialog.reason"
+              placeholder="请输入崩服情况说明"
+            />
+          </div>
+          <div class="flex justify-end gap-3">
+            <UButton
+              variant="ghost"
+              color="neutral"
+              @click="restartDialog.open = false"
+            >
+              取消
+            </UButton>
+            <UButton color="primary" @click="submitRestartRequest">
+              提交
+            </UButton>
+          </div>
         </div>
-        <div class="space-y-2">
-          <label class="text-sm text-slate-600 dark:text-slate-300">说明</label>
-          <UTextarea v-model="restartDialog.reason" placeholder="请输入崩服情况说明" />
-        </div>
-        <div class="flex justify-end gap-3">
-          <UButton variant="ghost" color="neutral" @click="restartDialog.open = false">
-            取消
-          </UButton>
-          <UButton color="primary" @click="submitRestartRequest">
-            提交
-          </UButton>
-        </div>
-      </div>
+      </template>
     </UModal>
   </section>
 </template>

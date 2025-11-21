@@ -51,7 +51,7 @@ let timer: ReturnType<typeof setInterval> | null = null
 let pollingTimer: ReturnType<typeof setInterval> | null = null
 let toggleTimer: ReturnType<typeof setInterval> | null = null
 
-const showTime = ref(false)
+const displayMode = ref<0 | 1 | 2>(0)
 const serversHeaderContainer = ref<HTMLElement | null>(null)
 
 function animateWidthChange(action: () => void) {
@@ -148,7 +148,7 @@ onMounted(() => {
 
   toggleTimer = setInterval(() => {
     animateWidthChange(() => {
-      showTime.value = !showTime.value
+      displayMode.value = ((displayMode.value + 1) % 3) as 0 | 1 | 2
     })
   }, 5000)
 })
@@ -237,10 +237,26 @@ function serverClockDisplay(item: PublicServerStatusItem) {
 }
 
 function displayHeaderLabel(item: PublicServerStatusItem) {
-  if (showTime.value && item.beacon?.clock?.worldMinutes != null) {
-    return serverClockDisplay(item)
+  if (displayMode.value === 1) {
+    if (item.beacon?.clock?.worldMinutes != null) {
+      return serverClockDisplay(item)
+    }
+    return '--:--'
+  }
+  if (displayMode.value === 2) {
+    return latencyLabel(item)
   }
   return onlineLabel(item)
+}
+
+function headerIcon() {
+  if (displayMode.value === 1) {
+    return 'i-lucide-clock'
+  }
+  if (displayMode.value === 2) {
+    return 'i-lucide-signal'
+  }
+  return 'i-lucide-server'
 }
 
 const totalCapacity = computed(() => {
@@ -283,7 +299,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
         <template v-if="servers.length">
           <template
             v-for="(item, index) in servers"
-            :key="item.id + (showTime ? '-time' : '-online')"
+            :key="item.id + '-' + displayMode"
           >
             <Motion
               as="div"
@@ -293,11 +309,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
               :transition="{ duration: 0.35, ease: 'easeInOut' }"
             >
               <UIcon
-                :name="
-                  showTime && item.beacon?.clock?.worldMinutes != null
-                    ? 'i-lucide-clock'
-                    : 'i-lucide-server'
-                "
+                :name="headerIcon()"
                 class="h-3 w-3 text-slate-400"
               />
               <span class="font-medium text-slate-900 dark:text-white">
@@ -305,7 +317,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
               </span>
               <span
                 :class="[
-                  showTime && item.beacon?.clock?.locked
+                  displayMode === 1 && item.beacon?.clock?.locked
                     ? 'text-rose-500 dark:text-rose-400'
                     : 'text-slate-500 dark:text-slate-400',
                 ]"
@@ -313,7 +325,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
                 {{ displayHeaderLabel(item) }}
               </span>
               <UIcon
-                v-if="showTime && item.beacon?.clock?.locked"
+                v-if="displayMode === 1 && item.beacon?.clock?.locked"
                 name="i-lucide-lock"
                 class="h-3 w-3 text-rose-500 dark:text-rose-400"
               />

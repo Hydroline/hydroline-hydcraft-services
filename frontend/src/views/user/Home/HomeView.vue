@@ -250,10 +250,8 @@ function formatLatency(value: number | null | undefined) {
         class="fixed inset-0 left-16 bottom-24 z-0 flex flex-col items-center justify-center transition duration-300"
         :style="heroBackdropStyle"
       >
-        <button
-          type="button"
+        <div
           class="bg-image relative block h-full w-full cursor-zoom-in select-none overflow-hidden rounded-2xl text-left focus:outline-none"
-          @click="heroPreviewOpen = true"
         >
           <Motion
             :key="activeHeroImage"
@@ -277,7 +275,7 @@ function formatLatency(value: number | null | undefined) {
             @load="handleHeroImageLoaded"
             @error="handleHeroImageErrored"
           />
-        </button>
+        </div>
       </div>
 
       <Transition name="fade-slide" mode="out-in">
@@ -346,7 +344,9 @@ function formatLatency(value: number | null | undefined) {
           >
             <template #header>
               <div class="flex flex-col gap-1">
-                <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <p
+                  class="text-sm font-semibold text-slate-700 dark:text-slate-200"
+                >
                   服务器情况
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -359,7 +359,9 @@ function formatLatency(value: number | null | undefined) {
                 <dt class="text-xs text-slate-500 dark:text-slate-400">
                   在线玩家
                 </dt>
-                <dd class="text-2xl font-semibold text-slate-900 dark:text-white">
+                <dd
+                  class="text-2xl font-semibold text-slate-900 dark:text-white"
+                >
                   {{ formatNumberCompact(serverOverview.onlinePlayers) }}
                 </dd>
               </div>
@@ -367,7 +369,9 @@ function formatLatency(value: number | null | undefined) {
                 <dt class="text-xs text-slate-500 dark:text-slate-400">
                   承载容量
                 </dt>
-                <dd class="text-2xl font-semibold text-slate-900 dark:text-white">
+                <dd
+                  class="text-2xl font-semibold text-slate-900 dark:text-white"
+                >
                   {{ formatNumberCompact(serverOverview.maxPlayers) }}
                 </dd>
               </div>
@@ -375,15 +379,21 @@ function formatLatency(value: number | null | undefined) {
                 <dt class="text-xs text-slate-500 dark:text-slate-400">
                   健康服务器
                 </dt>
-                <dd class="text-xl font-semibold text-slate-900 dark:text-white">
-                  {{ serverOverview.healthyServers }}/{{ serverOverview.totalServers }}
+                <dd
+                  class="text-xl font-semibold text-slate-900 dark:text-white"
+                >
+                  {{ serverOverview.healthyServers }}/{{
+                    serverOverview.totalServers
+                  }}
                 </dd>
               </div>
               <div>
                 <dt class="text-xs text-slate-500 dark:text-slate-400">
                   平均延迟
                 </dt>
-                <dd class="text-xl font-semibold text-slate-900 dark:text-white">
+                <dd
+                  class="text-xl font-semibold text-slate-900 dark:text-white"
+                >
                   {{ formatLatency(serverOverview.averageLatencyMs) }}
                 </dd>
               </div>
@@ -395,31 +405,48 @@ function formatLatency(value: number | null | undefined) {
             class="rounded-2xl border border-slate-200/70 bg-white/90 shadow-sm backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70"
           >
             <template #header>
-              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <p
+                class="text-sm font-semibold text-slate-700 dark:text-slate-200"
+              >
                 名下数据
               </p>
             </template>
-            <div class="grid grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-200">
+            <div
+              class="grid grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-200"
+            >
               <div>
-                <p class="text-xs text-slate-500 dark:text-slate-400">AuthMe 绑定</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  AuthMe 绑定
+                </p>
                 <p class="text-xl font-semibold">
                   {{ formatNumberCompact(ownershipOverview.authmeBindings) }}
                 </p>
               </div>
               <div>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Minecraft 档案</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  Minecraft 档案
+                </p>
                 <p class="text-xl font-semibold">
                   {{ formatNumberCompact(ownershipOverview.minecraftProfiles) }}
                 </p>
               </div>
               <div>
-                <p class="text-xs text-slate-500 dark:text-slate-400">公司/铁路</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  公司/铁路
+                </p>
                 <p class="text-xl font-semibold">
-                  {{ formatNumberCompact(ownershipOverview.companyCount + ownershipOverview.railwayCount) }}
+                  {{
+                    formatNumberCompact(
+                      ownershipOverview.companyCount +
+                        ownershipOverview.railwayCount,
+                    )
+                  }}
                 </p>
               </div>
               <div>
-                <p class="text-xs text-slate-500 dark:text-slate-400">角色授权</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  角色授权
+                </p>
                 <p class="text-xl font-semibold">
                   {{ formatNumberCompact(ownershipOverview.roleAssignments) }}
                 </p>
@@ -432,26 +459,36 @@ function formatLatency(value: number | null | undefined) {
             class="rounded-2xl border border-slate-200/70 bg-white/90 shadow-sm backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70"
           >
             <template #header>
-              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <p
+                class="text-sm font-semibold text-slate-700 dark:text-slate-200"
+              >
                 申请流程
               </p>
             </template>
             <div class="space-y-3 text-sm">
               <div class="flex items-center justify-between">
                 <span class="text-slate-500 dark:text-slate-400">待处理</span>
-                <span class="text-lg font-semibold text-slate-900 dark:text-white">
+                <span
+                  class="text-lg font-semibold text-slate-900 dark:text-white"
+                >
                   {{ applicationOverview.pendingContacts }}
                 </span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-slate-500 dark:text-slate-400">活跃会话</span>
-                <span class="text-lg font-semibold text-slate-900 dark:text-white">
+                <span
+                  class="text-lg font-semibold text-slate-900 dark:text-white"
+                >
                   {{ applicationOverview.activeSessions }}
                 </span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-slate-500 dark:text-slate-400">资料完整度</span>
-                <span class="text-lg font-semibold text-slate-900 dark:text-white">
+                <span class="text-slate-500 dark:text-slate-400"
+                  >资料完整度</span
+                >
+                <span
+                  class="text-lg font-semibold text-slate-900 dark:text-white"
+                >
                   {{
                     formatPercentage(applicationOverview.profileCompleteness)
                   }}
@@ -461,10 +498,7 @@ function formatLatency(value: number | null | undefined) {
           </UCard>
         </div>
 
-        <div
-          v-if="serverCards.length"
-          class="grid gap-4 md:grid-cols-2"
-        >
+        <div v-if="serverCards.length" class="grid gap-4 md:grid-cols-2">
           <UCard
             v-for="card in serverCards"
             :key="card.id"
@@ -472,23 +506,33 @@ function formatLatency(value: number | null | undefined) {
           >
             <div class="flex items-start justify-between">
               <div>
-                <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                <p
+                  class="text-sm font-semibold text-slate-800 dark:text-slate-100"
+                >
                   {{ card.title }}
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
                   {{ card.description }}
                 </p>
               </div>
-              <UBadge v-if="card.badge" size="sm" color="primary" variant="soft">
+              <UBadge
+                v-if="card.badge"
+                size="sm"
+                color="primary"
+                variant="soft"
+              >
                 {{ card.badge }}
               </UBadge>
             </div>
             <div class="mt-4 flex items-baseline justify-between">
-              <span class="text-3xl font-semibold text-slate-900 dark:text-white">
+              <span
+                class="text-3xl font-semibold text-slate-900 dark:text-white"
+              >
                 {{ card.value }}
-                <span class="text-base font-normal text-slate-500 dark:text-slate-400">{{
-                  card.unit
-                }}</span>
+                <span
+                  class="text-base font-normal text-slate-500 dark:text-slate-400"
+                  >{{ card.unit }}</span
+                >
               </span>
               <span
                 class="text-sm font-medium"
@@ -505,47 +549,50 @@ function formatLatency(value: number | null | undefined) {
         </div>
 
         <div class="grid gap-6 md:grid-cols-5">
-        <div class="md:col-span-3">
-          <!-- 等东西 -->
-          <Transition name="fade-slide" mode="out-in"> </Transition>
-        </div>
+          <div class="md:col-span-3">
+            <!-- 等东西 -->
+            <Transition name="fade-slide" mode="out-in"> </Transition>
+          </div>
 
-        <div class="grid gap-4 md:col-span-2">
-          <UCard
-            v-for="cardId in secondaryCards"
-            :key="cardId"
-            class="rounded-2xl border border-slate-200/70 bg-white/80 p-4 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
-          >
-            <div class="flex items-center justify-between">
-              <div>
-                <h3
-                  class="text-base font-medium text-slate-900 dark:text-white"
-                >
-                  {{ resolveCardMetadata(cardId).title }}
-                </h3>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  {{ resolveCardMetadata(cardId).description }}
-                </p>
+          <div class="grid gap-4 md:col-span-2">
+            <UCard
+              v-for="cardId in secondaryCards"
+              :key="cardId"
+              class="rounded-2xl border border-slate-200/70 bg-white/80 p-4 backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/70"
+            >
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3
+                    class="text-base font-medium text-slate-900 dark:text-white"
+                  >
+                    {{ resolveCardMetadata(cardId).title }}
+                  </h3>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                    {{ resolveCardMetadata(cardId).description }}
+                  </p>
+                </div>
+                <UBadge color="neutral" variant="soft">开发中</UBadge>
               </div>
-              <UBadge color="neutral" variant="soft">开发中</UBadge>
-            </div>
-          </UCard>
-        </div>
+            </UCard>
+          </div>
         </div>
       </div>
     </section>
   </div>
+
   <UModal v-model:open="heroPreviewOpen" :ui="{ content: 'w-full max-w-4xl' }">
-    <div class="space-y-2">
-      <img
-        :src="activeHeroImage"
-        :alt="activeHeroDescription"
-        class="rounded-2xl object-cover"
-      />
-      <p class="text-sm text-slate-600 dark:text-slate-300">
-        {{ activeHeroDescription || 'Hydroline Portal 背景图' }}
-      </p>
-    </div>
+    <template #content>
+      <div class="space-y-2">
+        <img
+          :src="activeHeroImage"
+          :alt="activeHeroDescription"
+          class="rounded-2xl object-cover"
+        />
+        <p class="text-sm text-slate-600 dark:text-slate-300">
+          {{ activeHeroDescription || 'Hydroline Portal 背景图' }}
+        </p>
+      </div>
+    </template>
   </UModal>
 </template>
 
