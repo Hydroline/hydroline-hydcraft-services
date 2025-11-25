@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,9 +9,17 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Request } from 'express';
 import { UsersService } from '../services/users/users.service';
 import { AuthGuard } from '../auth.guard';
@@ -31,6 +40,9 @@ import { ResetUserPasswordDto } from '../dto/reset-user-password.dto';
 import { UpdateAuthmeBindingAdminDto } from '../dto/update-authme-binding-admin.dto';
 import { AssignPermissionLabelsDto } from '../dto/assign-permission-labels.dto';
 import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { AttachmentsService } from '../../attachments/attachments.service';
+import { enrichUserAvatar } from '../helpers/user-avatar.helper';
 import {
   AddPhoneContactDto,
   UpdatePhoneContactDto,
@@ -44,7 +56,10 @@ type CreateBindingBody = { identifier: string; setPrimary?: boolean };
 @Controller('auth/users')
 @UseGuards(AuthGuard, PermissionsGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly attachmentsService: AttachmentsService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: '分页查询用户' })
@@ -56,20 +71,27 @@ export class UsersController {
     @Query('sortField') sortField?: string,
     @Query('sortOrder') sortOrder?: string,
   ) {
-    return this.usersService.listUsers({
+    const result = await this.usersService.listUsers({
       keyword,
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
       sortField,
       sortOrder,
     });
+    const items = await Promise.all(
+      result.items.map((item) =>
+        enrichUserAvatar(this.attachmentsService, item as any),
+      ),
+    );
+    return { ...result, items };
   }
 
   @Get(':userId')
   @ApiOperation({ summary: '获取用户详情' })
   @RequirePermissions(PERMISSIONS.AUTH_VIEW_USERS)
   async detail(@Param('userId') userId: string) {
-    return this.usersService.getUserDetail(userId);
+    const detail = await this.usersService.getUserDetail(userId);
+    return enrichUserAvatar(this.attachmentsService, detail as any);
   }
 
   @Delete(':userId')
@@ -131,6 +153,80 @@ export class UsersController {
     @Req() req: Request,
   ) {
     return this.usersService.resetUserPassword(userId, dto, req.user?.id);
+  }
+
+  @Patch(':userId/avatar')
+  @ApiOperation({ summary: '更新指定用户头像' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        avatar: { type: 'string', format: 'binary' },
+      },
+      required: ['avatar'],
+    },
+  })
+  @RequirePermissions(PERMISSIONS.AUTH_MANAGE_USERS)
+  @UseInterceptors(
+    FileInterceptor('avatar', { limits: { fileSize: 8 * 1024 * 1024 } }),
+  )
+  async updateUserAvatar(
+    @Param('userId') userId: string,
+    @UploadedFile() file: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Missing avatar file');
+    }
+
+    const existingUser = await this.usersService.getSessionUser(userId);
+    const previousAvatarAttachmentId =
+      (existingUser as any)?.avatarAttachmentId ?? null;
+
+    const avatarFolder = await this.attachmentsService.resolveUserAvatarFolder(
+      userId,
+    );
+
+    const attachment = await this.attachmentsService.uploadAttachment(
+      userId,
+      file as any,
+      {
+        name: file.originalname,
+        folderId: avatarFolder?.id ?? null,
+        description: 'User avatar',
+        isPublic: true,
+        tagKeys: [],
+        visibilityMode: 'public',
+        visibilityRoles: [],
+        visibilityLabels: [],
+        metadata: {},
+      } as any,
+    );
+
+    await this.usersService.updateCurrentUser(userId, {
+      avatarAttachmentId: attachment.id,
+    } as any);
+
+    if (
+      previousAvatarAttachmentId &&
+      previousAvatarAttachmentId !== attachment.id
+    ) {
+      try {
+        await this.attachmentsService.deleteAttachment(
+          previousAvatarAttachmentId,
+        );
+      } catch {
+        // ignore avatar cleanup errors
+      }
+    }
+
+    const detail = await this.usersService.getUserDetail(userId);
+    const enriched = await enrichUserAvatar(
+      this.attachmentsService,
+      detail as any,
+      attachment,
+    );
+    return { user: enriched };
   }
 
   @Patch(':userId/bindings/:bindingId')

@@ -132,5 +132,22 @@ export const useAdminUsersStore = defineStore('admin-users', {
       })
       await this.fetch({ page: this.pagination.page })
     },
+    updateUserAvatar(userId: string, payload: { avatarUrl?: string | null; avatarAttachmentId?: string | null }) {
+      const target = this.items.find((item) => item.id === userId)
+      if (!target) return
+      target.avatarUrl = payload.avatarUrl ?? null
+      target.avatarAttachmentId = payload.avatarAttachmentId ?? null
+      if (!target.profile) {
+        target.profile = {
+          displayName: target.name ?? null,
+          piic: null,
+          primaryAuthmeBindingId: null,
+          primaryMinecraft: null,
+          avatarUrl: payload.avatarUrl ?? null,
+        }
+      } else {
+        target.profile.avatarUrl = payload.avatarUrl ?? null
+      }
+    },
   },
 })

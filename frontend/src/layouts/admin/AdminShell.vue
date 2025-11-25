@@ -252,16 +252,12 @@ onMounted(() => {
         <div
           class="flex items-center gap-2 rounded-full px-2 py-1 text-sm hover:bg-elevated"
         >
-          <span class="hidden text-slate-700 dark:text-slate-200 sm:block">{{
-            authStore.displayName ?? authStore.user?.email
-          }}</span>
+          <span class="hidden text-slate-700 dark:text-slate-200 sm:block">
+            {{ authStore.displayName ?? authStore.user?.email }}
+          </span>
           <UserAvatar
             :name="authStore.displayName"
-            :src="
-              typeof authStore.user?.image === 'string'
-                ? authStore.user?.image
-                : null
-            "
+            :src="authStore.avatarUrl"
             size="sm"
           />
         </div>

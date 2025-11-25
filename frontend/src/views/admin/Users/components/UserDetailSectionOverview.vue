@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import type { AdminUserDetail } from '@/types/admin'
 import { playerStatusOptions } from '@/constants/status'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 interface RoleOption {
   label: string
@@ -18,6 +19,7 @@ interface LabelOption {
 const {
   detail,
   loading,
+  avatarUploading = false,
   roleSelection,
   labelSelection,
   roleOptions,
@@ -29,6 +31,7 @@ const {
 } = defineProps<{
   detail: AdminUserDetail | null
   loading: boolean
+  avatarUploading?: boolean
   roleSelection: string[]
   labelSelection: string[]
   roleOptions: RoleOption[]
@@ -53,6 +56,7 @@ const emit = defineEmits<{
   (e: 'updateLabels', nextValue: unknown): void
   (e: 'refreshPiic'): void
   (e: 'openSessions'): void
+  (e: 'changeAvatar'): void
 }>()
 
 // 本地可编辑的入服日期副本，避免直接修改 prop
@@ -271,13 +275,38 @@ const statusSnapshotSummary = computed(() => {
       class="flex flex-col gap-4 relative md:flex-row md:items-start md:justify-between"
     >
       <div class="flex-1">
-        <div>
-          <UserAvatar
-            :src="(detail?.profile as any)?.avatarUrl || undefined"
-            :alt="detail?.profile?.displayName || detail?.email || '用户头像'"
-            size="lg"
-            class="mb-2"
-          />
+        <div class="mb-2">
+          <div class="relative inline-flex">
+            <button
+              v-if="detail"
+              type="button"
+              class="group relative"
+              @click="emit('changeAvatar')"
+            >
+              <UserAvatar
+                :src="(detail?.profile as any)?.avatarUrl || undefined"
+                :alt="detail?.profile?.displayName || detail?.email || '头像'"
+                size="lg"
+              />
+              <div
+                class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/40 text-xs text-white opacity-0 transition group-hover:opacity-100 dark:bg-slate-900/60"
+              >
+                更换头像
+              </div>
+            </button>
+            <UserAvatar
+              v-else
+              :src="undefined"
+              :alt="'用户头像'"
+              size="lg"
+            />
+            <div
+              v-if="avatarUploading"
+              class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/60 text-xs text-white"
+            >
+              上传中…
+            </div>
+          </div>
         </div>
         <div>
           <span

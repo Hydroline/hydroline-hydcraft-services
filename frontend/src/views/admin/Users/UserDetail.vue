@@ -103,6 +103,9 @@ const deleteConfirmMessage = ref('')
 const deleteConfirmCallback = ref<(() => Promise<void>) | null>(null)
 const deleteConfirmSubmitting = ref(false)
 
+const avatarFileInput = ref<HTMLInputElement | null>(null)
+const avatarUploading = ref(false)
+
 const sessions = computed(() => detail.value?.sessions ?? [])
 const oauthProviders = computed(() => featureStore.flags.oauthProviders ?? [])
 const oauthAccounts = computed(() => detail.value?.oauthAccounts ?? [])
@@ -163,6 +166,49 @@ function openResetPasswordDialog() {
 function openDeleteDialog() {
   if (!detail.value) return
   deleteDialogOpen.value = true
+}
+
+function triggerAvatarSelect() {
+  if (!detail.value || avatarUploading.value) return
+  avatarFileInput.value?.click()
+}
+
+async function handleAvatarFileChange(event: Event) {
+  if (!auth.token || !detail.value) return
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0]
+  if (!file) return
+  avatarUploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    const response = await apiFetch<{ user: AdminUserDetail }>(
+      `/auth/users/${detail.value.id}/avatar`,
+      {
+        method: 'PATCH',
+        token: auth.token,
+        body: formData,
+      },
+    )
+    detail.value = response.user
+    usersStore.updateUserAvatar(response.user.id, {
+      avatarUrl:
+        response.user.avatarUrl ?? response.user.profile?.avatarUrl ?? null,
+      avatarAttachmentId: response.user.avatarAttachmentId ?? null,
+    })
+    toast.add({ title: '头像已更新', color: 'success' })
+  } catch (error) {
+    toast.add({
+      title: '头像更新失败',
+      description: error instanceof ApiError ? error.message : '请稍后重试',
+      color: 'error',
+    })
+  } finally {
+    avatarUploading.value = false
+    if (avatarFileInput.value) {
+      avatarFileInput.value.value = ''
+    }
+  }
 }
 
 function tryOpenEmailDialog() {
@@ -773,6 +819,7 @@ onMounted(async () => {
     <UserDetailSectionOverview
       :detail="detail"
       :loading="loading"
+      :avatar-uploading="avatarUploading"
       :role-selection="roleSelection"
       :label-selection="labelSelection"
       :role-options="roleOptions"
@@ -794,7 +841,15 @@ onMounted(async () => {
       @updateLabels="handleLabelsUpdate"
       @refreshPiic="openPiicDialog"
       @openSessions="sessionsDialogOpen = true"
+      @changeAvatar="triggerAvatarSelect"
     />
+    <input
+      ref="avatarFileInput"
+      type="file"
+      class="hidden"
+      accept="image/*"
+      @change="handleAvatarFileChange"
+    >
     <UserDetailSectionProfile
       :detail="detail"
       :profile-form="profileForm"

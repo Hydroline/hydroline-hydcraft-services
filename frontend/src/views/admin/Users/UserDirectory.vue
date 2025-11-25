@@ -6,6 +6,7 @@ import { useUiStore } from '@/stores/ui'
 import type { AdminUserListItem } from '@/types/admin'
 import UserDetailDialog from '@/views/admin/components/UserDetailDialog.vue'
 import PlayerDetailDialog from '@/views/admin/components/PlayerDetailDialog.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 
 type SortOrder = 'asc' | 'desc'
 type RefreshOptions = {
@@ -63,6 +64,21 @@ type PlayerUserSummary = {
 }
 
 const maxMinecraftAvatars = 3
+
+function userDisplayName(item: AdminUserListItem) {
+  return item.profile?.displayName ?? item.name ?? item.email ?? '用户'
+}
+
+function userAvatarUrl(item: AdminUserListItem) {
+  const profileAvatar = item.profile?.avatarUrl
+  if (typeof profileAvatar === 'string' && profileAvatar.length > 0) {
+    return profileAvatar
+  }
+  const rootAvatar = item.avatarUrl
+  return typeof rootAvatar === 'string' && rootAvatar.length > 0
+    ? rootAvatar
+    : null
+}
 
 function fmtDateTime(
   input?: string | null,
@@ -538,36 +554,43 @@ function extraEmails(user: AdminUserListItem) {
             class="align-top transition hover:bg-slate-50/80 dark:hover:bg-slate-900/60"
           >
             <td class="px-4 py-4">
-              <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-2">
-                  <span class="font-medium text-slate-900 dark:text-white">
-                    {{ item.profile?.displayName ?? item.email }}
-                  </span>
-                  <UBadge
-                    v-if="item.statusSnapshot?.status"
-                    color="primary"
-                    size="xs"
-                    variant="soft"
-                    class="text-[11px]"
+              <div class="flex items-start gap-3">
+                <UserAvatar
+                  :name="userDisplayName(item)"
+                  :src="userAvatarUrl(item)"
+                  size="sm"
+                />
+                <div class="flex flex-col gap-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-slate-900 dark:text-white">
+                      {{ userDisplayName(item) }}
+                    </span>
+                    <UBadge
+                      v-if="item.statusSnapshot?.status"
+                      color="primary"
+                      size="xs"
+                      variant="soft"
+                      class="text-[11px]"
+                    >
+                      {{ item.statusSnapshot.status }}
+                    </UBadge>
+                  </div>
+                  <div
+                    class="flex flex-wrap items-center gap-1 text-xs text-slate-600 dark:text-slate-300"
                   >
-                    {{ item.statusSnapshot.status }}
-                  </UBadge>
-                </div>
-                <div
-                  class="flex flex-wrap items-center gap-1 text-xs text-slate-600 dark:text-slate-300"
-                >
-                  <span class="font-mono">{{ item.email }}</span>
-                  <UBadge
-                    v-for="mail in extraEmails(item)"
-                    :key="mail.id"
-                    :color="
-                      mail.verification === 'VERIFIED' ? 'success' : 'warning'
-                    "
-                    size="xs"
-                    variant="soft"
-                    class="ml-1"
-                    >{{ mail.value }}</UBadge
-                  >
+                    <span class="font-mono">{{ item.email }}</span>
+                    <UBadge
+                      v-for="mail in extraEmails(item)"
+                      :key="mail.id"
+                      :color="
+                        mail.verification === 'VERIFIED' ? 'success' : 'warning'
+                      "
+                      size="xs"
+                      variant="soft"
+                      class="ml-1"
+                      >{{ mail.value }}</UBadge
+                    >
+                  </div>
                 </div>
               </div>
             </td>

@@ -198,6 +198,27 @@ export const useAuthStore = defineStore('auth', {
       }
       return null
     },
+    avatarUrl(state): string | null {
+      const user = state.user
+      if (!user || typeof user !== 'object') {
+        return null
+      }
+      const profile = (user as { profile?: unknown }).profile
+      if (profile && typeof profile === 'object') {
+        const profileAvatar = (profile as { avatarUrl?: unknown }).avatarUrl
+        if (typeof profileAvatar === 'string' && profileAvatar.length > 0) {
+          return profileAvatar
+        }
+      }
+      const directAvatar = (user as { avatarUrl?: unknown }).avatarUrl
+      if (typeof directAvatar === 'string' && directAvatar.length > 0) {
+        return directAvatar
+      }
+      const fallbackImage = (user as { image?: unknown }).image
+      return typeof fallbackImage === 'string' && fallbackImage.length > 0
+        ? fallbackImage
+        : null
+    },
   },
   actions: {
     setToken(token: string | null) {

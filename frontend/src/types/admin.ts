@@ -36,6 +36,8 @@ export interface AdminUserListItem {
   email: string
   emailVerified?: boolean
   name: string | null
+  avatarAttachmentId?: string | null
+  avatarUrl?: string | null
   createdAt: string
   joinDate: string | null
   lastLoginAt: string | null
@@ -45,6 +47,7 @@ export interface AdminUserListItem {
     piic: string | null
     primaryAuthmeBindingId?: string | null
     primaryMinecraft?: AdminMinecraftProfile | null
+    avatarUrl?: string | null
   } | null
   statusSnapshot?: AdminStatusSnapshot | null
   roles: Array<{
@@ -118,6 +121,7 @@ export interface AdminUserDetail
   lastLoginIpLocation?: string | null
   lastLoginIpLocationRaw?: string | null
   avatarUrl?: string | null
+  avatarAttachmentId?: string | null
   profile:
     | (AdminUserListItem['profile'] & {
         birthday?: string | null

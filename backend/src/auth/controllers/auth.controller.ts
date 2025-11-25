@@ -33,7 +33,7 @@ import { buildRequestContext } from '../helpers/request-context.helper';
 import { IpLocationService } from '../../lib/ip2region/ip-location.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from '../../attachments/attachments.service';
-import { buildPublicUrl } from '../../lib/shared/url';
+import { enrichUserAvatar } from '../helpers/user-avatar.helper';
 import { UpdateAvatarResponseDto } from '../dto/update-avatar.dto';
 import { ChangePasswordWithCodeDto } from '../dto/change-password-with-code.dto';
 import {
@@ -451,7 +451,10 @@ export class AuthController {
       ...user,
       authmeBindings: enrichedBindings,
     };
-    const enrichedUser = await this.enrichUserAvatar(withBindings);
+    const enrichedUser = await enrichUserAvatar(
+      this.attachmentsService,
+      withBindings as any,
+    );
     return {
       user: enrichedUser,
     };
@@ -473,7 +476,10 @@ export class AuthController {
     const withBindings = enrichedBindings
       ? { ...(user as any), authmeBindings: enrichedBindings }
       : (user as any);
-    const enrichedUser = await this.enrichUserAvatar(withBindings);
+    const enrichedUser = await enrichUserAvatar(
+      this.attachmentsService,
+      withBindings,
+    );
     return { user: enrichedUser };
   }
 
@@ -488,7 +494,10 @@ export class AuthController {
       throw new UnauthorizedException('Invalid session');
     }
     const user = await this.usersService.getSessionUser(userId);
-    const enrichedUser = await this.enrichUserAvatar(user as any);
+    const enrichedUser = await enrichUserAvatar(
+      this.attachmentsService,
+      user as any,
+    );
     // pick basic fields only
     const usr = enrichedUser as Record<string, unknown>;
     const picked = {
@@ -523,7 +532,10 @@ export class AuthController {
       throw new UnauthorizedException('Invalid session');
     }
     const user = await this.usersService.updateCurrentUser(userId, dto);
-    const enrichedUser = await this.enrichUserAvatar(user as any);
+    const enrichedUser = await enrichUserAvatar(
+      this.attachmentsService,
+      user as any,
+    );
     return { user: enrichedUser };
   }
 
@@ -686,7 +698,10 @@ export class AuthController {
       throw new UnauthorizedException('Invalid session');
     }
     const user = await this.usersService.updateCurrentUser(userId, dto);
-    const enrichedUser = await this.enrichUserAvatar(user as any);
+    const enrichedUser = await enrichUserAvatar(
+      this.attachmentsService,
+      user as any,
+    );
     return { user: enrichedUser };
   }
 
@@ -765,7 +780,11 @@ export class AuthController {
       }
     }
 
-    const enrichedUser = await this.enrichUserAvatar(updated, attachment);
+    const enrichedUser = await enrichUserAvatar(
+      this.attachmentsService,
+      updated as any,
+      attachment,
+    );
     return { user: enrichedUser };
   }
 
@@ -816,53 +835,4 @@ export class AuthController {
     );
   }
 
-  private async enrichUserAvatar(
-    user: any,
-    latestAttachment?: { id: string; isPublic: boolean },
-  ) {
-    const currentAttachmentId =
-      (user?.avatarAttachmentId as string | null | undefined) ?? null;
-    const effectiveAttachmentId =
-      latestAttachment?.id ?? currentAttachmentId ?? null;
-
-    if (!effectiveAttachmentId) {
-      const profile = user?.profile
-        ? { ...(user.profile as any), avatarUrl: null }
-        : { avatarUrl: null };
-      return {
-        ...user,
-        avatarAttachmentId: null,
-        avatarUrl: null,
-        profile,
-      };
-    }
-
-    let isPublic = latestAttachment?.isPublic ?? false;
-    if (latestAttachment === undefined) {
-      try {
-        const attachment = await this.attachmentsService.getAttachmentOrThrow(
-          effectiveAttachmentId,
-        );
-        isPublic = attachment.isPublic;
-      } catch {
-        isPublic = false;
-      }
-    }
-
-    const avatarUrl =
-      isPublic && effectiveAttachmentId
-        ? buildPublicUrl(`/attachments/public/${effectiveAttachmentId}`)
-        : null;
-
-    const profile = user?.profile
-      ? { ...(user.profile as any), avatarUrl }
-      : { avatarUrl };
-
-    return {
-      ...user,
-      avatarAttachmentId: effectiveAttachmentId,
-      avatarUrl,
-      profile,
-    };
-  }
 }
