@@ -318,6 +318,7 @@ export async function getSessionUser(ctx: UsersServiceContext, userId: string) {
       email: true,
       name: true,
       image: true,
+      avatarAttachmentId: true,
       joinDate: true,
       lastLoginAt: true,
       lastLoginIp: true,

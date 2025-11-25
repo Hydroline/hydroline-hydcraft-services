@@ -488,8 +488,9 @@ export class AuthController {
       throw new UnauthorizedException('Invalid session');
     }
     const user = await this.usersService.getSessionUser(userId);
+    const enrichedUser = await this.enrichUserAvatar(user as any);
     // pick basic fields only
-    const usr = user as Record<string, unknown>;
+    const usr = enrichedUser as Record<string, unknown>;
     const picked = {
       id: usr.id ?? null,
       name: usr.name ?? null,
@@ -522,7 +523,8 @@ export class AuthController {
       throw new UnauthorizedException('Invalid session');
     }
     const user = await this.usersService.updateCurrentUser(userId, dto);
-    return { user };
+    const enrichedUser = await this.enrichUserAvatar(user as any);
+    return { user: enrichedUser };
   }
 
   // split: minecraft bindings + luckperms
@@ -684,7 +686,8 @@ export class AuthController {
       throw new UnauthorizedException('Invalid session');
     }
     const user = await this.usersService.updateCurrentUser(userId, dto);
-    return { user };
+    const enrichedUser = await this.enrichUserAvatar(user as any);
+    return { user: enrichedUser };
   }
 
   @Patch('me/avatar')
