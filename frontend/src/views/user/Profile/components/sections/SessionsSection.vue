@@ -7,7 +7,6 @@ const props = defineProps<{
     id: string
     createdAt: string | Date
     updatedAt: string | Date
-    expiresAt: string | Date
     ipAddress?: string | null
     ipLocation?: string | null
     userAgent?: string | null
@@ -168,7 +167,7 @@ function deviceIcon(value: string | null | undefined) {
               }}</span>
             </div>
             <div
-              class="grid gap-1 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-3"
+              class="grid gap-1 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-2"
             >
               <div>
                 <div class="text-xs text-slate-500 dark:text-slate-500">
@@ -188,16 +187,6 @@ function deviceIcon(value: string | null | undefined) {
                   class="text-base font-semibold text-slate-800 dark:text-slate-300"
                 >
                   {{ formatDate(session.updatedAt) }}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs text-slate-500 dark:text-slate-500">
-                  过期时间
-                </div>
-                <div
-                  class="text-base font-semibold text-slate-800 dark:text-slate-300"
-                >
-                  {{ formatDate(session.expiresAt) }}
                 </div>
               </div>
             </div>

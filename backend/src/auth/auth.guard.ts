@@ -27,12 +27,12 @@ export class AuthGuard implements CanActivate {
     // Persist latest IP/User-Agent on every authenticated request
     try {
       const ctx = buildRequestContext(request);
-      await this.authService.touchSession(token, ctx);
+      await this.authService.touchSession(session.sessionToken, ctx);
     } catch {
       // best-effort only
     }
     request.user = session.user;
-    request.sessionToken = token;
+    request.sessionToken = session.sessionToken;
     return true;
   }
 }

@@ -144,7 +144,7 @@ export interface AdminUserDetail
   sessions?: Array<{
     id: string
     createdAt: string
-    expiresAt: string
+    updatedAt: string
     ipAddress: string | null
     userAgent: string | null
   }>

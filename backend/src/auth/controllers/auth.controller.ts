@@ -165,7 +165,8 @@ export class AuthController {
       throw new UnauthorizedException('Missing Authorization header');
     }
     const token = authHeader.slice(7);
-    return this.authService.signOut(token);
+    const session = await this.authService.getSession(token);
+    return this.authService.signOut(session.sessionToken);
   }
 
   @Post('password/code')
@@ -595,7 +596,6 @@ export class AuthController {
         id: session.id,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
-        expiresAt: session.expiresAt,
         ipAddress: session.ipAddress,
         ipLocation: location?.display ?? null,
         userAgent: session.userAgent,
@@ -635,7 +635,6 @@ export class AuthController {
         id: session.id,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
-        expiresAt: session.expiresAt,
         ipAddress: session.ipAddress,
         ipLocation: location?.display ?? null,
         userAgent: session.userAgent,

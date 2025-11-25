@@ -4,7 +4,7 @@ import dayjs from 'dayjs'
 interface SessionItem {
   id: string
   createdAt?: string | null
-  expiresAt?: string | null
+  updatedAt?: string | null
   ipAddress?: string | null
   userAgent?: string | null
 }
@@ -56,7 +56,7 @@ function fmtDateTime(ts?: string | null, format = 'YYYY-MM-DD HH:mm') {
               }}</span>
               <span>IP：{{ session.ipAddress ?? '—' }}</span>
             </div>
-            <p class="mt-1">过期：{{ fmtDateTime(session.expiresAt) }}</p>
+            <p class="mt-1">最近：{{ fmtDateTime(session.updatedAt) }}</p>
             <p class="mt-1 break-all">UA：{{ session.userAgent ?? '—' }}</p>
           </li>
           <li

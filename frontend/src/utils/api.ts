@@ -65,7 +65,8 @@ function performRequest<T>(url: string, options: ApiRequestOptions): Promise<T> 
     return inflight.get(dedupeKey)! as Promise<T>;
   }
 
-  const doRequest = async (): Promise<T> => {
+  const doRequest = async (tokenOverride?: string): Promise<T> => {
+    const authToken = tokenOverride ?? options.token;
     const init: RequestInit = {
       method,
       credentials: 'include',
@@ -76,8 +77,8 @@ function performRequest<T>(url: string, options: ApiRequestOptions): Promise<T> 
       },
     };
 
-    if (options.token) {
-      (init.headers as Record<string, string>)['Authorization'] = `Bearer ${options.token}`;
+    if (authToken) {
+      (init.headers as Record<string, string>)['Authorization'] = `Bearer ${authToken}`;
     }
 
     if (options.body instanceof FormData) {
@@ -110,11 +111,42 @@ function performRequest<T>(url: string, options: ApiRequestOptions): Promise<T> 
     return result as T;
   };
 
-  const promise = doRequest().finally(() => {
-    if (dedupeKey) inflight.delete(dedupeKey);
-  });
+  const promise = (async () => {
+    try {
+      return await doRequest();
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.status === 401 &&
+        options.token
+      ) {
+        const refreshedToken = await attemptTokenRefresh();
+        if (refreshedToken) {
+          return doRequest(refreshedToken);
+        }
+      }
+      throw error;
+    } finally {
+      if (dedupeKey) inflight.delete(dedupeKey);
+    }
+  })();
+
   if (dedupeKey) inflight.set(dedupeKey, promise);
   return promise;
+}
+
+async function attemptTokenRefresh(): Promise<string | null> {
+  try {
+    const { useAuthStore } = await import('@/stores/auth');
+    const auth = useAuthStore();
+    if (!auth.refreshToken) {
+      return null;
+    }
+    await auth.refreshSession();
+    return auth.token;
+  } catch {
+    return null;
+  }
 }
 
 function isEnvelope<T>(payload: ApiResponseEnvelope<T> | T): payload is ApiResponseEnvelope<T> {

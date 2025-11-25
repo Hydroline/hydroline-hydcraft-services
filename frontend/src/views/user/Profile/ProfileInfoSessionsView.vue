@@ -14,7 +14,6 @@ const sessions = ref<Array<{
   id: string
   createdAt: string
   updatedAt: string
-  expiresAt: string
   ipAddress: string | null
   ipLocation: string | null
   userAgent: string | null
@@ -50,7 +49,6 @@ async function loadSessions(force = false) {
       id: entry.id as string,
       createdAt: entry.createdAt as string,
       updatedAt: entry.updatedAt as string,
-      expiresAt: entry.expiresAt as string,
       ipAddress: (entry.ipAddress as string | null | undefined) ?? null,
       ipLocation: (entry.ipLocation as string | null | undefined) ?? null,
       userAgent: (entry.userAgent as string | null | undefined) ?? null,

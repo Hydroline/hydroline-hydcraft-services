@@ -7,6 +7,7 @@ import {
 import { compare as bcryptCompare, hash as bcryptHash } from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { auth } from '../../lib/shared/auth';
+import { sign as jwtSign, verify as jwtVerify, JwtPayload } from 'jsonwebtoken';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RolesService, DEFAULT_ROLES } from './roles.service';
 import { SignInDto } from '../dto/sign-in.dto';
@@ -61,6 +62,12 @@ interface SignUpInternalInput {
   minecraftId?: string;
   minecraftNick?: string;
   emailVerified?: boolean;
+}
+
+interface AccessTokenPayload extends JwtPayload {
+  sub: string;
+  sid: string;
+  type: 'access';
 }
 
 @Injectable()
@@ -154,23 +161,15 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token invalid or expired');
     }
 
-    const newExpires = new Date(Date.now() + this.sessionTtlMs);
-    await this.prisma.session.update({
-      where: { id: session.id },
-      data: { expiresAt: newExpires },
-    });
+    await this.renewSessionExpiry(session);
 
     const user = await this.usersService.getSessionUser(session.userId);
-    const tokens = {
-      accessToken: dto.refreshToken,
-      refreshToken: dto.refreshToken,
-      cookies: [] as string[],
-    };
+    const tokens = this.buildTokenPair(session.token, session.userId);
 
     return {
       tokens,
       user,
-      cookies: tokens.cookies,
+      cookies: [],
     };
   }
 
@@ -181,8 +180,11 @@ export class AuthService {
     return { success: true };
   }
 
-  async getSession(token: string) {
-    const session = await this.prisma.session.findUnique({ where: { token } });
+  async getSession(accessToken: string) {
+    const payload = this.verifyAccessToken(accessToken);
+    const session = await this.prisma.session.findUnique({
+      where: { token: payload.sid },
+    });
 
     if (!session || session.expiresAt.getTime() < Date.now()) {
       if (session) {
@@ -193,8 +195,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid session');
     }
 
+    await this.maybeExtendActiveSession(session);
+
     const user = await this.usersService.getSessionUser(session.userId);
-    return { user, sessionToken: token };
+    return { user, sessionToken: session.token };
   }
 
   async bindAuthme(
@@ -835,7 +839,7 @@ export class AuthService {
     });
 
     const userId = result.user.id;
-    await this.updateSessionMetadata(result.tokens.accessToken, context);
+    await this.updateSessionMetadata(result.tokens.refreshToken, context);
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -918,8 +922,8 @@ export class AuthService {
     });
     await this.assignDefaultRole(payload.user.id);
 
-    const tokens = this.extractTokens(result);
-    await this.updateSessionMetadata(tokens.accessToken, context);
+    const { tokens, cookies } = this.extractTokens(result, payload.user.id);
+    await this.updateSessionMetadata(tokens.refreshToken, context);
     await this.prisma.user.update({
       where: { id: payload.user.id },
       data: {
@@ -935,7 +939,7 @@ export class AuthService {
     return {
       tokens,
       user: fullUser,
-      cookies: tokens.cookies,
+      cookies,
     };
   }
 
@@ -962,16 +966,16 @@ export class AuthService {
       });
 
     const payload = result.response as AuthResponse;
-    if (!payload.user?.id || !payload.token) {
+    if (!payload.user?.id) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const tokens = this.extractTokens(result);
+    const { tokens, cookies } = this.extractTokens(result, payload.user.id);
     const user = await this.usersService.getSessionUser(payload.user.id);
 
     return {
       tokens,
       user,
-      cookies: tokens.cookies,
+      cookies,
     };
   }
 
@@ -1020,8 +1024,9 @@ export class AuthService {
       },
     });
     const user = await this.usersService.getSessionUser(userId);
+    const tokens = this.buildTokenPair(token, userId);
     return {
-      tokens: { accessToken: token, refreshToken: token },
+      tokens,
       user,
       cookies: [],
     };
@@ -1043,19 +1048,24 @@ export class AuthService {
     });
   }
 
-  private extractTokens(result: { headers: Headers; response: AuthResponse }) {
+  private extractTokens(
+    result: { headers: Headers; response: AuthResponse },
+    userId: string,
+  ) {
     const cookies = this.collectCookies(result.headers);
     const cookieMap = this.parseCookieMap(cookies);
-    const sessionToken = result.response.token;
-    const refreshToken =
+    const sessionToken =
       cookieMap.get('refresh_token') ??
       cookieMap.get('session_token') ??
-      sessionToken ??
+      result.response.token ??
       null;
 
+    if (!sessionToken) {
+      throw new UnauthorizedException('Failed to obtain session token');
+    }
+
     return {
-      accessToken: sessionToken,
-      refreshToken,
+      tokens: this.buildTokenPair(sessionToken, userId),
       cookies,
     };
   }
@@ -1137,6 +1147,119 @@ export class AuthService {
   private get sessionTtlMs() {
     const expiresIn = auth.options.session?.expiresIn ?? 60 * 60 * 24 * 7;
     return expiresIn * 1000;
+  }
+
+  private get sessionUpdateAgeMs() {
+    const updateAge = auth.options.session?.updateAge ?? 0;
+    if (!updateAge || updateAge <= 0) {
+      return 0;
+    }
+    return updateAge * 1000;
+  }
+
+  private getSessionLifetimeMs(session: { createdAt: Date; expiresAt: Date }) {
+    const lifetime = session.expiresAt.getTime() - session.createdAt.getTime();
+    if (Number.isFinite(lifetime) && lifetime > 0) {
+      return lifetime;
+    }
+    return this.sessionTtlMs;
+  }
+
+  private async renewSessionExpiry(session: {
+    id: string;
+    createdAt: Date;
+    expiresAt: Date;
+  }) {
+    const lifetime = this.getSessionLifetimeMs(session);
+    const newExpires = new Date(Date.now() + lifetime);
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: { expiresAt: newExpires },
+    });
+    return newExpires;
+  }
+
+  private async maybeExtendActiveSession(session: {
+    id: string;
+    createdAt: Date;
+    updatedAt: Date;
+    expiresAt: Date;
+  }) {
+    const updateAge = this.sessionUpdateAgeMs;
+    if (updateAge <= 0) {
+      return;
+    }
+    const lastUpdated = session.updatedAt ?? session.createdAt;
+    if (Date.now() - lastUpdated.getTime() < updateAge) {
+      return;
+    }
+    await this.renewSessionExpiry(session);
+  }
+
+  private get accessTokenSecret() {
+    return (
+      process.env.ACCESS_TOKEN_SECRET ||
+      process.env.BETTER_AUTH_SECRET ||
+      auth.options.secret ||
+      'hydroline-access-secret'
+    );
+  }
+
+  private get accessTokenExpiresInSeconds() {
+    const raw = process.env.ACCESS_TOKEN_EXPIRES_IN;
+    const parsed = raw ? Number(raw) : 15 * 60;
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+    return 15 * 60;
+  }
+
+  private signAccessToken(userId: string, sessionToken: string) {
+    return jwtSign(
+      {
+        sub: userId,
+        sid: sessionToken,
+        type: 'access',
+      },
+      this.accessTokenSecret,
+      {
+        expiresIn: this.accessTokenExpiresInSeconds,
+      },
+    );
+  }
+
+  private buildTokenPair(sessionToken: string | null, userId: string) {
+    if (!sessionToken) {
+      return {
+        accessToken: null,
+        refreshToken: null,
+      } as const;
+    }
+    return {
+      accessToken: this.signAccessToken(userId, sessionToken),
+      refreshToken: sessionToken,
+    } as const;
+  }
+
+  private verifyAccessToken(accessToken: string): AccessTokenPayload {
+    try {
+      const payload = jwtVerify(
+        accessToken,
+        this.accessTokenSecret,
+      ) as AccessTokenPayload;
+      if (payload.type !== 'access') {
+        throw new Error('Invalid token type');
+      }
+      if (typeof payload.sid !== 'string' || payload.sid.length === 0) {
+        throw new Error('Missing session reference');
+      }
+      if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+        throw new Error('Missing subject');
+      }
+      return payload;
+    } catch {
+      throw new UnauthorizedException('Invalid session');
+    }
   }
 
   async listUserSessions(userId: string) {

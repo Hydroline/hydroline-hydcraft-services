@@ -21,7 +21,7 @@ export class OptionalAuthGuard implements CanActivate {
     try {
       const session = await this.authService.getSession(token);
       request.user = session.user;
-      request.sessionToken = token;
+      request.sessionToken = session.sessionToken;
     } catch (error) {
       request.user = undefined;
       request.sessionToken = undefined;
