@@ -320,8 +320,7 @@ defineExpose({ forceEdit })
     </div>
 
       <div
-        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6 cursor-pointer"
-        @click="props.onAvatarClick && props.onAvatarClick()"
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
       >
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
@@ -329,22 +328,48 @@ defineExpose({ forceEdit })
           头像
         </div>
         <div class="flex-1 flex items-center gap-4">
-          <div
-            class="relative inline-flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+          <button
+            v-if="props.onAvatarClick"
+            type="button"
+            class="group relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-sm font-medium text-slate-500 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+            @click="props.onAvatarClick && props.onAvatarClick()"
+            aria-label="更换头像"
           >
             <img
               v-if="props.avatarUrl"
               :src="props.avatarUrl"
               alt="用户头像"
               class="h-full w-full object-cover"
+            />
+            <span
+              v-else
+              class="flex h-full w-full items-center justify-center text-xs font-semibold"
             >
-            <span v-else>头像</span>
+              头像
+            </span>
+            <div
+              class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/40 text-xs text-white opacity-0 transition group-hover:opacity-100 dark:bg-slate-900/60"
+            >
+              更换头像
+            </div>
+          </button>
+          <div
+            v-else
+            class="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+          >
+            <img
+              v-if="props.avatarUrl"
+              :src="props.avatarUrl"
+              alt="用户头像"
+              class="h-full w-full object-cover"
+            />
+            <span class="flex h-full w-full items-center justify-center text-xs font-semibold">
+              头像
+            </span>
           </div>
           <div
             class="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400"
           >
-            <span>头像</span>
-            <span>点击头像上传新的个人头像。</span>
             <div
               v-if="props.avatarUploading"
               class="mt-1 flex items-center gap-2 text-[11px]"
