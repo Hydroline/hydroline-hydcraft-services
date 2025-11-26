@@ -277,7 +277,7 @@ function handleHeroImageErrored() {
             as="img"
             :src="activeHeroImage as string"
             :alt="activeHeroDescription"
-            class="block h-full w-full object-cover object-top"
+            class="block h-full w-full object-cover object-top select-none pointer-events-none"
             :initial="{
               opacity: 0,
               scale: 1.03,
@@ -313,7 +313,7 @@ function handleHeroImageErrored() {
             as="img"
             :src="fallbackHeroImage"
             :alt="activeHeroDescription || 'Hydroline Portal 背景图'"
-            class="block h-full w-full object-cover object-top"
+            class="block h-full w-full object-cover object-top select-none pointer-events-none"
             :initial="{
               opacity: 0,
               scale: 1.03,
@@ -350,12 +350,12 @@ function handleHeroImageErrored() {
           class="relative block h-full w-full select-none overflow-hidden text-left focus:outline-none"
         >
           <div
-            class="absolute inset-0 z-1 flex flex-col items-center bg-[linear-gradient(0deg,white_5%,transparent_30%)] justify-end p-6 text-slate-900 dark:from-slate-950/95 dark:via-slate-950/60 dark:text-slate-100"
+            class="absolute inset-0 z-1 flex flex-col items-center bg-[linear-gradient(0deg,white_5%,transparent_30%)] dark:bg-[linear-gradient(0deg,rgba(15,23,42,0.95)_5%,transparent_30%)] justify-end p-6 text-slate-900 dark:from-slate-950/95 dark:via-slate-950/60 dark:text-slate-100"
           >
             <div class="w-full max-w-3xl text-center">
               <div
                 v-if="activeHeroTitle"
-                class="text-3xl text-slate-800 dark:text-slate-950 font-semibold leading-tight tracking-wide"
+                class="text-3xl text-slate-800 dark:text-slate-100 font-semibold leading-tight tracking-wide"
               >
                 {{ activeHeroTitle }}
               </div>
@@ -403,7 +403,7 @@ function handleHeroImageErrored() {
             as="img"
             :src="activeHeroImage as string"
             :alt="activeHeroDescription"
-            class="block h-full w-full object-cover object-top"
+            class="block h-full w-full object-cover object-top select-none pointer-events-none"
             :initial="{
               opacity: 0,
               scale: 1.03,
@@ -434,7 +434,7 @@ function handleHeroImageErrored() {
             as="img"
             :src="fallbackHeroImage"
             :alt="activeHeroDescription || 'Hydroline Portal 背景图'"
-            class="block h-full w-full object-cover object-top"
+            class="block h-full w-full object-cover object-top select-none pointer-events-none"
             :initial="{
               opacity: 0,
               scale: 1.03,
@@ -538,9 +538,7 @@ function handleHeroImageErrored() {
       v-show="!uiStore.previewMode"
       class="relative z-10 -mt-12 px-4 opacity-100"
     >
-      <div class="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        
-      </div>
+      <div class="mx-auto flex w-full max-w-6xl flex-col gap-6"></div>
     </section>
   </div>
 </template>

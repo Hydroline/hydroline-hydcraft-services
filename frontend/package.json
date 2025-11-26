@@ -24,6 +24,7 @@
     "china-division": "^2.7.0",
     "dayjs": "^1.11.19",
     "echarts": "^6.0.0",
+    "jsbarcode": "^3.12.1",
     "motion-v": "^1.7.4",
     "pinia": "^3.0.3",
     "qss": "^3.0.0",

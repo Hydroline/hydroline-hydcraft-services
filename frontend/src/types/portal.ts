@@ -86,6 +86,7 @@ export interface PlayerSummary {
   email: string
   name: string | null
   image: string | null
+  avatarUrl: string | null
   createdAt: string
   joinDate: string | null
   lastLoginAt: string | null

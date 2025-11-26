@@ -102,10 +102,14 @@ export class PortalController {
   ) {
     const targetId = this.resolveTargetUserId(req, id);
     const pageNumber = actionsPage ? Number(actionsPage) : undefined;
-    return this.portalService.getPlayerPortalData(req.user?.id ?? null, targetId, {
-      period,
-      actionsPage: Number.isFinite(pageNumber) ? pageNumber : undefined,
-    });
+    return this.portalService.getPlayerPortalData(
+      req.user?.id ?? null,
+      targetId,
+      {
+        period,
+        actionsPage: Number.isFinite(pageNumber) ? pageNumber : undefined,
+      },
+    );
   }
 
   @Get('player/summary')
@@ -129,7 +133,8 @@ export class PortalController {
     const toDate = to ? new Date(to) : undefined;
     const targetId = this.resolveTargetUserId(req, id);
     return this.portalService.getPlayerLoginMap(targetId, {
-      from: fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : undefined,
+      from:
+        fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : undefined,
       to: toDate && !Number.isNaN(toDate.getTime()) ? toDate : undefined,
     });
   }
@@ -190,10 +195,7 @@ export class PortalController {
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: '提交 AuthMe 密码重置申请' })
-  async authmeReset(
-    @Req() req: Request,
-    @Body() body: PlayerReasonDto,
-  ) {
+  async authmeReset(@Req() req: Request, @Body() body: PlayerReasonDto) {
     return this.portalService.submitAuthmeResetRequest(
       req.user!.id,
       body.reason,
@@ -204,10 +206,7 @@ export class PortalController {
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: '提交强制登陆申请' })
-  async authmeForceLogin(
-    @Req() req: Request,
-    @Body() body: PlayerReasonDto,
-  ) {
+  async authmeForceLogin(@Req() req: Request, @Body() body: PlayerReasonDto) {
     return this.portalService.submitAuthmeForceLogin(req.user!.id, body.reason);
   }
 
@@ -226,10 +225,7 @@ export class PortalController {
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: '申请服务器强制重启' })
-  async restartRequest(
-    @Req() req: Request,
-    @Body() body: RestartRequestDto,
-  ) {
+  async restartRequest(@Req() req: Request, @Body() body: RestartRequestDto) {
     return this.portalService.submitServerRestartRequest(req.user!.id, body);
   }
 
@@ -248,10 +244,14 @@ export class PortalController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
-    return this.portalService.getRankLeaderboard(category ?? 'login-count', period, {
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-    });
+    return this.portalService.getRankLeaderboard(
+      category ?? 'login-count',
+      period,
+      {
+        page: page ? Number(page) : undefined,
+        pageSize: pageSize ? Number(pageSize) : undefined,
+      },
+    );
   }
 
   @Get('rank/me')

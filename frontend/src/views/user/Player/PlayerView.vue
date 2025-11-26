@@ -61,31 +61,6 @@ const stats = computed(() => playerStore.stats)
 const actions = computed(() => playerStore.actions)
 const storeLoading = computed(() => playerStore.loading)
 
-const regionPositions: Record<string, { x: number; y: number }> = {
-  北京: { x: 70, y: 18 },
-  上海: { x: 82, y: 32 },
-  广东: { x: 68, y: 58 },
-  江苏: { x: 80, y: 30 },
-  浙江: { x: 82, y: 38 },
-  湖北: { x: 70, y: 38 },
-  湖南: { x: 66, y: 45 },
-  四川: { x: 58, y: 40 },
-  重庆: { x: 60, y: 36 },
-  天津: { x: 72, y: 20 },
-  辽宁: { x: 76, y: 12 },
-  陕西: { x: 60, y: 30 },
-  山西: { x: 64, y: 24 },
-  广西: { x: 58, y: 60 },
-  云南: { x: 48, y: 58 },
-  福建: { x: 78, y: 48 },
-  浙江省: { x: 82, y: 38 },
-  江苏省: { x: 80, y: 30 },
-  Taiwan: { x: 88, y: 52 },
-  日本: { x: 92, y: 28 },
-  Singapore: { x: 70, y: 70 },
-  UnitedStates: { x: 10, y: 30 },
-}
-
 async function loadServerOptions() {
   const publicServers = await apiFetch<{
     servers: Array<{ id: string; displayName: string }>
@@ -210,24 +185,6 @@ async function submitRestartRequest() {
   }
 }
 
-function markerStyle(cluster: PlayerLoginCluster) {
-  const key =
-    cluster.province ||
-    cluster.city ||
-    cluster.country ||
-    cluster.id ||
-    'default'
-  const mapped = regionPositions[key] ??
-    regionPositions[key.replace(/省|市|自治区|特别行政区/g, '')] ?? {
-      x: 55,
-      y: 35,
-    }
-  return {
-    left: `${mapped.x}%`,
-    top: `${mapped.y}%`,
-  }
-}
-
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—'
   const date = new Date(value)
@@ -249,15 +206,26 @@ function formatMetricValue(value: number, unit: string) {
 </script>
 
 <template>
-  <section class="mx-auto w-full max-w-6xl px-4 pb-16 pt-8">
+  <Transition name="opacity-motion">
+    <div
+      v-if="summary?.avatarUrl"
+      class="absolute top-0 left-0 right-0 h-1/2 pointer-events-none select-none mask-[linear-gradient(to_bottom,#fff_-20%,transparent_80%)] filter-[blur(32px)_saturate(250%)_opacity(0.2)] dark:filter-[blur(48px)_saturate(200%)_opacity(0.8)]"
+    >
+      <img
+        :src="summary.avatarUrl"
+        alt="Player Avatar"
+        class="h-full w-full object-cover"
+      />
+    </div>
+  </Transition>
+
+  <section class="relative z-0 mx-auto w-full max-w-6xl px-4 pb-16 pt-8">
     <PlayerLoginPrompt :can-view-profile="canViewProfile" />
 
     <PlayerProfileContent
       v-if="canViewProfile"
       :is-viewing-self="isViewingSelf"
       :summary="summary"
-      :login-map="loginMap"
-      :login-clusters="loginClusters"
       :actions="actions"
       :ownership="ownership"
       :minecraft="minecraft"
@@ -265,7 +233,6 @@ function formatMetricValue(value: number, unit: string) {
       :stats-period="statsPeriod"
       :format-date-time="formatDateTime"
       :format-metric-value="formatMetricValue"
-      :marker-style="markerStyle"
       @update:stats-period="statsPeriod = $event"
       @refresh-actions="refreshActions"
       @authme-reset="handleAuthmeReset"
@@ -296,3 +263,20 @@ function formatMetricValue(value: number, unit: string) {
     />
   </section>
 </template>
+
+<style scoped>
+.opacity-motion-enter-active,
+.opacity-motion-leave-active {
+  transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.opacity-motion-enter-from,
+.opacity-motion-leave-to {
+  opacity: 0;
+}
+
+.opacity-motion-enter-to,
+.opacity-motion-leave-from {
+  opacity: 1;
+}
+</style>

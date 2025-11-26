@@ -348,8 +348,9 @@ const routerPush = (path: string) => {
             @click="openLogin"
             >登录</UButton
           >
-          <UTooltip text="消息中心">
+          <UTooltip text="消息中心（开发中）">
             <UButton
+              disabled
               color="neutral"
               variant="ghost"
               size="xs"

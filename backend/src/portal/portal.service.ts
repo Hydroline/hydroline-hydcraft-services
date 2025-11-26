@@ -14,6 +14,8 @@ import { PortalConfigService } from '../portal-config/portal-config.service';
 import { MinecraftServerService } from '../minecraft/minecraft-server.service';
 import { BeaconLibService } from '../lib/hydroline-beacon';
 import { IpLocationService } from '../lib/ip2region/ip-location.service';
+import { AttachmentsService } from '../attachments/attachments.service';
+import { buildPublicUrl } from '../lib/shared/url';
 import {
   DEFAULT_PORTAL_HOME_CONFIG,
   PORTAL_CARD_REGISTRY,
@@ -269,6 +271,7 @@ export class PortalService {
     private readonly minecraftServers: MinecraftServerService,
     private readonly beaconLib: BeaconLibService,
     private readonly ipLocationService: IpLocationService,
+    private readonly attachmentsService: AttachmentsService,
   ) {}
 
   /**
@@ -1057,6 +1060,7 @@ export class PortalService {
         email: true,
         name: true,
         image: true,
+        avatarAttachmentId: true,
         createdAt: true,
         joinDate: true,
         lastLoginAt: true,
@@ -1114,11 +1118,28 @@ export class PortalService {
     }
     const location = await this.ipLocationService.lookup(user.lastLoginIp);
     const ownership = await this.computeOwnershipOverview(userId);
+    
+    // 计算用户头像 URL
+    let avatarUrl: string | null = null;
+    if (user.avatarAttachmentId) {
+      try {
+        const attachment = await this.attachmentsService.getAttachmentOrThrow(
+          user.avatarAttachmentId,
+        );
+        if (attachment.isPublic) {
+          avatarUrl = buildPublicUrl(`/attachments/public/${user.avatarAttachmentId}`);
+        }
+      } catch {
+        avatarUrl = null;
+      }
+    }
+    
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       image: user.image ?? null,
+      avatarUrl,
       createdAt: user.createdAt.toISOString(),
       joinDate: user.joinDate?.toISOString() ?? null,
       lastLoginAt: user.lastLoginAt?.toISOString() ?? null,

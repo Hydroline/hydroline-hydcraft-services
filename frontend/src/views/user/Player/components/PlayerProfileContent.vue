@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type {
   PlayerActionsResponse,
-  PlayerLoginCluster,
-  PlayerLoginMap,
   PlayerMinecraftResponse,
   PlayerStatsResponse,
   PlayerSummary,
@@ -13,8 +11,6 @@ import type {
 const props = defineProps<{
   isViewingSelf: boolean
   summary: PlayerSummary | null
-  loginMap: PlayerLoginMap | null
-  loginClusters: PlayerLoginCluster[]
   actions: PlayerActionsResponse | null
   ownership: PortalOwnershipOverview | null
   minecraft: PlayerMinecraftResponse | null
@@ -22,7 +18,6 @@ const props = defineProps<{
   statsPeriod: string
   formatDateTime: (value: string | null | undefined) => string
   formatMetricValue: (value: number, unit: string) => string
-  markerStyle: (cluster: PlayerLoginCluster) => { left: string; top: string }
 }>()
 
 const emit = defineEmits<{
@@ -38,125 +33,107 @@ const statsPeriodModel = computed({
   get: () => props.statsPeriod,
   set: (value: string) => emit('update:statsPeriod', value),
 })
+
+const showAuthmeBindingsModal = ref(false)
 </script>
 
 <template>
   <div class="mt-8 grid gap-6 lg:grid-cols-[320px_1fr]">
     <div class="space-y-6">
-      <div
-        v-if="props.isViewingSelf"
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200"
-      >
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          档案概要
-        </p>
+      <div>
         <div v-if="props.summary" class="space-y-3">
-          <div class="flex items-center gap-4">
-            <img
-              :src="
-                props.summary.minecraftProfiles[0]?.nickname
-                  ? `https://mc-heads.net/avatar/${
-                      props.summary.minecraftProfiles[0]?.nickname
-                    }/64`
-                  : 'https://mc-heads.net/avatar/Steve/64'
-              "
-              :alt="props.summary.displayName ?? props.summary.email"
-              class="h-16 w-16 rounded-xl border border-slate-200 object-cover dark:border-slate-700"
-            />
+          <div class="flex flex-col gap-4">
+            <div class="flex gap-2 select-none">
+              <img
+                v-if="props.summary.avatarUrl"
+                :src="props.summary.avatarUrl"
+                :alt="props.summary.displayName ?? props.summary.email"
+                class="h-16 w-16 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
+              />
+
+              <img
+                v-if="props.summary.authmeBindings[0]"
+                :src="`https://mc-heads.net/avatar/${
+                  props.summary.authmeBindings[0]?.username
+                }/64`"
+                :alt="props.summary.authmeBindings[0]?.username ?? 'MC Avatar'"
+                class="h-16 w-16 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
+              />
+
+              <button
+                v-if="props.summary.authmeBindings.length > 1"
+                @click="showAuthmeBindingsModal = true"
+                class="flex h-16 w-16 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                ...
+              </button>
+            </div>
             <div>
-              <p class="text-lg font-semibold text-slate-900 dark:text-white">
-                {{ props.summary.displayName || props.summary.email }}
+              <p class="font-semibold text-slate-700 dark:text-white">
+                <span class="text-2xl">
+                  {{
+                    props.summary.minecraftProfiles[0].nickname ||
+                    props.summary.authmeBindings[0]?.realname
+                  }}
+                </span>
+                <span
+                  class="mx-2 select-none"
+                  v-if="
+                    props.summary.authmeBindings[0]?.realname &&
+                    props.summary.minecraftProfiles[0]?.nickname
+                  "
+                  >/</span
+                >
+                <span
+                  v-if="
+                    props.summary.authmeBindings[0]?.realname &&
+                    props.summary.minecraftProfiles[0]?.nickname
+                  "
+                >
+                  {{ props.summary.authmeBindings[0]?.realname }}
+                </span>
               </p>
               <p class="text-xs text-slate-500 dark:text-slate-400">
-                PIIC：{{ props.summary.piic || '未分配' }}
+                {{ props.summary.id }}
               </p>
             </div>
           </div>
-          <dl
-            class="grid grid-cols-1 gap-3 text-sm text-slate-700 dark:text-slate-200"
-          >
-            <div>
-              <dt class="text-xs text-slate-500 dark:text-slate-400">
-                注册时间
-              </dt>
-              <dd>{{ props.formatDateTime(props.summary.createdAt) }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs text-slate-500 dark:text-slate-400">
-                最近登录
-              </dt>
-              <dd>
-                {{ props.formatDateTime(props.summary.lastLoginAt) }}
-                <span
-                  v-if="props.summary.lastLoginLocation"
-                  class="text-xs text-slate-500 dark:text-slate-400"
-                >
-                  · {{ props.summary.lastLoginLocation }}
-                </span>
-              </dd>
-            </div>
-
-            <RouterLink
-              v-if="isViewingSelf"
-              to="/profile"
-              class="inline-flex items-center gap-2 rounded-full border border-primary-200 px-4 py-1.5 text-sm font-medium text-primary-600 transition hover:border-primary-300 hover:text-primary-500 dark:border-primary-500/40 dark:text-primary-200"
-            >
-              <UIcon name="i-lucide-id-card" class="h-4 w-4" />
-              管理用户信息
-            </RouterLink>
-          </dl>
         </div>
-        <USkeleton v-else class="h-32 w-full" />
       </div>
 
-      <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200"
-      >
-        <div class="flex items-center justify-between">
-          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            登录地图
-          </p>
-          <span class="text-xs text-slate-500 dark:text-slate-400">
-            {{ props.loginMap?.range.from }} - {{ props.loginMap?.range.to }}
-          </span>
-        </div>
+      <div v-if="props.summary">
         <div
-          class="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-100 to-slate-200 p-4 dark:border-slate-800/70 dark:from-slate-800 dark:to-slate-900"
+          class="grid grid-cols-1 gap-3 text-sm text-slate-700 dark:text-slate-200"
         >
-          <div
-            class="relative h-56 overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_top,_#cbd5f5,_transparent_60%),radial-gradient(circle_at_bottom,_#f1f5ff,_transparent_55%)] dark:bg-[radial-gradient(circle_at_top,_#1e293b,_transparent_60%),radial-gradient(circle_at_bottom,_#0f172a,_transparent_55%)]"
-          >
-            <div
-              v-for="cluster in props.loginClusters"
-              :key="cluster.id"
-              class="absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-primary-500/80 text-xs font-semibold text-white shadow"
-              :style="props.markerStyle(cluster)"
-            >
-              {{ cluster.count }}
-            </div>
+          <div>
+            <dt class="text-xs text-slate-500 dark:text-slate-400">注册时间</dt>
+            <dd>{{ props.formatDateTime(props.summary.createdAt) }}</dd>
           </div>
-          <ul class="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
-            <li
-              v-for="cluster in props.loginClusters.slice(0, 4)"
-              :key="cluster.id"
-              class="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 shadow-sm dark:bg-slate-900/60"
-            >
-              <span>
-                {{
-                  cluster.city || cluster.province || cluster.country || '未知'
-                }}
+          <div>
+            <dt class="text-xs text-slate-500 dark:text-slate-400">最近登录</dt>
+            <dd>
+              {{ props.formatDateTime(props.summary.lastLoginAt) }}
+              <span
+                v-if="props.summary.lastLoginLocation"
+                class="text-xs text-slate-500 dark:text-slate-400"
+              >
+                · {{ props.summary.lastLoginLocation }}
               </span>
-              <span class="font-semibold text-slate-900 dark:text-white">
-                {{ cluster.count }}
-              </span>
-            </li>
-          </ul>
+            </dd>
+          </div>
+
+          <RouterLink
+            v-if="isViewingSelf"
+            to="/profile"
+            class="inline-flex items-center gap-2 rounded-full border border-primary-200 px-4 py-1.5 text-sm font-medium text-primary-600 transition hover:border-primary-300 hover:text-primary-500 dark:border-primary-500/40 dark:text-primary-200"
+          >
+            <UIcon name="i-lucide-id-card" class="h-4 w-4" />
+            管理用户信息
+          </RouterLink>
         </div>
       </div>
 
-      <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200"
-      >
+      <div>
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
           操作记录
         </p>
@@ -203,7 +180,7 @@ const statsPeriodModel = computed({
 
     <div class="space-y-6">
       <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200"
+        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
       >
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
           名下资产
@@ -242,7 +219,7 @@ const statsPeriodModel = computed({
       </div>
 
       <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200"
+        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
       >
         <div class="flex items-center justify-between">
           <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -280,7 +257,7 @@ const statsPeriodModel = computed({
       </div>
 
       <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200"
+        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
       >
         <div class="flex items-center justify-between">
           <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -314,7 +291,7 @@ const statsPeriodModel = computed({
       </div>
 
       <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200"
+        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
       >
         <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
           自助操作
@@ -344,4 +321,74 @@ const statsPeriodModel = computed({
       </div>
     </div>
   </div>
+
+  <!-- Multiple AuthMe Bindings Modal -->
+  <Teleport to="body">
+    <div
+      v-if="showAuthmeBindingsModal && props.summary?.authmeBindings"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70"
+      @click="showAuthmeBindingsModal = false"
+    >
+      <div
+        class="max-h-96 w-full max-w-md rounded-2xl bg-white p-6 shadow-lg dark:bg-slate-900"
+        @click.stop
+      >
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+            所有 AuthMe 绑定
+          </h3>
+          <button
+            @click="showAuthmeBindingsModal = false"
+            class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div class="max-h-80 overflow-y-auto">
+          <div
+            v-for="binding in props.summary.authmeBindings"
+            :key="binding.uuid || binding.username"
+            class="mb-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+          >
+            <div class="mb-2 flex items-start justify-between">
+              <div>
+                <p class="font-medium text-slate-900 dark:text-white">
+                  {{ binding.username }}
+                </p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                  {{ binding.realname }}
+                </p>
+              </div>
+              <span
+                :class="[
+                  'rounded-full px-2 py-1 text-xs font-medium',
+                  binding.status === 'ACTIVE'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+                ]"
+              >
+                {{ binding.status }}
+              </span>
+            </div>
+            <div class="space-y-1 text-xs text-slate-500 dark:text-slate-400">
+              <p>
+                UUID: <span class="font-mono">{{ binding.uuid }}</span>
+              </p>
+              <p>绑定于: {{ props.formatDateTime(binding.boundAt) }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 flex gap-2">
+          <button
+            @click="showAuthmeBindingsModal = false"
+            class="flex-1 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
+          >
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
