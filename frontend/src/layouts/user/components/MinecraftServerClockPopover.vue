@@ -175,6 +175,9 @@ function latencyLabel(item: PublicServerStatusItem) {
 }
 
 function mcsmStatusLabel(item: PublicServerStatusItem) {
+  if (isServerFrozen(item)) {
+    return '服卡死了'
+  }
   const status = item.mcsm?.status
   switch (status) {
     case -1:
@@ -218,6 +221,12 @@ function motdText(item: PublicServerStatusItem) {
   return ''
 }
 
+function isServerFrozen(item: PublicServerStatusItem) {
+  const isRunning = item.mcsm?.status === 3
+  const latency = item.ping?.response?.latency
+  return isRunning && latency == null
+}
+
 function serverClockDisplay(item: PublicServerStatusItem) {
   const worldMinutes = item.beacon?.clock?.worldMinutes
   if (worldMinutes == null) return ''
@@ -237,6 +246,9 @@ function serverClockDisplay(item: PublicServerStatusItem) {
 }
 
 function displayHeaderLabel(item: PublicServerStatusItem) {
+  if (isServerFrozen(item)) {
+    return '服卡死了'
+  }
   if (displayMode.value === 1) {
     if (item.beacon?.clock?.worldMinutes != null) {
       return serverClockDisplay(item)
@@ -371,10 +383,15 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
           </div>
 
           <div class="space-y-2">
-            <div
+          <div
               v-for="item in servers"
               :key="item.id"
-              class="rounded-lg border border-slate-200/70 bg-slate-50/60 p-2 text-xs dark:border-slate-700 dark:bg-slate-900/50"
+              :class="[
+                'rounded-lg border p-2 text-xs transition-colors',
+                isServerFrozen(item)
+                  ? 'border-rose-400/70 bg-rose-50/60 dark:border-rose-500/70 dark:bg-rose-950/40'
+                  : 'border-slate-200/70 bg-slate-50/60 dark:border-slate-700 dark:bg-slate-900/50',
+              ]"
             >
               <div class="flex items-center justify-between gap-2">
                 <div class="flex flex-col">
@@ -404,8 +421,13 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
                     ]"
                   />
                   <span>
-                    {{ latencyLabel(item) }} · {{ onlineLabel(item) }} ·
-                    {{ mcsmStatusLabel(item) }}
+                    <template v-if="isServerFrozen(item)">
+                      服卡死了
+                    </template>
+                    <template v-else>
+                      {{ latencyLabel(item) }} · {{ onlineLabel(item) }} ·
+                      {{ mcsmStatusLabel(item) }}
+                    </template>
                   </span>
                 </div>
               </div>

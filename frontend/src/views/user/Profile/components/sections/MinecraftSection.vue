@@ -198,7 +198,7 @@ function resolveGroupLabel(
               >
                 注册时间
                 <UTooltip
-                  text="服务器登录数据库在2023年7月重置过一次，此前已经登录服务器注册过的玩家的信息已丢失"
+                  text="注册时间可能因登录插件的数据同步问题重置，注册时间不代表第一次进入服务器的时间"
                 >
                   <button
                     type="button"
