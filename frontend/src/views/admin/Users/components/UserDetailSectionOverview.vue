@@ -718,6 +718,7 @@ const statusSnapshotSummary = computed(() => {
               :items="labelOptions"
               multiple
               searchable
+              :close-on-select="false"
               value-key="value"
               label-key="label"
               :disabled="labelSaving || loading"

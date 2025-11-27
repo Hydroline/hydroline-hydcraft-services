@@ -54,6 +54,7 @@ const region = computed(() => playerStore.region)
 const minecraft = computed(() => playerStore.minecraft)
 const stats = computed(() => playerStore.stats)
 const actions = computed(() => playerStore.actions)
+const statusSnapshot = computed(() => playerStore.statusSnapshot)
 const storeLoading = computed(() => playerStore.loading)
 
 async function loadServerOptions() {
@@ -197,13 +198,31 @@ function formatMetricValue(value: number, unit: string) {
   }
   return `${value}`
 }
+
+function formatIpLocation(location: string | null | undefined) {
+  if (!location) return ''
+  let text = location
+  if (text.includes('|')) {
+    const parts = text
+      .split('|')
+      .map((part) => part.trim())
+      .filter((part) => part && part !== '0')
+    if (parts.length === 0) return ''
+    text = parts.join(' ')
+  }
+  const cleaned = text
+    .replace(/\s*·\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned || ''
+}
 </script>
 
 <template>
   <Transition name="opacity-motion">
     <div
       v-if="summary?.avatarUrl"
-      class="absolute top-0 left-0 right-0 h-1/2 pointer-events-none select-none mask-[linear-gradient(to_bottom,#fff_-20%,transparent_80%)] filter-[blur(32px)_saturate(250%)_opacity(0.2)] dark:filter-[blur(48px)_saturate(200%)_opacity(0.8)]"
+      class="absolute top-0 left-0 right-0 h-2/3 pointer-events-none select-none mask-[linear-gradient(to_bottom,#fff_-20%,transparent_80%)] filter-[blur(32px)_saturate(250%)_opacity(0.2)] dark:filter-[blur(48px)_saturate(200%)_opacity(0.8)]"
     >
       <img
         :src="summary.avatarUrl"
@@ -213,19 +232,22 @@ function formatMetricValue(value: number, unit: string) {
     </div>
   </Transition>
 
-  <section class="relative z-0 mx-auto w-full max-w-6xl px-4 pb-16 pt-8">
+  <section class="relative z-0 mx-auto w-full max-w-6xl px-8 pb-16 pt-8">
     <PlayerLoginPrompt :can-view-profile="canViewProfile" />
 
     <PlayerProfileContent
       v-if="canViewProfile"
       :is-viewing-self="isViewingSelf"
       :summary="summary"
+      :region="region"
       :actions="actions"
       :minecraft="minecraft"
       :stats="stats"
       :stats-period="statsPeriod"
       :format-date-time="formatDateTime"
       :format-metric-value="formatMetricValue"
+      :status-snapshot="statusSnapshot"
+      :format-ip-location="formatIpLocation"
       @update:stats-period="statsPeriod = $event"
       @refresh-actions="refreshActions"
       @authme-reset="handleAuthmeReset"

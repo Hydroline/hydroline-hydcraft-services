@@ -78,17 +78,14 @@ function buildPhoneSummary(contact: any) {
     }
   }
   const dial = extractDialCode(contact) ?? ''
-  const number = dial && rawValue.startsWith(dial)
-    ? rawValue.slice(dial.length)
-    : rawValue
+  const number =
+    dial && rawValue.startsWith(dial) ? rawValue.slice(dial.length) : rawValue
   const normalizedNumber = number.replace(/\s+/g, '')
   return {
     value: rawValue,
     dialCode: dial,
     number: normalizedNumber,
-    display: dial
-      ? `${dial} ${normalizedNumber}`.trim()
-      : normalizedNumber,
+    display: dial ? `${dial} ${normalizedNumber}`.trim() : normalizedNumber,
     isPrimary: Boolean(contact?.isPrimary),
     verified: isContactVerified(contact),
   }
@@ -551,7 +548,7 @@ watch(
       accept="image/*"
       class="hidden"
       @change="handleAvatarFileChange"
-    >
+    />
 
     <BasicSection
       ref="basicSectionRef"

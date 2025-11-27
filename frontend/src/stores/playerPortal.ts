@@ -5,6 +5,7 @@ import type {
   PlayerActionsResponse,
   PlayerAssetsResponse,
   PlayerMinecraftResponse,
+  PlayerStatusSnapshot,
   PlayerPortalProfileResponse,
   PlayerRegionResponse,
   PlayerStatsResponse,
@@ -23,6 +24,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
     region: null as PlayerRegionResponse | null,
     minecraft: null as PlayerMinecraftResponse | null,
     stats: null as PlayerStatsResponse | null,
+    statusSnapshot: null as PlayerStatusSnapshot | null,
     viewerId: null as string | null,
     targetUserId: null as string | null,
     loading: false,
@@ -60,6 +62,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
         this.region = response.region
         this.minecraft = response.minecraft
         this.stats = response.stats
+        this.statusSnapshot = response.statusSnapshot
         this.viewerId = response.viewerId
         this.targetUserId = response.targetId
         return response
@@ -171,6 +174,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       this.region = null
       this.minecraft = null
       this.stats = null
+      this.statusSnapshot = null
       this.viewerId = null
       this.targetUserId = null
       this.rankContext = null

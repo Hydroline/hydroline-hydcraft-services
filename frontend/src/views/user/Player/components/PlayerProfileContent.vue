@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, watch, nextTick } from 'vue'
+import { computed, ref, onMounted, watch, nextTick, onBeforeUnmount } from 'vue'
 import dayjs from 'dayjs'
 import JsBarcode from 'jsbarcode'
+import type { SkinViewer } from 'skinview3d'
+import { playerStatusOptions } from '@/constants/status'
 import type {
   PlayerActionsResponse,
   PlayerMinecraftResponse,
+  PlayerStatusSnapshot,
+  PlayerRegionResponse,
   PlayerStatsResponse,
   PlayerSummary,
 } from '@/types/portal'
+import {
+  countries,
+  municipalities,
+} from '@/views/user/Profile/components/region-data'
 
 const props = defineProps<{
   isViewingSelf: boolean
@@ -18,6 +26,9 @@ const props = defineProps<{
   statsPeriod: string
   formatDateTime: (value: string | null | undefined) => string
   formatMetricValue: (value: number, unit: string) => string
+  region: PlayerRegionResponse | null
+  statusSnapshot: PlayerStatusSnapshot | null
+  formatIpLocation: (value: string | null | undefined) => string
 }>()
 
 const emit = defineEmits<{
@@ -34,8 +45,99 @@ const statsPeriodModel = computed({
   set: (value: string) => emit('update:statsPeriod', value),
 })
 
-const showAuthmeBindingsModal = ref(false)
 const barcodeCanvas = ref<HTMLCanvasElement | null>(null)
+
+const skinCanvasRefs = ref<Record<string, HTMLCanvasElement | null>>({})
+const skinViewers = ref<Record<string, SkinViewer | null>>({})
+let skinviewModule: typeof import('skinview3d') | null = null
+
+async function ensureSkinview() {
+  if (!skinviewModule) {
+    skinviewModule = await import('skinview3d')
+  }
+  return skinviewModule
+}
+
+async function updateSkinViewer(bindingId: string, username: string) {
+  if (typeof window === 'undefined') return
+  if (!username) return
+  const canvas = skinCanvasRefs.value[bindingId]
+  if (!canvas) return
+
+  try {
+    const skinview = await ensureSkinview()
+    const width = canvas.clientWidth > 0 ? canvas.clientWidth : 160
+    const height =
+      canvas.clientHeight > 0 ? canvas.clientHeight : Math.round(width * 1.2)
+    canvas.width = width
+    canvas.height = height
+
+    if (!skinViewers.value[bindingId]) {
+      const instance = new skinview.SkinViewer({
+        canvas,
+        width,
+        height,
+        skin: `https://mc-heads.net/skin/${encodeURIComponent(username)}`,
+      })
+      instance.autoRotate = true
+      instance.zoom = 0.95
+      if (instance.controls) {
+        instance.controls.enableZoom = false
+        instance.controls.enablePan = false
+      }
+      const idleAnimation = new skinview.IdleAnimation()
+      instance.animation = idleAnimation
+      skinViewers.value[bindingId] = instance
+    } else {
+      const viewer = skinViewers.value[bindingId]
+      if (viewer) {
+        viewer.width = width
+        viewer.height = height
+        viewer.loadSkin(
+          `https://mc-heads.net/skin/${encodeURIComponent(username)}`,
+        )
+      }
+    }
+  } catch (error) {
+    console.error('Failed to initialize skinview3d:', error)
+  }
+}
+
+function cleanupAllSkinViewers() {
+  Object.values(skinViewers.value).forEach((viewer) => {
+    if (viewer) {
+      try {
+        viewer.dispose()
+      } catch (error) {
+        console.error('Error disposing viewer:', error)
+      }
+    }
+  })
+  skinViewers.value = {}
+  skinCanvasRefs.value = {}
+}
+
+watch(
+  () => props.summary?.authmeBindings,
+  async (bindings) => {
+    if (!bindings || bindings.length === 0) {
+      cleanupAllSkinViewers()
+      return
+    }
+    await nextTick()
+    bindings.forEach((binding) => {
+      const username = binding.username
+      if (username) {
+        void updateSkinViewer(binding.id, username)
+      }
+    })
+  },
+  { immediate: true, deep: false },
+)
+
+onBeforeUnmount(() => {
+  cleanupAllSkinViewers()
+})
 
 const generateBarcode = async () => {
   await nextTick()
@@ -50,9 +152,10 @@ const generateBarcode = async () => {
   try {
     JsBarcode(canvas, piic, {
       format: 'CODE128',
-      height: 40,
+      height: 35,
       displayValue: false,
       background: 'transparent',
+      margin: 2,
     })
   } catch (error) {
     console.error('Failed to generate PIIC barcode', error)
@@ -67,23 +170,131 @@ watch(
   { immediate: true },
 )
 
+const rawBirthday = computed(
+  () =>
+    props.summary?.birthday ?? props.summary?.profileExtra?.birthday ?? null,
+)
+
+const formattedBirthday = computed(() => {
+  const raw = rawBirthday.value
+  if (!raw) {
+    return null
+  }
+  const parsed = dayjs(raw)
+  return parsed.isValid() ? parsed.format('YYYY/MM/DD') : null
+})
+
+const fallbackRegion = computed(() => props.summary?.profileExtra ?? {})
+const regionCountryCode = computed(
+  () => props.region?.country ?? fallbackRegion.value.regionCountry ?? 'OTHER',
+)
+const regionCountryLabel = computed(() => {
+  if (!regionCountryCode.value) {
+    return ''
+  }
+  const mapped = countries.find(
+    (entry) => entry.code === regionCountryCode.value,
+  )?.name
+  if (mapped) return mapped
+  if (regionCountryCode.value === 'HK') return '香港特别行政区'
+  if (regionCountryCode.value === 'MO') return '澳门特别行政区'
+  if (regionCountryCode.value === 'TW') return '台湾地区'
+  return regionCountryCode.value
+})
+
+const regionProvince = computed(
+  () => props.region?.province ?? fallbackRegion.value.regionProvince ?? '',
+)
+const regionCity = computed(
+  () => props.region?.city ?? fallbackRegion.value.regionCity ?? '',
+)
+const regionDistrict = computed(
+  () => props.region?.district ?? fallbackRegion.value.regionDistrict ?? '',
+)
+
+const isChina = computed(() => regionCountryCode.value === 'CN')
+const isHkMoTw = computed(() => {
+  const province = regionProvince.value
+  return (
+    province === '香港特别行政区' ||
+    province === '澳门特别行政区' ||
+    province === '台湾地区'
+  )
+})
+
+const isMunicipality = computed(() => {
+  if (!regionProvince.value) return false
+  return municipalities.includes(regionProvince.value)
+})
+
+const hasRegionData = computed(() => {
+  return Boolean(
+    regionCountryCode.value ||
+      regionProvince.value ||
+      regionCity.value ||
+      regionDistrict.value,
+  )
+})
+
+const showCityLevel = computed(() => {
+  if (!isChina.value) return false
+  if (!regionCity.value) return false
+  if (isMunicipality.value) return false
+  return true
+})
+
+const showCountryLabel = computed(() => {
+  if (!regionCountryCode.value) return false
+  if (isChina.value && !isHkMoTw.value) {
+    return false
+  }
+  return true
+})
+
+const displayCountryLabel = computed(() => {
+  if (!showCountryLabel.value) return ''
+  if (isChina.value) {
+    return '中国'
+  }
+  return regionCountryLabel.value
+})
+
+const showProvince = computed(
+  () => isChina.value && Boolean(regionProvince.value),
+)
+const showDistrict = computed(
+  () => isChina.value && Boolean(regionDistrict.value),
+)
+
+const summaryLastLoginLocationDisplay = computed(() => {
+  if (!props.summary?.lastLoginLocation) return ''
+  return props.formatIpLocation(props.summary.lastLoginLocation)
+})
+
+const statusLabel = computed(() => {
+  const code = props.statusSnapshot?.status
+  if (!code) return ''
+  const option = playerStatusOptions.find((item) => item.value === code)
+  return option?.label ?? code
+})
+
 onMounted(() => {
   void generateBarcode()
 })
 </script>
 
 <template>
-  <div class="mt-8 grid gap-6 lg:grid-cols-[320px_1fr]">
-    <div class="space-y-6">
+  <div class="mt-8 grid gap-8 lg:grid-cols-[320px_1fr]">
+    <div class="space-y-8">
       <div>
         <div v-if="props.summary" class="space-y-3">
-          <div class="flex flex-col gap-4">
+          <div class="flex flex-col gap-3">
             <div class="flex gap-2 select-none">
               <img
                 v-if="props.summary.avatarUrl"
                 :src="props.summary.avatarUrl"
                 :alt="props.summary.displayName ?? props.summary.email"
-                class="h-16 w-16 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
+                class="h-18 w-18 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
               />
 
               <img
@@ -92,82 +303,205 @@ onMounted(() => {
                   props.summary.authmeBindings[0]?.username
                 }/64`"
                 :alt="props.summary.authmeBindings[0]?.username ?? 'MC Avatar'"
-                class="h-16 w-16 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
+                class="h-18 w-18 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
               />
 
-              <button
-                v-if="props.summary.authmeBindings.length > 1"
-                @click="showAuthmeBindingsModal = true"
-                class="flex h-16 w-16 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              <UTooltip
+                :text="`共 ${props.summary.authmeBindings.length} 个账户`"
               >
-                ...
-              </button>
+                <UButton
+                  v-if="props.summary.authmeBindings.length > 1"
+                  class="w-6 h-6 flex justify-center items-center rounded-full mt-auto"
+                  variant="ghost"
+                  size="sm"
+                >
+                  ...
+                </UButton>
+              </UTooltip>
             </div>
+
             <div>
-              <p class="font-semibold text-slate-700 dark:text-white">
-                <span class="text-2xl">
-                  {{
-                    props.summary.minecraftProfiles[0].nickname ||
-                    props.summary.authmeBindings[0]?.realname
-                  }}
-                </span>
-                <span
-                  class="mx-2 select-none"
-                  v-if="
-                    props.summary.authmeBindings[0]?.realname &&
-                    props.summary.minecraftProfiles[0]?.nickname
-                  "
-                  >/</span
-                >
-                <span
-                  v-if="
-                    props.summary.authmeBindings[0]?.realname &&
-                    props.summary.minecraftProfiles[0]?.nickname
-                  "
-                >
-                  {{ props.summary.authmeBindings[0]?.realname }}
-                </span>
-              </p>
-              <p class="text-xs text-slate-500 dark:text-slate-500">
+              <div
+                class="flex items-center gap-1 font-semibold text-slate-700 dark:text-white"
+              >
+                <div>
+                  <span class="text-2xl">
+                    {{
+                      props.summary.minecraftProfiles[0].nickname ||
+                      props.summary.authmeBindings[0]?.realname
+                    }}
+                  </span>
+                  <span
+                    class="mx-2 select-none"
+                    v-if="
+                      props.summary.authmeBindings[0]?.realname &&
+                      props.summary.minecraftProfiles[0]?.nickname
+                    "
+                    >/</span
+                  >
+                  <span
+                    v-if="
+                      props.summary.authmeBindings[0]?.realname &&
+                      props.summary.minecraftProfiles[0]?.nickname
+                    "
+                  >
+                    {{ props.summary.authmeBindings[0]?.realname }}
+                  </span>
+                </div>
+
+                <div class="flex items-center">
+                  <UButton
+                    variant="link"
+                    color="error"
+                    icon="i-lucide-heart"
+                    class="flex justify-center items-center rounded-full h-5.5 w-5.5"
+                    size="xs"
+                  />
+
+                  <UButton
+                    variant="link"
+                    icon="i-lucide-qr-code"
+                    class="flex justify-center items-center rounded-full h-5.5 w-5.5"
+                    size="xs"
+                  />
+                </div>
+              </div>
+
+              <div class="text-xs text-slate-500 dark:text-slate-500">
                 {{ props.summary.id }}
-              </p>
+              </div>
+
+              <div
+                v-if="props.summary?.rbacLabels?.length"
+                class="flex flex-wrap gap-1 mt-1"
+              >
+                <UBadge
+                  v-for="label in props.summary?.rbacLabels"
+                  :key="label.id"
+                  variant="soft"
+                  size="sm"
+                  :style="
+                    label.color
+                      ? {
+                          backgroundColor: label.color,
+                          color: '#ffffff',
+                          borderColor: 'transparent',
+                        }
+                      : undefined
+                  "
+                >
+                  {{ label.name || label.key }}
+                </UBadge>
+              </div>
+            </div>
+
+            <div class="mt-2 grid grid-cols-2 gap-2 items-center">
+              <UButton
+                v-if="!props.isViewingSelf"
+                class="justify-center items-center"
+                color="primary"
+                variant="solid"
+              >
+                <UIcon name="i-lucide-message-square" />
+                私信
+              </UButton>
+
+              <RouterLink v-else to="/profile/basic">
+                <UButton
+                  class="justify-center items-center w-full"
+                  color="primary"
+                  variant="solid"
+                >
+                  <UIcon name="i-lucide-pencil-line" />
+                  修改用户信息
+                </UButton>
+              </RouterLink>
+
+              <UButton
+                class="justify-center items-center"
+                color="primary"
+                variant="soft"
+              >
+                <UIcon name="i-lucide-message-circle-plus" />
+                留言板
+              </UButton>
             </div>
           </div>
         </div>
+        <USkeleton v-else class="h-160 w-full" />
       </div>
 
       <div v-if="props.summary">
         <div
+          class="flex flex-col p-2 pb-1 mb-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 backdrop-blur dark:bg-slate-600/30 select-none"
+          v-if="props.summary"
+        >
+          <div class="justify-center items-center select-none">
+            <canvas
+              ref="barcodeCanvas"
+              class="object-cover w-full h-full dark:filter-[invert(1)]"
+            >
+            </canvas>
+          </div>
+
+          <UTooltip text="玩家身份标识码（PIIC）">
+            <div
+              class="text-center text-xs text-slate-700 dark:text-slate-200 leading-normal"
+            >
+              {{ props.summary.piic }}
+            </div>
+          </UTooltip>
+        </div>
+
+        <div
           class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-200"
         >
-          <div class="col-span-1 md:col-span-2" v-if="props.summary.piic">
+          <div class="md:col-span-2">
             <div class="text-xs text-slate-500 dark:text-slate-500">
-              PIIC
+              用户信息
             </div>
-            <div class="flex flex-col justify-center items-center select-none">
-              <div>
-                <canvas
-                  ref="barcodeCanvas"
-                  class="object-cover w-full h-full dark:filter-[invert(1)]"
-                >
-                </canvas>
-              </div>
+            <div
+              class="flex items-center flex-wrap break-all gap-2 text-base font-semibold text-slate-800 dark:text-slate-300"
+            >
+              <span>
+                {{ props.summary.displayName }}
+              </span>
+
               <div
-                class="text-sm font-semibold text-slate-800 dark:text-slate-300 -mt-1"
+                class="text-base font-semibold text-slate-800 dark:text-slate-300"
               >
-                {{ props.summary.piic || '未生成' }}
+                <div
+                  v-if="props.minecraft?.permissionRoles?.length"
+                  class="flex flex-wrap gap-2"
+                >
+                  <UBadge
+                    v-for="role in props.minecraft?.permissionRoles"
+                    :key="role.id"
+                    variant="soft"
+                    size="sm"
+                  >
+                    {{ role.name || role.key }}
+                  </UBadge>
+                </div>
               </div>
             </div>
           </div>
 
-          <div>
-            <div class="text-xs text-slate-500 dark:text-slate-500">
-              用户名
-            </div>
+          <div v-if="hasRegionData">
+            <div class="text-xs text-slate-500 dark:text-slate-500">地区</div>
             <div
-              class="text-base font-semibold text-slate-800 dark:text-slate-300"
+              class="text-base font-semibold text-slate-800 dark:text-slate-300 space-y-0"
             >
-              {{ props.summary.displayName }}
+              <div class="flex flex-wrap gap-0.5">
+                <span v-if="displayCountryLabel">{{
+                  displayCountryLabel
+                }}</span>
+                <span v-if="showProvince">{{ regionProvince }}</span>
+                <span v-if="showCityLevel">{{ regionCity }}</span>
+                <span v-if="showDistrict">
+                  {{ regionDistrict }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -179,6 +513,26 @@ onMounted(() => {
               class="text-base font-semibold text-slate-800 dark:text-slate-300"
             >
               {{ dayjs(props.summary.joinDate).format('YYYY/MM/DD') }}
+            </div>
+          </div>
+
+          <div v-if="props.statusSnapshot">
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              用户状态
+            </div>
+            <div
+              class="text-base font-semibold text-slate-800 dark:text-slate-300"
+            >
+              {{ statusLabel }}
+            </div>
+          </div>
+
+          <div v-if="formattedBirthday">
+            <div class="text-xs text-slate-500 dark:text-slate-500">生日</div>
+            <div
+              class="text-base font-semibold text-slate-800 dark:text-slate-300"
+            >
+              {{ formattedBirthday }}
             </div>
           </div>
 
@@ -204,359 +558,313 @@ onMounted(() => {
                 {{ props.formatDateTime(props.summary.lastLoginAt) }}
               </span>
               <span
-                v-if="props.summary.lastLoginLocation"
+                v-if="summaryLastLoginLocationDisplay"
                 class="text-xs font-normal text-slate-500 dark:text-slate-500"
               >
-                {{ props.summary.lastLoginLocation }}
+                {{ summaryLastLoginLocationDisplay }}
               </span>
             </div>
           </div>
-
-          <RouterLink
-            v-if="isViewingSelf"
-            to="/profile"
-            class="inline-flex items-center gap-2 rounded-full border border-primary-200 px-4 py-1.5 text-sm font-medium text-primary-600 transition hover:border-primary-300 hover:text-primary-500 dark:border-primary-500/40 dark:text-primary-200"
-          >
-            <UIcon name="i-lucide-id-card" class="h-4 w-4" />
-            管理用户信息
-          </RouterLink>
         </div>
-      </div>
-
-      <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
-      >
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          权限信息
-        </p>
-        <div class="space-y-4 text-sm text-slate-700 dark:text-slate-200">
-          <div>
-            <p class="text-xs text-slate-500 dark:text-slate-500 mb-2">
-              权限组
-            </p>
-            <div
-              v-if="props.minecraft?.permissionRoles?.length"
-              class="flex flex-wrap gap-2"
-            >
-              <UBadge
-                v-for="role in props.minecraft?.permissionRoles"
-                :key="role.id"
-                color="neutral"
-                variant="soft"
-              >
-                {{ role.name || role.key }}
-              </UBadge>
-            </div>
-            <p
-              v-else
-              class="text-xs text-slate-500 dark:text-slate-500 italic"
-            >
-              暂无权限组
-            </p>
-          </div>
-
-          <div>
-            <p class="text-xs text-slate-500 dark:text-slate-500 mb-2">
-              RBAC 标签
-            </p>
-            <div
-              v-if="props.summary?.rbacLabels?.length"
-              class="flex flex-wrap gap-2"
-            >
-              <UBadge
-                v-for="label in props.summary?.rbacLabels"
-                :key="label.id"
-                color="neutral"
-                variant="soft"
-                :style="
-                  label.color
-                    ? {
-                        backgroundColor: label.color,
-                        color: '#ffffff',
-                        borderColor: 'transparent',
-                      }
-                    : undefined
-                "
-              >
-                {{ label.name || label.key }}
-              </UBadge>
-            </div>
-            <p
-              v-else
-              class="text-xs text-slate-500 dark:text-slate-500 italic"
-            >
-              暂无 RBAC 标签
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          操作记录
-        </p>
-        <div v-if="props.actions?.items.length" class="space-y-3 text-sm">
-          <div
-            v-for="item in props.actions.items"
-            :key="item.id"
-            class="rounded-xl border border-slate-200/70 px-3 py-2 dark:border-slate-800/70"
-          >
-            <p class="font-semibold text-slate-900 dark:text-white">
-              {{ item.action }}
-            </p>
-            <p class="text-xs text-slate-500 dark:text-slate-500">
-              {{ props.formatDateTime(item.createdAt) }}
-            </p>
-            <p
-              v-if="item.reason"
-              class="text-xs text-slate-600 dark:text-slate-300"
-            >
-              {{ item.reason }}
-            </p>
-          </div>
-          <UButton
-            v-if="
-              props.actions?.pagination.pageCount &&
-              props.actions.pagination.page < props.actions.pagination.pageCount
-            "
-            block
-            variant="ghost"
-            color="neutral"
-            @click="emit('refresh-actions', props.actions.pagination.page + 1)"
-          >
-            查看更多
-          </UButton>
-        </div>
-        <p
-          v-else
-          class="text-center text-sm text-slate-500 dark:text-slate-400"
-        >
-          暂无操作记录
-        </p>
       </div>
     </div>
 
-    <div class="space-y-6">
-      <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
-      >
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          名下资产
-        </p>
-        <div v-if="props.summary" class="space-y-3 text-sm">
-          <div
-            v-for="binding in props.summary.authmeBindings"
-            :key="binding.id"
-            class="rounded-xl border border-slate-200/70 p-3 dark:border-slate-800/70"
-          >
-            <p class="text-base font-semibold text-slate-900 dark:text-white">
-              {{ binding.username }}
-            </p>
-            <p class="text-xs text-slate-500 dark:text-slate-500">
-              角色名：{{ binding.realname || '未设置' }}
-            </p>
-            <p class="text-xs text-slate-500 dark:text-slate-500">
-              绑定时间：{{ props.formatDateTime(binding.boundAt) }}
-            </p>
-            <p
-              v-if="binding.lastLoginIp"
-              class="text-xs text-slate-500 dark:text-slate-400"
-            >
-              最后登录 IP：{{ binding.lastLoginIp }}
-              <span v-if="binding.lastLoginLocation">
-                （{{ binding.lastLoginLocation }}）
-              </span>
-            </p>
-            <p
-              v-if="binding.regIp"
-              class="text-xs text-slate-500 dark:text-slate-400"
-            >
-              注册 IP：{{ binding.regIp }}
-              <span v-if="binding.regIpLocation">
-                （{{ binding.regIpLocation }}）
-              </span>
-            </p>
-          </div>
-          <p
-            v-if="props.summary.authmeBindings.length === 0"
-            class="text-xs text-slate-500 dark:text-slate-500"
-          >
-            暂无 AuthMe 绑定
-          </p>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="md:col-span-2">
+        <div
+          class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 backdrop-blur dark:bg-slate-800/70 overflow-hidden h-60"
+        >
+          <iframe
+            src="https://map.nitrogen.hydcraft.cn/"
+            class="block h-full w-full"
+          ></iframe>
         </div>
-        <USkeleton v-else class="h-28 w-full" />
       </div>
 
-      <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
-      >
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          服务器账户
-        </p>
-        <div v-if="props.minecraft" class="space-y-4">
+      <div class="flex flex-col gap-4">
+        <div>
           <div
-            v-for="profile in props.minecraft.minecraftProfiles"
-            :key="profile.id"
-            class="rounded-xl border border-slate-200/70 p-3 dark:border-slate-800/70"
+            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
           >
-            <p class="font-semibold text-slate-900 dark:text-white">
-              {{ profile.nickname || '未设置' }}
-            </p>
-            <p
-              class="text-xs text-slate-500 dark:text-slate-400"
-            >
-              {{ profile.isPrimary ? '主档案' : '辅助档案' }}
-            </p>
-            <p
-              v-if="profile.source"
-              class="text-xs text-slate-500 dark:text-slate-400"
-            >
-              来源：{{ profile.source }}
-            </p>
+            游戏账户
           </div>
-          <p
-            v-if="props.minecraft.minecraftProfiles.length === 0"
-            class="text-xs text-slate-500 dark:text-slate-500"
-          >
-            暂无 Minecraft 档案
-          </p>
+          <div class="flex gap-2">
+            <div v-if="props.summary" class="space-y-3 text-sm">
+              <div
+                v-for="binding in props.summary.authmeBindings"
+                :key="binding.id"
+                class="w-42 rounded-xl p-3 bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800"
+              >
+                <div class="flex justify-center items-center gap-3">
+                  <canvas
+                    :ref="
+                      (el) => {
+                        if (el)
+                          skinCanvasRefs[binding.id] = el as HTMLCanvasElement
+                      }
+                    "
+                    width="140"
+                    height="200"
+                    class="h-50 w-auto rounded-lg pointer-events-none"
+                  />
+                </div>
+
+                <div>
+                  <UPopover mode="hover">
+                    <template #content>
+                      <div class="p-3">
+                        <div
+                          v-if="binding.lastlogin"
+                          class="text-xs text-slate-500 dark:text-slate-500"
+                        >
+                          最近登录于
+                          <span class="font-semibold">
+                            {{
+                              dayjs(binding.lastlogin).format(
+                                'YYYY/MM/DD HH:mm:ss',
+                              )
+                            }}
+                          </span>
+                          <span
+                            v-if="
+                              props.formatIpLocation(
+                                binding.lastLoginLocation,
+                              ) !== ''
+                            "
+                          >
+                            （{{
+                              props.formatIpLocation(binding.lastLoginLocation)
+                            }}）
+                          </span>
+                          。
+                        </div>
+                        <div
+                          v-if="binding.regdate"
+                          class="text-xs text-slate-500 dark:text-slate-500"
+                        >
+                          该账号注册于
+                          <span class="font-semibold">
+                            {{
+                              dayjs(binding.regdate).format(
+                                'YYYY/MM/DD HH:mm:ss',
+                              )
+                            }}
+                          </span>
+                          <span
+                            v-if="
+                              props.formatIpLocation(binding.regIpLocation) !==
+                              ''
+                            "
+                          >
+                            （{{
+                              props.formatIpLocation(binding.regIpLocation)
+                            }}）
+                          </span>
+                          。
+                        </div>
+                        <div
+                          v-if="binding.boundAt"
+                          class="text-xs text-slate-500 dark:text-slate-500"
+                        >
+                          该账户于
+                          <span class="font-semibold">
+                            {{ props.formatDateTime(binding.boundAt) }}
+                          </span>
+                          绑定到本系统。
+                        </div>
+                      </div>
+                    </template>
+
+                    <div
+                      class="line-clamp-1 truncate text-xl font-semibold text-slate-900 dark:text-white"
+                    >
+                      {{ binding.realname }}
+                    </div>
+
+                    <div
+                      v-if="binding.lastlogin"
+                      class="text-xs text-slate-500 dark:text-slate-500"
+                    >
+                      {{ dayjs().diff(dayjs(binding.lastlogin), 'day') }}
+                      天前登录过
+                    </div>
+                  </UPopover>
+                </div>
+              </div>
+              <div
+                v-if="props.summary.authmeBindings.length === 0"
+                class="text-xs text-slate-500 dark:text-slate-500"
+              >
+                暂无 AuthMe 绑定
+              </div>
+            </div>
+            <USkeleton v-else class="h-28 w-full" />
+          </div>
         </div>
-        <USkeleton v-else class="h-32 w-full" />
+
+        <div>
+          <div
+            class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
+          >
+            惯用昵称
+            <UTooltip
+              text="在交流群、社区内广泛使用的昵称，昵称会作为玩家在正式场合的称呼使用"
+            >
+              <button
+                type="button"
+                class="text-slate-400 transition hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:text-slate-300"
+              >
+                <UIcon name="i-lucide-info" class="h-4 w-4" />
+                <span class="sr-only">玩家身份标识编码</span>
+              </button>
+            </UTooltip>
+          </div>
+          <div class="flex flex-col gap-3">
+            <div v-if="props.minecraft">
+              <div
+                v-for="profile in props.minecraft.minecraftProfiles"
+                :key="profile.id"
+                class="text-sm font-medium w-full rounded-xl p-3 bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800"
+              >
+                {{ profile.nickname || '未设置' }}
+              </div>
+            </div>
+            <USkeleton v-else class="h-32 w-full" />
+          </div>
+        </div>
+
+        <div>
+          <div
+            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
+          >
+            游戏账户控制
+          </div>
+          <div v-if="props.isViewingSelf">
+            <div class="grid gap-3 md:grid-cols-1">
+              <UButton
+                class="justify-center rounded-xl bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
+                color="neutral"
+                variant="soft"
+                @click="emit('authme-reset')"
+              >
+                AuthMe 密码重置
+              </UButton>
+              <UButton
+                class="justify-center rounded-xl bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
+                color="neutral"
+                variant="soft"
+                @click="emit('force-login')"
+              >
+                强制登陆
+              </UButton>
+              <UButton
+                class="justify-center rounded-xl bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
+                color="neutral"
+                variant="soft"
+                @click="emit('open-permission-dialog')"
+              >
+                权限组调整申请
+              </UButton>
+              <UButton
+                class="justify-center rounded-xl bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
+                color="neutral"
+                variant="soft"
+                @click="emit('open-restart-dialog')"
+              >
+                炸服重启申请
+              </UButton>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
-      >
-        <div class="flex items-center justify-between">
-          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            统计信息
-          </p>
-          <USelectMenu
-            v-model="statsPeriodModel"
-            :options="[
-              { label: '近 30 天', value: '30d' },
-              { label: '近 7 天', value: '7d' },
-              { label: '全部', value: 'all' },
-            ]"
-            class="w-28"
-          />
-        </div>
-        <div v-if="props.stats" class="grid gap-4 md:grid-cols-2">
+      <div class="flex flex-col gap-4">
+        <div>
           <div
-            v-for="metric in props.stats.metrics"
-            :key="metric.id"
-            class="rounded-xl border border-slate-200/70 p-3 dark:border-slate-800/70"
+            class="flex items-center justify-between flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
           >
-            <p class="text-xs text-slate-500 dark:text-slate-500">
-              {{ metric.label }}
-            </p>
-            <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              {{ props.formatMetricValue(metric.value, metric.unit) }}
-            </p>
+            <span>账户统计信息</span>
+            <USelectMenu
+              :model-value="statsPeriodModel"
+              :items="[
+                { label: '近 30 天', value: '30d' },
+                { label: '近 7 天', value: '7d' },
+                { label: '全部', value: 'all' },
+              ]"
+              class="w-24"
+              size="sm"
+            />
+          </div>
+          <div>
+            <div v-if="props.stats" class="grid gap-4 md:grid-cols-2">
+              <div
+                v-for="metric in props.stats.metrics"
+                :key="metric.id"
+                class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/90 backdrop-blur dark:bg-slate-800/70"
+              >
+                <p class="text-xs text-slate-500 dark:text-slate-500">
+                  {{ metric.label }}
+                </p>
+                <p class="text-xl font-semibold text-slate-900 dark:text-white">
+                  {{ props.formatMetricValue(metric.value, metric.unit) }}
+                </p>
+              </div>
+            </div>
+            <USkeleton v-else class="h-28 w-full" />
           </div>
         </div>
-        <USkeleton v-else class="h-28 w-full" />
-      </div>
 
-      <div
-        class="rounded-lg p-4 bg-white/85 backdrop-blur dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800"
-      >
-        <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          自助操作
-        </p>
-        <div class="grid gap-3 md:grid-cols-2">
-          <UButton color="primary" variant="soft" @click="emit('authme-reset')">
-            AuthMe 密码重置
-          </UButton>
-          <UButton color="primary" variant="ghost" @click="emit('force-login')">
-            强制登陆
-          </UButton>
-          <UButton
-            color="neutral"
-            variant="soft"
-            @click="emit('open-permission-dialog')"
+        <div>
+          <div
+            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
           >
-            权限组调整申请
-          </UButton>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            @click="emit('open-restart-dialog')"
-          >
-            炸服重启申请
-          </UButton>
+            账户操作日志
+          </div>
+          <div>
+            <div v-if="props.actions?.items.length" class="space-y-3 text-sm">
+              <div
+                v-for="item in props.actions.items"
+                :key="item.id"
+                class="rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 bg-white/90 backdrop-blur dark:bg-slate-800/70"
+              >
+                <p class="font-semibold text-slate-900 dark:text-white">
+                  {{ item.action }}
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-500">
+                  {{ props.formatDateTime(item.createdAt) }}
+                </p>
+                <p
+                  v-if="item.reason"
+                  class="text-xs text-slate-600 dark:text-slate-300"
+                >
+                  {{ item.reason }}
+                </p>
+              </div>
+              <UButton
+                v-if="
+                  props.actions?.pagination.pageCount &&
+                  props.actions.pagination.page <
+                    props.actions.pagination.pageCount
+                "
+                block
+                variant="ghost"
+                color="neutral"
+                @click="
+                  emit('refresh-actions', props.actions.pagination.page + 1)
+                "
+              >
+                查看更多
+              </UButton>
+            </div>
+            <div
+              v-else
+              class="text-center text-xs rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 bg-white/90 backdrop-blur dark:bg-slate-800/70"
+            >
+              暂无操作记录
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
-
-  <!-- Multiple AuthMe Bindings Modal -->
-  <Teleport to="body">
-    <div
-      v-if="showAuthmeBindingsModal && props.summary?.authmeBindings"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70"
-      @click="showAuthmeBindingsModal = false"
-    >
-      <div
-        class="max-h-96 w-full max-w-md rounded-2xl bg-white p-6 shadow-lg dark:bg-slate-900"
-        @click.stop
-      >
-        <div class="mb-4 flex items-center justify-between">
-          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
-            所有 AuthMe 绑定
-          </h3>
-          <button
-            @click="showAuthmeBindingsModal = false"
-            class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div class="max-h-80 overflow-y-auto">
-          <div
-            v-for="binding in props.summary.authmeBindings"
-            :key="binding.uuid || binding.username"
-            class="mb-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
-          >
-            <div class="mb-2 flex items-start justify-between">
-              <div>
-                <p class="font-medium text-slate-900 dark:text-white">
-                  {{ binding.username }}
-                </p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">
-                  {{ binding.realname }}
-                </p>
-              </div>
-              <span
-                :class="[
-                  'rounded-full px-2 py-1 text-xs font-medium',
-                  binding.status === 'ACTIVE'
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
-                ]"
-              >
-                {{ binding.status }}
-              </span>
-            </div>
-            <div class="space-y-1 text-xs text-slate-500 dark:text-slate-500">
-              <p>
-                UUID: <span class="font-mono">{{ binding.uuid }}</span>
-              </p>
-              <p>绑定于: {{ props.formatDateTime(binding.boundAt) }}</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-4 flex gap-2">
-          <button
-            @click="showAuthmeBindingsModal = false"
-            class="flex-1 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
-          >
-            关闭
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
 </template>

@@ -47,18 +47,30 @@ export class PlayerService {
       Math.max(options.actionsPageSize ?? 10, 1),
       50,
     );
-    const [summary, assets, region, minecraft, stats, actions] =
-      await Promise.all([
-        this.getPlayerSummary(targetUserId),
-        this.getPlayerAssets(targetUserId),
-        this.getPlayerRegion(targetUserId),
-        this.getPlayerMinecraftData(targetUserId),
-        this.getPlayerStats(targetUserId, period),
-        this.getPlayerActions(targetUserId, {
-          page: actionsPage,
-          pageSize: actionsPageSize,
-        }),
-      ]);
+    const [
+      summary,
+      rawAssets,
+      region,
+      minecraft,
+      stats,
+      actions,
+      statusSnapshot,
+    ] = await Promise.all([
+      this.getPlayerSummary(targetUserId),
+      this.getPlayerAssets(targetUserId),
+      this.getPlayerRegion(targetUserId),
+      this.getPlayerMinecraftData(targetUserId),
+      this.getPlayerStats(targetUserId, period),
+      this.getPlayerActions(targetUserId, {
+        page: actionsPage,
+        pageSize: actionsPageSize,
+      }),
+      this.getPlayerStatusSnapshot(targetUserId),
+    ]);
+    const assets = {
+      companies: rawAssets.companies ?? [],
+      railways: rawAssets.railways ?? [],
+    };
     return {
       viewerId,
       targetId: targetUserId,
@@ -68,6 +80,7 @@ export class PlayerService {
       minecraft,
       stats,
       actions,
+      statusSnapshot,
     };
   }
 
@@ -105,6 +118,7 @@ export class PlayerService {
             displayName: true,
             primaryMinecraftProfileId: true,
             primaryAuthmeBindingId: true,
+            birthday: true,
             gender: true,
             extra: true,
           },
@@ -182,6 +196,9 @@ export class PlayerService {
       }
     }
 
+    const profileExtra = this.normalizeProfileExtra(user.profile?.extra);
+    const birthday = user.profile?.birthday?.toISOString() ?? null;
+
     return {
       id: user.id,
       email: user.email,
@@ -192,11 +209,12 @@ export class PlayerService {
       joinDate: user.joinDate?.toISOString() ?? null,
       lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
       lastLoginIp: user.lastLoginIp ?? null,
-      lastLoginLocation: location?.display ?? null,
+      lastLoginLocation: location?.raw ?? null,
       displayName: user.profile?.displayName ?? null,
       piic: user.profile?.piic ?? null,
       gender: user.profile?.gender ?? null,
-      profileExtra: this.normalizeProfileExtra(user.profile?.extra),
+      birthday,
+      profileExtra,
       contacts: user.contacts.map((contact) => ({
         id: contact.id,
         value: contact.value,
@@ -210,10 +228,11 @@ export class PlayerService {
         authmeBindingId: profile.authmeBindingId,
         verifiedAt: profile.verifiedAt?.toISOString() ?? null,
       })),
-      authmeBindings: await this.buildAuthmeBindingPayloads(
-        user.authmeBindings,
-        { includeBoundLocation: true },
-      ),
+      authmeBindings: (
+        await this.buildAuthmeBindingPayloads(user.authmeBindings, {
+          includeBoundLocation: true,
+        })
+      ).map(({ status, ...rest }) => rest),
       rbacLabels: user.permissionLabels
         .map((entry) => {
           if (!entry.label) {
@@ -397,7 +416,7 @@ export class PlayerService {
 
     return {
       ownership,
-      bindings: enrichedBindings,
+      bindings: enrichedBindings.map(({ status, ...rest }) => rest),
       minecraftProfiles: minecraftProfiles.map((profile) => ({
         id: profile.id,
         nickname: profile.nickname,
@@ -447,7 +466,7 @@ export class PlayerService {
       lastLogin: {
         at: profile?.user?.lastLoginAt?.toISOString() ?? null,
         ip: profile?.user?.lastLoginIp ?? null,
-        location: lastLoginLocation?.display ?? null,
+        location: lastLoginLocation?.raw ?? null,
       },
     };
   }
@@ -471,7 +490,7 @@ export class PlayerService {
       includeBoundLocation: true,
     });
     return {
-      bindings: enrichedBindings,
+      bindings: enrichedBindings.map(({ status, ...rest }) => rest),
       minecraftProfiles: minecraftProfiles.map((profile) => ({
         id: profile.id,
         nickname: profile.nickname,
@@ -720,11 +739,11 @@ export class PlayerService {
 
     return Promise.all(
       bindings.map(async (binding) => {
-        const account = await resolveAccount(binding.authmeUsername);
-        const lastLoginIp = normalizeIpAddress(account?.ip ?? null);
-        const regIp = normalizeIpAddress(account?.regip ?? null);
-        const [lastLoginLocation, regIpLocation, boundLocation] =
-          await Promise.all([
+      const account = await resolveAccount(binding.authmeUsername);
+      const lastLoginIp = normalizeIpAddress(account?.ip ?? null);
+      const regIp = normalizeIpAddress(account?.regip ?? null);
+      const [lastLoginLocation, regIpLocation, boundLocation] =
+        await Promise.all([
             this.lookupLocationWithCache(lastLoginIp, locationCache),
             this.lookupLocationWithCache(regIp, locationCache),
             includeBoundLocation
@@ -734,23 +753,51 @@ export class PlayerService {
                 )
               : Promise.resolve(null),
           ]);
-        return {
-          id: binding.id,
-          username: binding.authmeUsername,
-          realname: binding.authmeRealname,
-          uuid: binding.authmeUuid,
-          boundAt: binding.boundAt.toISOString(),
-          status: binding.status,
-          lastKnownLocation: includeBoundLocation
-            ? boundLocation?.display ?? null
-            : null,
-          lastLoginIp,
-          lastLoginLocation: lastLoginLocation?.display ?? null,
-          regIp,
-          regIpLocation: regIpLocation?.display ?? null,
+      return {
+        id: binding.id,
+        username: binding.authmeUsername,
+        realname: binding.authmeRealname,
+        uuid: binding.authmeUuid,
+        boundAt: binding.boundAt.toISOString(),
+        status: binding.status,
+        lastlogin: account?.lastlogin ?? null,
+        regdate: account?.regdate ?? null,
+        lastKnownLocation: includeBoundLocation
+          ? boundLocation?.raw ?? null
+          : null,
+        lastLoginLocation: lastLoginLocation?.raw ?? null,
+        regIpLocation: regIpLocation?.raw ?? null,
         };
       }),
     );
+  }
+
+  private async getPlayerStatusSnapshot(userId: string) {
+    const snapshot = await this.prisma.userStatusSnapshot.findUnique({
+      where: { userId },
+      include: {
+        event: true,
+      },
+    });
+    if (!snapshot) {
+      return null;
+    }
+    return {
+      userId: snapshot.userId,
+      status: snapshot.status,
+      updatedAt: snapshot.updatedAt.toISOString(),
+      statusEventId: snapshot.statusEventId,
+      event: snapshot.event
+        ? {
+            id: snapshot.event.id,
+            status: snapshot.event.status,
+            reasonCode: snapshot.event.reasonCode,
+            source: snapshot.event.source,
+            createdAt: snapshot.event.createdAt.toISOString(),
+            metadata: snapshot.event.metadata ?? null,
+          }
+        : null,
+    };
   }
 
   private normalizeProfileExtra(extra: unknown) {

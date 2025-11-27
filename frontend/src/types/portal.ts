@@ -87,6 +87,7 @@ export interface PlayerSummary {
   avatarUrl: string | null
   createdAt: string
   joinDate: string | null
+  birthday: string | null
   lastLoginAt: string | null
   lastLoginIp: string | null
   lastLoginLocation: string | null
@@ -113,11 +114,10 @@ export interface PlayerSummary {
     realname: string | null
     uuid: string | null
     boundAt: string
-    status: string
+    lastlogin: number | null
+    regdate: number | null
     lastKnownLocation: string | null
-    lastLoginIp: string | null
     lastLoginLocation: string | null
-    regIp: string | null
     regIpLocation: string | null
   }>
   ownership: PortalOwnershipOverview
@@ -209,6 +209,21 @@ export interface PlayerStatsResponse {
   }>
 }
 
+export interface PlayerStatusSnapshot {
+  userId: string
+  status: string
+  updatedAt: string
+  statusEventId: string
+  event: {
+    id: string
+    status: string
+    reasonCode: string | null
+    source: string
+    createdAt: string
+    metadata: unknown | null
+  } | null
+}
+
 export interface PlayerPortalProfileResponse {
   viewerId: string | null
   targetId: string
@@ -218,6 +233,7 @@ export interface PlayerPortalProfileResponse {
   region: PlayerRegionResponse
   minecraft: PlayerMinecraftResponse
   stats: PlayerStatsResponse
+  statusSnapshot: PlayerStatusSnapshot | null
 }
 
 export interface RankCategoryInfo {

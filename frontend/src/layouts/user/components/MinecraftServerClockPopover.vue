@@ -302,7 +302,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
 <template>
   <UPopover mode="hover" :popper="{ placement: 'bottom-start' }">
     <div
-      class="flex items-center gap-2 font-mono rounded-full border border-slate-200/70 px-3 py-1.5 text-xs text-slate-500 dark:border-slate-700 hover:bg-slate-200/40 dark:hover:bg-slate-700/40 transition duration-300 cursor-pointer"
+      class="absolute top-[calc(100%+0.5rem)] left-1/2 -translate-x-1/2 md:translate-0 md:static flex items-center gap-2 font-mono rounded-full border border-slate-400/50 md:border-slate-200/70 px-3 py-1.5 text-xs text-slate-500 dark:border-slate-500/60 md:dark:border-slate-700 bg-slate-100 dark:bg-slate-800 md:bg-transparent md:dark:bg-transparent md:hover:bg-slate-200/40 md:dark:hover:bg-slate-700/40 transition duration-300 cursor-pointer"
     >
       <div
         ref="serversHeaderContainer"
@@ -320,10 +320,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
               :animate="{ opacity: 1, filter: 'blur(0px)', y: 0 }"
               :transition="{ duration: 0.35, ease: 'easeInOut' }"
             >
-              <UIcon
-                :name="headerIcon()"
-                class="h-3 w-3 text-slate-400"
-              />
+              <UIcon :name="headerIcon()" class="h-3 w-3 text-slate-400" />
               <span class="font-medium text-slate-900 dark:text-white">
                 {{ item.displayName }}
               </span>
@@ -383,7 +380,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
           </div>
 
           <div class="space-y-2">
-          <div
+            <div
               v-for="item in servers"
               :key="item.id"
               :class="[
@@ -421,9 +418,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
                     ]"
                   />
                   <span>
-                    <template v-if="isServerFrozen(item)">
-                      服卡死了
-                    </template>
+                    <template v-if="isServerFrozen(item)"> 服卡死了 </template>
                     <template v-else>
                       {{ latencyLabel(item) }} · {{ onlineLabel(item) }} ·
                       {{ mcsmStatusLabel(item) }}

@@ -849,7 +849,7 @@ onMounted(async () => {
       class="hidden"
       accept="image/*"
       @change="handleAvatarFileChange"
-    >
+    />
     <UserDetailSectionProfile
       :detail="detail"
       :profile-form="profileForm"
