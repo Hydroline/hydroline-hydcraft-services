@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, watch, nextTick } from 'vue'
+import dayjs from 'dayjs'
+import JsBarcode from 'jsbarcode'
 import type {
   PlayerActionsResponse,
   PlayerMinecraftResponse,
@@ -35,6 +37,41 @@ const statsPeriodModel = computed({
 })
 
 const showAuthmeBindingsModal = ref(false)
+const barcodeCanvas = ref<HTMLCanvasElement | null>(null)
+
+const generateBarcode = async () => {
+  await nextTick()
+
+  const canvas = barcodeCanvas.value
+  const piic = props.summary?.piic
+
+  if (!canvas || !piic) {
+    return
+  }
+
+  try {
+    JsBarcode(canvas, piic, {
+      format: 'CODE128',
+      height: 40,
+      displayValue: false,
+      background: 'transparent',
+    })
+  } catch (error) {
+    console.error('Failed to generate PIIC barcode', error)
+  }
+}
+
+watch(
+  [() => props.summary?.piic, () => barcodeCanvas.value],
+  () => {
+    void generateBarcode()
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  void generateBarcode()
+})
 </script>
 
 <template>
@@ -93,7 +130,7 @@ const showAuthmeBindingsModal = ref(false)
                   {{ props.summary.authmeBindings[0]?.realname }}
                 </span>
               </p>
-              <p class="text-xs text-slate-500 dark:text-slate-400">
+              <p class="text-xs text-slate-500 dark:text-slate-500">
                 {{ props.summary.id }}
               </p>
             </div>
@@ -103,23 +140,78 @@ const showAuthmeBindingsModal = ref(false)
 
       <div v-if="props.summary">
         <div
-          class="grid grid-cols-1 gap-3 text-sm text-slate-700 dark:text-slate-200"
+          class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-200"
         >
-          <div>
-            <dt class="text-xs text-slate-500 dark:text-slate-400">注册时间</dt>
-            <dd>{{ props.formatDateTime(props.summary.createdAt) }}</dd>
+          <div class="col-span-1 md:col-span-2" v-if="props.summary.piic">
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              PIIC
+            </div>
+            <div class="flex flex-col justify-center items-center select-none">
+              <div>
+                <canvas
+                  ref="barcodeCanvas"
+                  class="object-cover w-full h-full dark:filter-[invert(1)]"
+                >
+                </canvas>
+              </div>
+              <div
+                class="text-sm font-semibold text-slate-800 dark:text-slate-300 -mt-1"
+              >
+                {{ props.summary.piic || '未生成' }}
+              </div>
+            </div>
           </div>
+
           <div>
-            <dt class="text-xs text-slate-500 dark:text-slate-400">最近登录</dt>
-            <dd>
-              {{ props.formatDateTime(props.summary.lastLoginAt) }}
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              用户名
+            </div>
+            <div
+              class="text-base font-semibold text-slate-800 dark:text-slate-300"
+            >
+              {{ props.summary.displayName }}
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              入服时间
+            </div>
+            <div
+              class="text-base font-semibold text-slate-800 dark:text-slate-300"
+            >
+              {{ dayjs(props.summary.joinDate).format('YYYY/MM/DD') }}
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              注册时间
+            </div>
+            <div
+              class="text-base font-semibold text-slate-800 dark:text-slate-300"
+            >
+              {{ props.formatDateTime(props.summary.createdAt) }}
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              最近登录
+            </div>
+            <div
+              class="text-base font-semibold text-slate-800 dark:text-slate-300 flex flex-col"
+            >
+              <span>
+                {{ props.formatDateTime(props.summary.lastLoginAt) }}
+              </span>
               <span
                 v-if="props.summary.lastLoginLocation"
-                class="text-xs text-slate-500 dark:text-slate-400"
+                class="text-xs font-normal text-slate-500 dark:text-slate-500"
               >
-                · {{ props.summary.lastLoginLocation }}
+                {{ props.summary.lastLoginLocation }}
               </span>
-            </dd>
+            </div>
           </div>
 
           <RouterLink
@@ -146,7 +238,7 @@ const showAuthmeBindingsModal = ref(false)
             <p class="font-semibold text-slate-900 dark:text-white">
               {{ item.action }}
             </p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
+            <p class="text-xs text-slate-500 dark:text-slate-500">
               {{ props.formatDateTime(item.createdAt) }}
             </p>
             <p
@@ -187,7 +279,7 @@ const showAuthmeBindingsModal = ref(false)
         </p>
         <div v-if="props.ownership" class="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
+            <p class="text-xs text-slate-500 dark:text-slate-500">
               AuthMe 绑定
             </p>
             <p class="text-2xl font-semibold text-slate-900 dark:text-white">
@@ -195,23 +287,19 @@ const showAuthmeBindingsModal = ref(false)
             </p>
           </div>
           <div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
-              Minecraft 档案
+            <p class="text-xs text-slate-500 dark:text-slate-500">
+              权限组
             </p>
             <p class="text-2xl font-semibold text-slate-900 dark:text-white">
-              {{ props.ownership.minecraftProfiles }}
-            </p>
-          </div>
-          <div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">公司/铁路</p>
-            <p class="text-2xl font-semibold text-slate-900 dark:text-white">
-              {{ props.ownership.companyCount + props.ownership.railwayCount }}
+              {{ props.ownership.permissionGroups }}
             </p>
           </div>
           <div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">角色授权</p>
+            <p class="text-xs text-slate-500 dark:text-slate-500">
+              RBAC 标签
+            </p>
             <p class="text-2xl font-semibold text-slate-900 dark:text-white">
-              {{ props.ownership.roleAssignments }}
+              {{ props.ownership.rbacLabels }}
             </p>
           </div>
         </div>
@@ -238,8 +326,26 @@ const showAuthmeBindingsModal = ref(false)
             <p class="font-semibold text-slate-900 dark:text-white">
               {{ binding.username }}
             </p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
+            <p class="text-xs text-slate-500 dark:text-slate-500">
               绑定时间：{{ props.formatDateTime(binding.boundAt) }}
+            </p>
+            <p
+              v-if="binding.lastLoginIp"
+              class="text-xs text-slate-500 dark:text-slate-400"
+            >
+              最后登录 IP：{{ binding.lastLoginIp }}
+              <span v-if="binding.lastLoginLocation">
+                （{{ binding.lastLoginLocation }}）
+              </span>
+            </p>
+            <p
+              v-if="binding.regIp"
+              class="text-xs text-slate-500 dark:text-slate-400"
+            >
+              注册 IP：{{ binding.regIp }}
+              <span v-if="binding.regIpLocation">
+                （{{ binding.regIpLocation }}）
+              </span>
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -279,7 +385,7 @@ const showAuthmeBindingsModal = ref(false)
             :key="metric.id"
             class="rounded-xl border border-slate-200/70 p-3 dark:border-slate-800/70"
           >
-            <p class="text-xs text-slate-500 dark:text-slate-400">
+            <p class="text-xs text-slate-500 dark:text-slate-500">
               {{ metric.label }}
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
@@ -371,7 +477,7 @@ const showAuthmeBindingsModal = ref(false)
                 {{ binding.status }}
               </span>
             </div>
-            <div class="space-y-1 text-xs text-slate-500 dark:text-slate-400">
+            <div class="space-y-1 text-xs text-slate-500 dark:text-slate-500">
               <p>
                 UUID: <span class="font-mono">{{ binding.uuid }}</span>
               </p>

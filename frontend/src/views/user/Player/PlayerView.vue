@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerPortalStore } from '@/stores/playerPortal'
 import { apiFetch } from '@/utils/api'
-import type { PlayerLoginCluster } from '@/types/portal'
 import PlayerLoginPrompt from './components/PlayerLoginPrompt.vue'
 import PlayerProfileContent from './components/PlayerProfileContent.vue'
 import PlayerPermissionDialog from './components/PlayerPermissionDialog.vue'
@@ -49,10 +49,6 @@ const isViewingSelf = computed(() => {
 
 const summary = computed(() => playerStore.summary)
 const ownership = computed(() => summary.value?.ownership ?? null)
-const loginMap = computed(() => playerStore.loginMap)
-const loginClusters = computed<PlayerLoginCluster[]>(
-  () => playerStore.loginMap?.clusters ?? [],
-)
 
 const assets = computed(() => playerStore.assets)
 const region = computed(() => playerStore.region)
@@ -187,8 +183,7 @@ async function submitRestartRequest() {
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—'
-  const date = new Date(value)
-  return date.toLocaleString()
+  return dayjs(value).format('YYYY/MM/DD HH:mm:ss')
 }
 
 function formatMetricValue(value: number, unit: string) {

@@ -16,6 +16,8 @@ import { BeaconLibService } from '../lib/hydroline-beacon';
 import { IpLocationService } from '../lib/ip2region/ip-location.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { buildPublicUrl } from '../lib/shared/url';
+import { AuthmeService } from '../authme/authme.service';
+import { normalizeIpAddress } from '../lib/ip2region/ip-normalizer';
 import {
   DEFAULT_PORTAL_HOME_CONFIG,
   PORTAL_CARD_REGISTRY,
@@ -132,11 +134,9 @@ type PortalServerOverview = {
 };
 
 type PortalOwnershipOverview = {
-  companyCount: number;
-  railwayCount: number;
   authmeBindings: number;
-  minecraftProfiles: number;
-  roleAssignments: number;
+  permissionGroups: number;
+  rbacLabels: number;
 };
 
 type PortalApplicationOverview = {
@@ -272,6 +272,7 @@ export class PortalService {
     private readonly beaconLib: BeaconLibService,
     private readonly ipLocationService: IpLocationService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly authmeService: AuthmeService,
   ) {}
 
   /**
@@ -351,10 +352,9 @@ export class PortalService {
       Math.max(options.actionsPageSize ?? 10, 1),
       50,
     );
-    const [summary, loginMap, assets, region, minecraft, stats, actions] =
+    const [summary, assets, region, minecraft, stats, actions] =
       await Promise.all([
         this.getPlayerSummary(targetUserId),
-        this.getPlayerLoginMap(targetUserId, {}),
         this.getPlayerAssets(targetUserId),
         this.getPlayerRegion(targetUserId),
         this.getPlayerMinecraftData(targetUserId),
@@ -368,7 +368,6 @@ export class PortalService {
       viewerId,
       targetId: targetUserId,
       summary,
-      loginMap,
       assets,
       region,
       minecraft,
@@ -414,11 +413,9 @@ export class PortalService {
       return {
         serverOverview,
         ownershipOverview: {
-          companyCount: 0,
-          railwayCount: 0,
           authmeBindings: 0,
-          minecraftProfiles: 0,
-          roleAssignments: 0,
+          permissionGroups: 0,
+          rbacLabels: 0,
         },
         applicationOverview: {
           pendingContacts: 0,
@@ -508,17 +505,15 @@ export class PortalService {
   private async computeOwnershipOverview(
     userId: string,
   ): Promise<PortalOwnershipOverview> {
-    const [bindings, minecraftProfiles, roles] = await Promise.all([
+    const [bindings, permissionGroups, labels] = await Promise.all([
       this.prisma.userAuthmeBinding.count({ where: { userId } }),
-      this.prisma.userMinecraftProfile.count({ where: { userId } }),
       this.prisma.userRole.count({ where: { userId } }),
+      this.prisma.userPermissionLabel.count({ where: { userId } }),
     ]);
     return {
-      companyCount: 0,
-      railwayCount: 0,
       authmeBindings: bindings,
-      minecraftProfiles,
-      roleAssignments: roles,
+      permissionGroups,
+      rbacLabels: labels,
     };
   }
 
@@ -589,6 +584,107 @@ export class PortalService {
       score,
       label: `${filled}/${fields.length}`,
     };
+  }
+
+  private async fetchAuthmeAccount(username?: string | null) {
+    if (!username) {
+      return null;
+    }
+    try {
+      return await this.authmeService.getAccount(username);
+    } catch (error) {
+      this.logger.debug(
+        `无法获取 AuthMe 账号 ${username}: ${String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  private async lookupLocationWithCache(
+    ip: string | null | undefined,
+    cache: Map<
+      string,
+      Awaited<ReturnType<IpLocationService['lookup']>> | null
+    >,
+  ) {
+    const normalized = normalizeIpAddress(ip);
+    if (!normalized) {
+      return null;
+    }
+    if (cache.has(normalized)) {
+      return cache.get(normalized) ?? null;
+    }
+    const location = await this.ipLocationService.lookup(normalized);
+    cache.set(normalized, location);
+    return location;
+  }
+
+  private async buildAuthmeBindingPayloads(
+    bindings: Array<{
+      id: string;
+      authmeUsername: string;
+      authmeRealname: string | null;
+      authmeUuid: string | null;
+      boundAt: Date;
+      status: string;
+      boundByIp?: string | null;
+    }>,
+    options: { includeBoundLocation?: boolean } = {},
+  ) {
+    const includeBoundLocation = Boolean(options.includeBoundLocation);
+    const accountCache = new Map<
+      string,
+      Awaited<ReturnType<AuthmeService['getAccount']>> | null
+    >();
+    const locationCache = new Map<
+      string,
+      Awaited<ReturnType<IpLocationService['lookup']>> | null
+    >();
+
+    const resolveAccount = async (username?: string | null) => {
+      if (!username) return null;
+      const key = username.toLowerCase();
+      if (accountCache.has(key)) {
+        return accountCache.get(key) ?? null;
+      }
+      const account = await this.fetchAuthmeAccount(username);
+      accountCache.set(key, account);
+      return account;
+    };
+
+    return Promise.all(
+      bindings.map(async (binding) => {
+        const account = await resolveAccount(binding.authmeUsername);
+        const lastLoginIp = normalizeIpAddress(account?.ip ?? null);
+        const regIp = normalizeIpAddress(account?.regip ?? null);
+        const [lastLoginLocation, regIpLocation, boundLocation] =
+          await Promise.all([
+            this.lookupLocationWithCache(lastLoginIp, locationCache),
+            this.lookupLocationWithCache(regIp, locationCache),
+            includeBoundLocation
+              ? this.lookupLocationWithCache(
+                  binding.boundByIp ?? null,
+                  locationCache,
+                )
+              : Promise.resolve(null),
+          ]);
+        return {
+          id: binding.id,
+          username: binding.authmeUsername,
+          realname: binding.authmeRealname,
+          uuid: binding.authmeUuid,
+          boundAt: binding.boundAt.toISOString(),
+          status: binding.status,
+          lastKnownLocation: includeBoundLocation
+            ? boundLocation?.display ?? null
+            : null,
+          lastLoginIp,
+          lastLoginLocation: lastLoginLocation?.display ?? null,
+          regIp,
+          regIpLocation: regIpLocation?.display ?? null,
+        };
+      }),
+    );
   }
 
   private normalizeProfileExtra(extra: unknown) {
@@ -1162,21 +1258,9 @@ export class PortalService {
         authmeBindingId: profile.authmeBindingId,
         verifiedAt: profile.verifiedAt?.toISOString() ?? null,
       })),
-      authmeBindings: await Promise.all(
-        user.authmeBindings.map(async (binding) => {
-          const bindLocation = await this.ipLocationService.lookup(
-            binding.boundByIp ?? null,
-          );
-          return {
-            id: binding.id,
-            username: binding.authmeUsername,
-            realname: binding.authmeRealname,
-            uuid: binding.authmeUuid,
-            boundAt: binding.boundAt.toISOString(),
-            status: binding.status,
-            lastKnownLocation: bindLocation?.display ?? null,
-          };
-        }),
+      authmeBindings: await this.buildAuthmeBindingPayloads(
+        user.authmeBindings,
+        { includeBoundLocation: true },
       ),
       ownership,
     };
@@ -1333,17 +1417,13 @@ export class PortalService {
       }),
       this.computeOwnershipOverview(userId),
     ]);
+    const enrichedBindings = await this.buildAuthmeBindingPayloads(bindings, {
+      includeBoundLocation: true,
+    });
 
     return {
       ownership,
-      bindings: bindings.map((binding) => ({
-        id: binding.id,
-        username: binding.authmeUsername,
-        realname: binding.authmeRealname,
-        uuid: binding.authmeUuid,
-        status: binding.status,
-        boundAt: binding.boundAt.toISOString(),
-      })),
+      bindings: enrichedBindings,
       minecraftProfiles: minecraftProfiles.map((profile) => ({
         id: profile.id,
         nickname: profile.nickname,
@@ -1413,15 +1493,11 @@ export class PortalService {
         include: { role: true },
       }),
     ]);
+    const enrichedBindings = await this.buildAuthmeBindingPayloads(bindings, {
+      includeBoundLocation: true,
+    });
     return {
-      bindings: bindings.map((binding) => ({
-        id: binding.id,
-        username: binding.authmeUsername,
-        realname: binding.authmeRealname,
-        uuid: binding.authmeUuid,
-        status: binding.status,
-        boundAt: binding.boundAt.toISOString(),
-      })),
+      bindings: enrichedBindings,
       minecraftProfiles: minecraftProfiles.map((profile) => ({
         id: profile.id,
         nickname: profile.nickname,

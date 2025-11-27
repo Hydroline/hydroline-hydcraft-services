@@ -59,11 +59,9 @@ export interface PortalServerOverview {
 }
 
 export interface PortalOwnershipOverview {
-  companyCount: number
-  railwayCount: number
   authmeBindings: number
-  minecraftProfiles: number
-  roleAssignments: number
+  permissionGroups: number
+  rbacLabels: number
 }
 
 export interface PortalApplicationOverview {
@@ -117,6 +115,10 @@ export interface PlayerSummary {
     boundAt: string
     status: string
     lastKnownLocation: string | null
+    lastLoginIp: string | null
+    lastLoginLocation: string | null
+    regIp: string | null
+    regIpLocation: string | null
   }>
   ownership: PortalOwnershipOverview
 }
@@ -205,7 +207,6 @@ export interface PlayerPortalProfileResponse {
   viewerId: string | null
   targetId: string
   summary: PlayerSummary
-  loginMap: PlayerLoginMap
   actions: PlayerActionsResponse
   assets: PlayerAssetsResponse
   region: PlayerRegionResponse

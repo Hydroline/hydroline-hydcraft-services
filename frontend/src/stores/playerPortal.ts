@@ -4,7 +4,6 @@ import { useAuthStore } from '@/stores/auth'
 import type {
   PlayerActionsResponse,
   PlayerAssetsResponse,
-  PlayerLoginMap,
   PlayerMinecraftResponse,
   PlayerPortalProfileResponse,
   PlayerRegionResponse,
@@ -19,7 +18,6 @@ type RankCategoryInfo = import('@/types/portal').RankCategoryInfo
 export const usePlayerPortalStore = defineStore('player-portal', {
   state: () => ({
     summary: null as PlayerSummary | null,
-    loginMap: null as PlayerLoginMap | null,
     actions: null as PlayerActionsResponse | null,
     assets: null as PlayerAssetsResponse | null,
     region: null as PlayerRegionResponse | null,
@@ -57,7 +55,6 @@ export const usePlayerPortalStore = defineStore('player-portal', {
           { token: this.authToken() ?? undefined },
         )
         this.summary = response.summary
-        this.loginMap = response.loginMap
         this.actions = response.actions
         this.assets = response.assets
         this.region = response.region
@@ -169,7 +166,6 @@ export const usePlayerPortalStore = defineStore('player-portal', {
     },
     reset() {
       this.summary = null
-      this.loginMap = null
       this.actions = null
       this.assets = null
       this.region = null
