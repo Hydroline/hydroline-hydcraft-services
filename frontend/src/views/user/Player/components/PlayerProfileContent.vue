@@ -675,18 +675,20 @@ onMounted(() => {
                       </div>
                     </template>
 
-                    <div
-                      class="line-clamp-1 truncate text-xl font-semibold text-slate-900 dark:text-white"
-                    >
-                      {{ binding.realname }}
-                    </div>
+                    <div>
+                      <div
+                        class="line-clamp-1 truncate text-xl font-semibold text-slate-900 dark:text-white"
+                      >
+                        {{ binding.realname }}
+                      </div>
 
-                    <div
-                      v-if="binding.lastlogin"
-                      class="text-xs text-slate-500 dark:text-slate-500"
-                    >
-                      {{ dayjs().diff(dayjs(binding.lastlogin), 'day') }}
-                      天前登录过
+                      <div
+                        v-if="binding.lastlogin"
+                        class="text-xs text-slate-500 dark:text-slate-500"
+                      >
+                        {{ dayjs().diff(dayjs(binding.lastlogin), 'day') }}
+                        天前登录过
+                      </div>
                     </div>
                   </UPopover>
                 </div>
