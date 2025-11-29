@@ -115,6 +115,7 @@ export async function oauthProxyFetch(
       init.body instanceof URLSearchParams
         ? init.body.toString()
         : (init.body as any),
+    key: proxyKey,
   };
 
   try {
@@ -122,7 +123,6 @@ export async function oauthProxyFetch(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-proxy-key': proxyKey,
       },
       body: JSON.stringify(proxyRequestBody),
     });
