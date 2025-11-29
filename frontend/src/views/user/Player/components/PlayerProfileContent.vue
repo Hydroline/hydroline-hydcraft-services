@@ -41,10 +41,13 @@ const emit = defineEmits<{
 }>()
 
 function resolveBindingIdentifier(
-  binding: {
-    username: string
-    realname?: string | null
-  } | null | undefined,
+  binding:
+    | {
+        username: string
+        realname?: string | null
+      }
+    | null
+    | undefined,
 ) {
   if (!binding) return null
   const trimmedRealname = binding.realname?.trim()
@@ -101,9 +104,9 @@ async function updateSkinViewer(bindingId: string, playerIdentifier: string) {
         canvas,
         width,
         height,
-          skin: `https://mc-heads.hydcraft.cn/skin/${encodeURIComponent(
-            playerIdentifier,
-          )}`,
+        skin: `https://mc-heads.hydcraft.cn/skin/${encodeURIComponent(
+          playerIdentifier,
+        )}`,
       })
       instance.autoRotate = true
       instance.zoom = 0.95
@@ -313,7 +316,7 @@ onMounted(() => {
 
 <template>
   <div class="mt-8 grid gap-8 lg:grid-cols-[320px_1fr]">
-    <div class="space-y-8">
+    <div class="space-y-7 pt-6">
       <div>
         <div v-if="props.summary" class="space-y-3">
           <div class="flex flex-col gap-3">
@@ -424,38 +427,6 @@ onMounted(() => {
                 </UBadge>
               </div>
             </div>
-
-            <div class="mt-2 grid grid-cols-2 gap-2 items-center">
-              <UButton
-                v-if="!props.isViewingSelf"
-                class="justify-center items-center"
-                color="primary"
-                variant="solid"
-              >
-                <UIcon name="i-lucide-message-square" />
-                私信
-              </UButton>
-
-              <RouterLink v-else to="/profile/basic">
-                <UButton
-                  class="justify-center items-center w-full"
-                  color="primary"
-                  variant="solid"
-                >
-                  <UIcon name="i-lucide-pencil-line" />
-                  修改用户信息
-                </UButton>
-              </RouterLink>
-
-              <UButton
-                class="justify-center items-center"
-                color="primary"
-                variant="soft"
-              >
-                <UIcon name="i-lucide-message-circle-plus" />
-                留言板
-              </UButton>
-            </div>
           </div>
         </div>
         <USkeleton v-else class="h-160 w-full" />
@@ -463,7 +434,7 @@ onMounted(() => {
 
       <div v-if="props.summary">
         <div
-          class="flex flex-col p-2 pb-1 mb-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 backdrop-blur dark:bg-slate-600/30 select-none"
+          class="flex flex-col p-2.5 pb-1.5 mb-4 rounded-lg border border-slate-300/75 dark:border-slate-600/75 select-none"
           v-if="props.summary"
         >
           <div class="justify-center items-center select-none">
@@ -597,6 +568,38 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <div class="grid grid-cols-2 gap-2 items-center">
+        <UButton
+          v-if="!props.isViewingSelf"
+          class="justify-center items-center"
+          color="primary"
+          variant="soft"
+        >
+          <UIcon name="i-lucide-message-square" />
+          私信
+        </UButton>
+
+        <RouterLink v-else to="/profile/basic">
+          <UButton
+            class="justify-center items-center w-full"
+            color="primary"
+            variant="soft"
+          >
+            <UIcon name="i-lucide-pencil-line" />
+            修改用户信息
+          </UButton>
+        </RouterLink>
+
+        <UButton
+          class="justify-center items-center"
+          color="primary"
+          variant="outline"
+        >
+          <UIcon name="i-lucide-message-circle-plus" />
+          留言板
+        </UButton>
+      </div>
     </div>
 
     <div class="grid md:grid-cols-2 gap-4">
@@ -623,7 +626,7 @@ onMounted(() => {
               <div
                 v-for="binding in props.summary.authmeBindings"
                 :key="binding.id"
-                class="w-42 rounded-xl p-3 bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800"
+                class="w-42 rounded-xl p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800"
               >
                 <div class="flex justify-center items-center gap-3">
                   <canvas
@@ -756,7 +759,7 @@ onMounted(() => {
               <div
                 v-for="profile in props.minecraft.minecraftProfiles"
                 :key="profile.id"
-                class="text-sm font-medium w-full rounded-xl p-3 bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800"
+                class="text-sm font-medium w-full rounded-xl p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800"
               >
                 {{ profile.nickname || '未设置' }}
               </div>
@@ -774,7 +777,7 @@ onMounted(() => {
           <div v-if="props.isViewingSelf">
             <div class="grid gap-3 md:grid-cols-1">
               <UButton
-                class="justify-center rounded-xl bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
+                class="justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
                 color="neutral"
                 variant="soft"
                 @click="emit('authme-reset')"
@@ -782,7 +785,7 @@ onMounted(() => {
                 AuthMe 密码重置
               </UButton>
               <UButton
-                class="justify-center rounded-xl bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
+                class="justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
                 color="neutral"
                 variant="soft"
                 @click="emit('force-login')"
@@ -790,7 +793,7 @@ onMounted(() => {
                 强制登陆
               </UButton>
               <UButton
-                class="justify-center rounded-xl bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
+                class="justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
                 color="neutral"
                 variant="soft"
                 @click="emit('open-permission-dialog')"
@@ -798,7 +801,7 @@ onMounted(() => {
                 权限组调整申请
               </UButton>
               <UButton
-                class="justify-center rounded-xl bg-white/90 backdrop-blur dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
+                class="justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
                 color="neutral"
                 variant="soft"
                 @click="emit('open-restart-dialog')"
