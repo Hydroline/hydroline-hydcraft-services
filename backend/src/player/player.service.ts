@@ -19,6 +19,7 @@ import type {
   PortalOwnershipOverview,
   PlayerLuckpermsSnapshot,
 } from './player.types';
+import { PlayerAutomationService } from './player-automation.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_LOGIN_MAP_RANGE_DAYS = 30;
@@ -33,6 +34,7 @@ export class PlayerService {
     private readonly attachmentsService: AttachmentsService,
     private readonly authmeService: AuthmeService,
     private readonly luckpermsService: LuckpermsService,
+    private readonly automation: PlayerAutomationService,
   ) {}
 
   async getPlayerPortalData(viewerId: string | null, targetUserId: string) {
@@ -565,70 +567,112 @@ export class PlayerService {
     };
   }
 
-  async submitAuthmeResetRequest(userId: string, reason?: string | null) {
-    const bindingCount = await this.prisma.userAuthmeBinding.count({
-      where: { userId },
-    });
-    if (bindingCount === 0) {
-      throw new BadRequestException('未找到有效的 AuthMe 绑定');
+  async submitAuthmeResetRequest(
+    userId: string,
+    payload: {
+      serverId: string;
+      password: string;
+      bindingId?: string | null;
+      reason?: string | null;
+    },
+  ) {
+    if (!payload.serverId?.trim()) {
+      throw new BadRequestException('请选择服务器');
     }
-    const event = await this.prisma.userLifecycleEvent.create({
-      data: {
-        userId,
-        eventType: LifecycleEventType.OTHER,
-        occurredAt: new Date(),
-        source: 'portal.player.authme-reset',
-        notes: this.toNullableString(reason),
-        metadata: {
-          reason: this.toNullableString(reason),
-        },
-      },
-    });
-    return { success: true, requestId: event.id };
+    if (!payload.password || payload.password.trim().length < 6) {
+      throw new BadRequestException('请输入至少 6 位的新密码');
+    }
+    return this.automation.submitAuthmePasswordReset(userId, payload);
   }
 
-  async submitAuthmeForceLogin(userId: string, reason?: string | null) {
-    const bindingCount = await this.prisma.userAuthmeBinding.count({
-      where: { userId },
-    });
-    if (bindingCount === 0) {
-      throw new BadRequestException('未找到有效的 AuthMe 绑定');
+  async submitAuthmeForceLogin(
+    userId: string,
+    payload: {
+      serverId: string;
+      bindingId?: string | null;
+      reason?: string | null;
+    },
+  ) {
+    if (!payload.serverId?.trim()) {
+      throw new BadRequestException('请选择服务器');
     }
-    const event = await this.prisma.userLifecycleEvent.create({
-      data: {
-        userId,
-        eventType: LifecycleEventType.OTHER,
-        occurredAt: new Date(),
-        source: 'portal.player.force-login',
-        notes: this.toNullableString(reason),
-        metadata: {
-          reason: this.toNullableString(reason),
-        },
-      },
-    });
-    return { success: true, requestId: event.id };
+    return this.automation.submitAuthmeForceLogin(userId, payload);
   }
 
   async submitPermissionChangeRequest(
     userId: string,
-    payload: { targetGroup: string; reason?: string },
+    payload: {
+      targetGroup: string;
+      serverId: string;
+      bindingId?: string | null;
+      reason?: string | null;
+    },
   ) {
     const sanitized = this.toNullableString(payload.targetGroup);
     if (!sanitized) {
       throw new BadRequestException('请选择目标权限组');
     }
-    const log = await this.prisma.adminAuditLog.create({
-      data: {
-        actorId: userId,
-        action: 'portal.player.permission.request',
-        targetType: 'permission-group',
-        targetId: sanitized,
-        payload: {
-          reason: this.toNullableString(payload.reason),
-        },
-      },
+    if (!payload.serverId?.trim()) {
+      throw new BadRequestException('请选择服务器');
+    }
+    return this.automation.submitPermissionGroupAdjustment(userId, {
+      ...payload,
+      targetGroup: sanitized,
     });
-    return { success: true, requestId: log.id };
+  }
+
+  async getLifecycleEvents(
+    userId: string,
+    options: { sources?: string[]; limit?: number },
+  ) {
+    return this.automation.listLifecycleEvents(userId, options);
+  }
+
+  async getPermissionAdjustmentOptions(userId: string, bindingId?: string) {
+    if (!this.luckpermsService.isEnabled()) {
+      return {
+        currentGroup: null,
+        currentGroupLabel: null,
+        options: [],
+      } as const;
+    }
+    const binding = await this.prisma.userAuthmeBinding.findFirst({
+      where: bindingId ? { id: bindingId, userId } : { userId },
+      orderBy: { boundAt: 'desc' },
+    });
+    if (!binding) {
+      throw new BadRequestException('未找到有效的 AuthMe 绑定');
+    }
+    const snapshot = await this.buildLuckpermsSnapshotForBinding(
+      {
+        authmeUsername: binding.authmeUsername,
+        authmeRealname: binding.authmeRealname,
+        authmeUuid: binding.authmeUuid,
+      },
+      new Map(),
+      new Map(),
+    );
+    const priorityEntries = this.luckpermsService.getGroupPriorityEntries();
+    const currentGroup = snapshot.primaryGroup;
+    const currentPriority = currentGroup
+      ? this.luckpermsService.getGroupPriority(currentGroup)
+      : null;
+    const options = priorityEntries
+      .filter((entry) =>
+        currentPriority == null ? true : entry.priority >= currentPriority,
+      )
+      .sort((a, b) => a.priority - b.priority)
+      .map((entry) => ({
+        value: entry.group,
+        label:
+          this.luckpermsService.getGroupDisplayName(entry.group) ?? entry.group,
+        priority: entry.priority,
+      }));
+    return {
+      currentGroup,
+      currentGroupLabel: snapshot.primaryGroupDisplayName,
+      options,
+    } as const;
   }
 
   async submitServerRestartRequest(

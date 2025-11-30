@@ -197,7 +197,7 @@ const routerPush = (path: string) => {
 </script>
 
 <template>
-  <div class="relative min-h-screen bg-white dark:bg-slate-950">
+  <div class="relative min-h-screen">
     <AppLoadingBar />
     <AuthDialog />
 

@@ -12,6 +12,7 @@ import {
   LUCKPERMS_DEFAULT_SAFE_MESSAGE,
   LUCKPERMS_DISPLAY_NAMESPACE,
   LUCKPERMS_GROUP_LABELS_KEY,
+  LUCKPERMS_GROUP_PRIORITIES_KEY,
 } from './luckperms.constants';
 import { LuckpermsDbConfig } from './luckperms.config';
 import type {
@@ -43,6 +44,12 @@ interface GroupLabelsState {
   meta: ConfigEntryMeta | null;
 }
 
+interface GroupPrioritiesState {
+  signature: string;
+  record: Record<string, number>;
+  meta: ConfigEntryMeta | null;
+}
+
 @Injectable()
 export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LuckpermsService.name);
@@ -55,6 +62,10 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
   private groupLabelRecord: Record<string, string> = {};
   private groupLabelLowercase: Record<string, string> = {};
   private groupLabelMeta: ConfigEntryMeta | null = null;
+  private groupPrioritySignature: string | null = null;
+  private groupPriorityRecord: Record<string, number> = {};
+  private groupPriorityLowercase: Record<string, number> = {};
+  private groupPriorityMeta: ConfigEntryMeta | null = null;
 
   constructor(
     @Inject(ConfigService) private readonly configService: ConfigService,
@@ -197,6 +208,23 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  async getGroupPrioritySnapshot() {
+    if (!this.groupPrioritySignature) {
+      await this.refreshState();
+    }
+    const meta = this.groupPriorityMeta
+      ? {
+          id: this.groupPriorityMeta.id,
+          version: this.groupPriorityMeta.version,
+          updatedAt: this.groupPriorityMeta.updatedAt,
+        }
+      : null;
+    return {
+      entries: this.getGroupPriorityEntries(),
+      meta,
+    };
+  }
+
   async upsertGroupLabels(
     entries: Array<{ group: string; label: string }>,
     userId?: string,
@@ -233,6 +261,42 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
     await this.refreshState(false);
   }
 
+  async upsertGroupPriorities(
+    entries: Array<{ group: string; priority: number }>,
+    userId?: string,
+  ) {
+    const namespace = await this.configService.ensureNamespaceByKey(
+      LUCKPERMS_DISPLAY_NAMESPACE,
+      {
+        name: 'LuckPerms Group Display',
+        description: 'Rendered display text for LuckPerms permission groups',
+      },
+    );
+    const normalized = this.normalizeGroupPriorityEntries(entries);
+    const entry = await this.configService.getEntry(
+      LUCKPERMS_DISPLAY_NAMESPACE,
+      LUCKPERMS_GROUP_PRIORITIES_KEY,
+    );
+    if (entry) {
+      await this.configService.updateEntry(
+        entry.id,
+        { value: normalized },
+        userId,
+      );
+    } else {
+      await this.configService.createEntry(
+        namespace.id,
+        {
+          key: LUCKPERMS_GROUP_PRIORITIES_KEY,
+          value: normalized,
+          description: 'LuckPerms group priority mapping',
+        },
+        userId,
+      );
+    }
+    await this.refreshState(false);
+  }
+
   getGroupDisplayName(group: string | null | undefined): string | null {
     if (!group) {
       return null;
@@ -245,6 +309,23 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
     return typeof fallback === 'string' && fallback.length > 0
       ? fallback
       : null;
+  }
+
+  getGroupPriorityEntries() {
+    return Object.entries(this.groupPriorityRecord)
+      .map(([group, priority]) => ({ group, priority }))
+      .sort((a, b) => a.priority - b.priority);
+  }
+
+  getGroupPriority(group: string | null | undefined): number | null {
+    if (!group) {
+      return null;
+    }
+    if (typeof this.groupPriorityRecord[group] === 'number') {
+      return this.groupPriorityRecord[group];
+    }
+    const fallback = this.groupPriorityLowercase[group.toLowerCase()];
+    return typeof fallback === 'number' ? fallback : null;
   }
 
   private async bootstrapConfigStorage() {
@@ -284,6 +365,17 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
         description: 'LuckPerms group display text mapping',
       });
     }
+    const priorityEntry = await this.configService.getEntry(
+      LUCKPERMS_DISPLAY_NAMESPACE,
+      LUCKPERMS_GROUP_PRIORITIES_KEY,
+    );
+    if (!priorityEntry) {
+      await this.configService.createEntry(displayNamespace.id, {
+        key: LUCKPERMS_GROUP_PRIORITIES_KEY,
+        value: {},
+        description: 'LuckPerms group priority mapping',
+      });
+    }
   }
 
   private ensureLib(): LuckpermsLib {
@@ -294,12 +386,15 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async refreshState(force = false) {
-    const [configState, groupLabelsState] = await Promise.all([
-      this.loadConfig(),
-      this.loadGroupLabels(),
-    ]);
+    const [configState, groupLabelsState, groupPriorityState] =
+      await Promise.all([
+        this.loadConfig(),
+        this.loadGroupLabels(),
+        this.loadGroupPriorities(),
+      ]);
     await this.applyConfigState(configState, force);
     this.applyGroupLabelState(groupLabelsState, force);
+    this.applyGroupPriorityState(groupPriorityState, force);
   }
 
   private async applyConfigState(
@@ -348,6 +443,18 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
     this.groupLabelLowercase = buildLowercaseRecord(record);
   }
 
+  private applyGroupPriorityState(state: GroupPrioritiesState, force: boolean) {
+    const { signature, record, meta } = state;
+    const changed = force || signature !== this.groupPrioritySignature;
+    this.groupPrioritySignature = signature;
+    this.groupPriorityMeta = meta;
+    if (!changed) {
+      return;
+    }
+    this.groupPriorityRecord = record;
+    this.groupPriorityLowercase = buildLowercaseNumberRecord(record);
+  }
+
   private async loadConfig(): Promise<{
     signature: string;
     config: LuckpermsDbConfig | null;
@@ -380,6 +487,31 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
       return { signature: 'missing', record: {}, meta: null };
     }
     const record = this.parseGroupLabelRecord(entry.value);
+    const updatedAt =
+      entry.updatedAt instanceof Date
+        ? entry.updatedAt.toISOString()
+        : String(entry.updatedAt ?? '');
+    const meta: ConfigEntryMeta = {
+      id: entry.id,
+      version: entry.version,
+      updatedAt,
+    };
+    return {
+      signature: `${entry.key}:${entry.version}`,
+      record,
+      meta,
+    };
+  }
+
+  private async loadGroupPriorities(): Promise<GroupPrioritiesState> {
+    const entry = await this.configService.getEntry(
+      LUCKPERMS_DISPLAY_NAMESPACE,
+      LUCKPERMS_GROUP_PRIORITIES_KEY,
+    );
+    if (!entry) {
+      return { signature: 'missing', record: {}, meta: null };
+    }
+    const record = this.normalizeGroupPriorityRecord(entry.value);
     const updatedAt =
       entry.updatedAt instanceof Date
         ? entry.updatedAt.toISOString()
@@ -431,6 +563,28 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
     return {};
   }
 
+  private normalizeGroupPriorityRecord(value: unknown): Record<string, number> {
+    if (!value) {
+      return {};
+    }
+    if (Array.isArray(value)) {
+      return this.normalizeGroupPriorityEntries(
+        value as Array<{ group: string; priority: number }>,
+      );
+    }
+    if (isRecord(value)) {
+      const entries = Object.entries(value).map(([group, priority]) => {
+        const numeric = Number(priority);
+        return {
+          group,
+          priority: Number.isFinite(numeric) ? numeric : Number.NaN,
+        };
+      }) as Array<{ group: string; priority: number }>;
+      return this.normalizeGroupPriorityEntries(entries);
+    }
+    return {};
+  }
+
   private normalizeGroupLabelEntries(
     entries: Array<{ group: string; label: string }>,
   ): Record<string, string> {
@@ -453,6 +607,30 @@ export class LuckpermsService implements OnModuleInit, OnModuleDestroy {
     return Object.entries(this.groupLabelRecord)
       .map(([group, label]) => ({ group, label }))
       .sort((a, b) => a.group.localeCompare(b.group));
+  }
+
+  private normalizeGroupPriorityEntries(
+    entries: Array<{ group: string; priority: number }>,
+  ): Record<string, number> {
+    if (!Array.isArray(entries)) {
+      return {};
+    }
+    const result: Record<string, number> = {};
+    for (const entry of entries) {
+      if (!entry) {
+        continue;
+      }
+      const groupValue = toNonEmptyString(entry.group);
+      if (!groupValue) {
+        continue;
+      }
+      const priorityValue = toNumber(entry.priority, Number.NaN);
+      if (!Number.isFinite(priorityValue)) {
+        continue;
+      }
+      result[groupValue] = priorityValue;
+    }
+    return result;
   }
 
   private normalizeConfig(
@@ -542,6 +720,14 @@ function toNonEmptyString(value: unknown): string | null {
 
 function buildLowercaseRecord(record: Record<string, string>) {
   const lower: Record<string, string> = {};
+  for (const [key, value] of Object.entries(record)) {
+    lower[key.toLowerCase()] = value;
+  }
+  return lower;
+}
+
+function buildLowercaseNumberRecord(record: Record<string, number>) {
+  const lower: Record<string, number> = {};
   for (const [key, value] of Object.entries(record)) {
     lower[key.toLowerCase()] = value;
   }

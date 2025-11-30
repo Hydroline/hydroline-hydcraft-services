@@ -46,6 +46,18 @@ type EditableGroupLabelEntry = {
   label: string
 }
 
+type GroupPriorityPair = {
+  group: string
+  priority: number
+}
+
+type EditableGroupConfigEntry = {
+  id: number
+  group: string
+  label: string
+  priority: number | ''
+}
+
 type StatusRow = {
   key: string
   label: string
@@ -59,16 +71,21 @@ type StatusRow = {
 
 const loading = ref(true)
 const savingConfig = ref(false)
-const savingGroupLabels = ref(false)
+const savingGroupConfig = ref(false)
 const reloadingHealth = ref(false)
 
 const configDialogOpen = ref(false)
-const groupLabelDialogOpen = ref(false)
+const groupConfigDialogOpen = ref(false)
 
 const health = ref<LuckpermsHealth | null>(null)
 const system = ref<{ uptimeSeconds: number; timestamp: string } | null>(null)
 const configMeta = ref<{ version: number; updatedAt: string } | null>(null)
 const groupLabelMeta = ref<{ version: number; updatedAt: string } | null>(null)
+const groupPriorityMeta = ref<{ version: number; updatedAt: string } | null>(
+  null,
+)
+const groupLabelBaseline = ref<GroupLabelPair[]>([])
+const groupPriorityBaseline = ref<GroupPriorityPair[]>([])
 
 const configBaseline = ref<LuckpermsConfigForm | null>(null)
 
@@ -90,29 +107,31 @@ const configForm = reactive<LuckpermsConfigForm>({
   enabled: true,
 })
 
-let groupLabelSeed = 0
-function createGroupLabelEntry(
+let groupConfigSeed = 0
+function createGroupConfigEntry(
   group = '',
   label = '',
-): EditableGroupLabelEntry {
-  groupLabelSeed += 1
+  priority: number | '' = '',
+): EditableGroupConfigEntry {
+  groupConfigSeed += 1
   return {
-    id: groupLabelSeed,
+    id: groupConfigSeed,
     group,
     label,
+    priority,
   }
 }
 
-const groupLabelEntries = ref<EditableGroupLabelEntry[]>([
-  createGroupLabelEntry(),
+const groupConfigEntries = ref<EditableGroupConfigEntry[]>([
+  createGroupConfigEntry(),
 ])
-const groupLabelBaseline = ref<GroupLabelPair[]>([])
-const groupLabelSignature = ref('[]')
+const groupConfigBaseline = ref<EditableGroupConfigEntry[]>([])
+const groupConfigSignature = ref('[]')
 
-const groupLabelDirty = computed(() => {
+const groupConfigDirty = computed(() => {
   return (
-    serializeGroupLabelEntries(groupLabelEntries.value) !==
-    groupLabelSignature.value
+    serializeGroupConfigEntries(groupConfigEntries.value) !==
+    groupConfigSignature.value
   )
 })
 
@@ -224,6 +243,14 @@ const statusRows = computed<StatusRow[]>(() => {
       ? `版本 ${groupLabelMeta.value.version} · ${new Date(groupLabelMeta.value.updatedAt).toLocaleString()}`
       : '尚未保存映射',
   })
+  rows.push({
+    key: 'groupPriorities',
+    label: '权限组优先级',
+    text: `${groupPriorityBaseline.value.length} 条规则`,
+    description: groupPriorityMeta.value
+      ? `版本 ${groupPriorityMeta.value.version} · ${new Date(groupPriorityMeta.value.updatedAt).toLocaleString()}`
+      : '尚未配置优先级',
+  })
   return rows
 })
 
@@ -244,53 +271,114 @@ function normalizeGroupLabelPayload(
     .map(([group, label]) => ({ group, label }))
 }
 
-function serializeGroupLabelEntries(entries: EditableGroupLabelEntry[]) {
+function normalizeGroupPriorityPayload(
+  entries: Array<{ group: string; priority: number }>,
+): GroupPriorityPair[] {
+  const map = new Map<string, number>()
+  for (const entry of entries) {
+    const group = typeof entry.group === 'string' ? entry.group.trim() : ''
+    const priority = Number(entry.priority)
+    if (!group || Number.isNaN(priority)) {
+      continue
+    }
+    map.set(group, priority)
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[1] - b[1])
+    .map(([group, priority]) => ({ group, priority }))
+}
+
+function serializeGroupConfigEntries(entries: EditableGroupConfigEntry[]) {
   const payload = entries.map((entry) => ({
     group: entry.group,
     label: entry.label,
+    priority: entry.priority,
   }))
-  return JSON.stringify(normalizeGroupLabelPayload(payload))
+  return JSON.stringify(payload)
 }
 
-function setGroupLabelEntriesFromServer(entries: GroupLabelPair[]) {
-  const normalized = normalizeGroupLabelPayload(entries)
-  groupLabelBaseline.value = normalized
-  groupLabelEntries.value =
-    normalized.length > 0
-      ? normalized.map((entry) =>
-          createGroupLabelEntry(entry.group, entry.label),
+function setGroupConfigEntriesFromServer(
+  labels: GroupLabelPair[],
+  priorities: GroupPriorityPair[],
+) {
+  const map = new Map<string, { label: string; priority: number | '' }>()
+  for (const entry of labels) {
+    const group = typeof entry.group === 'string' ? entry.group.trim() : ''
+    if (!group) continue
+    const label = typeof entry.label === 'string' ? entry.label : ''
+    const existing = map.get(group) ?? { label: '', priority: '' }
+    existing.label = label
+    map.set(group, existing)
+  }
+  for (const entry of priorities) {
+    const group = typeof entry.group === 'string' ? entry.group.trim() : ''
+    if (!group) continue
+    const priority = Number(entry.priority)
+    const existing = map.get(group) ?? { label: '', priority: '' }
+    existing.priority = Number.isFinite(priority) ? priority : ''
+    map.set(group, existing)
+  }
+  const normalized = Array.from(map.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([group, payload]) =>
+      createGroupConfigEntry(
+        group,
+        payload.label ?? '',
+        payload.priority ?? '',
+      ),
+    )
+  if (!normalized.length) {
+    normalized.push(createGroupConfigEntry())
+  }
+  groupConfigEntries.value = normalized
+  groupConfigBaseline.value = normalized.map((entry) =>
+    createGroupConfigEntry(entry.group, entry.label, entry.priority),
+  )
+  groupConfigSignature.value = serializeGroupConfigEntries(normalized)
+}
+
+function resetGroupConfig() {
+  groupConfigEntries.value =
+    groupConfigBaseline.value.length > 0
+      ? groupConfigBaseline.value.map((entry) =>
+          createGroupConfigEntry(entry.group, entry.label, entry.priority),
         )
-      : [createGroupLabelEntry()]
-  groupLabelSignature.value = JSON.stringify(normalized)
+      : [createGroupConfigEntry()]
 }
 
-function resetGroupLabels() {
-  setGroupLabelEntriesFromServer(groupLabelBaseline.value)
+function addGroupConfigEntry() {
+  groupConfigEntries.value.push(createGroupConfigEntry())
 }
 
-function addGroupLabelEntry() {
-  groupLabelEntries.value.push(createGroupLabelEntry())
-}
-
-function removeGroupLabelEntry(id: number) {
-  if (groupLabelEntries.value.length <= 1) {
-    groupLabelEntries.value = [createGroupLabelEntry()]
+function removeGroupConfigEntry(id: number) {
+  if (groupConfigEntries.value.length <= 1) {
+    groupConfigEntries.value = [createGroupConfigEntry()]
     return
   }
-  groupLabelEntries.value = groupLabelEntries.value.filter(
+  groupConfigEntries.value = groupConfigEntries.value.filter(
     (entry) => entry.id !== id,
   )
-  if (!groupLabelEntries.value.length) {
-    groupLabelEntries.value.push(createGroupLabelEntry())
+  if (!groupConfigEntries.value.length) {
+    groupConfigEntries.value.push(createGroupConfigEntry())
   }
 }
 
-function buildGroupLabelPayload() {
+function buildGroupLabelPayloadFromConfig(entries: EditableGroupConfigEntry[]) {
   return normalizeGroupLabelPayload(
-    groupLabelEntries.value.map((entry) => ({
-      group: entry.group,
-      label: entry.label,
-    })),
+    entries.map((entry) => ({ group: entry.group, label: entry.label })),
+  )
+}
+
+function buildGroupPriorityPayloadFromConfig(
+  entries: EditableGroupConfigEntry[],
+) {
+  return normalizeGroupPriorityPayload(
+    entries
+      .filter((entry) => entry.priority !== '' && entry.priority !== null)
+      .map((entry) => ({
+        group: entry.group,
+        priority: Number(entry.priority),
+      })),
   )
 }
 
@@ -307,6 +395,10 @@ async function loadOverview() {
       entries: GroupLabelPair[]
       meta: { version: number; updatedAt: string } | null
     } | null
+    groupPriorities: {
+      entries: GroupPriorityPair[]
+      meta: { version: number; updatedAt: string } | null
+    } | null
   }>('/luckperms/admin/overview', {
     token: authStore.token,
   })
@@ -318,13 +410,17 @@ async function loadOverview() {
     configBaseline.value = cloneLuckpermsConfig(configForm)
   }
   configMeta.value = result.configMeta
-  if (result.groupLabels) {
-    setGroupLabelEntriesFromServer(result.groupLabels.entries ?? [])
-    groupLabelMeta.value = result.groupLabels.meta ?? null
-  } else {
-    setGroupLabelEntriesFromServer([])
-    groupLabelMeta.value = null
-  }
+  const labelEntries = normalizeGroupLabelPayload(
+    result.groupLabels?.entries ?? [],
+  )
+  const priorityEntries = normalizeGroupPriorityPayload(
+    result.groupPriorities?.entries ?? [],
+  )
+  groupLabelBaseline.value = labelEntries
+  groupPriorityBaseline.value = priorityEntries
+  groupLabelMeta.value = result.groupLabels?.meta ?? null
+  groupPriorityMeta.value = result.groupPriorities?.meta ?? null
+  setGroupConfigEntriesFromServer(labelEntries, priorityEntries)
 }
 
 async function initialize() {
@@ -361,25 +457,34 @@ async function saveConfig() {
   }
 }
 
-async function saveGroupLabels() {
-  if (!authStore.token || !groupLabelDirty.value) return
-  savingGroupLabels.value = true
+async function saveGroupConfig() {
+  if (!authStore.token || !groupConfigDirty.value) return
+  savingGroupConfig.value = true
   uiStore.startLoading()
   try {
-    await apiFetch('/luckperms/admin/group-labels', {
-      method: 'PATCH',
-      token: authStore.token,
-      body: {
-        entries: buildGroupLabelPayload(),
-      },
-    })
+    const [labelPayload, priorityPayload] = [
+      buildGroupLabelPayloadFromConfig(groupConfigEntries.value),
+      buildGroupPriorityPayloadFromConfig(groupConfigEntries.value),
+    ]
+    await Promise.all([
+      apiFetch('/luckperms/admin/group-labels', {
+        method: 'PATCH',
+        token: authStore.token,
+        body: { entries: labelPayload },
+      }),
+      apiFetch('/luckperms/admin/group-priorities', {
+        method: 'PATCH',
+        token: authStore.token,
+        body: { entries: priorityPayload },
+      }),
+    ])
     await loadOverview()
-    toastSuccess('权限组显示文本已更新')
-    groupLabelDialogOpen.value = false
+    toastSuccess('权限组配置已更新')
+    groupConfigDialogOpen.value = false
   } catch (error) {
-    handleError(error, '更新权限组显示文本失败')
+    handleError(error, '更新权限组配置失败')
   } finally {
-    savingGroupLabels.value = false
+    savingGroupConfig.value = false
     uiStore.stopLoading()
   }
 }
@@ -461,8 +566,8 @@ watch(configDialogOpen, () => {
   resetConfigForm()
 })
 
-watch(groupLabelDialogOpen, () => {
-  resetGroupLabels()
+watch(groupConfigDialogOpen, () => {
+  resetGroupConfig()
 })
 
 onMounted(() => {
@@ -487,10 +592,10 @@ onMounted(() => {
         </UButton>
         <UButton
           variant="soft"
-          icon="i-lucide-type"
-          @click="groupLabelDialogOpen = true"
+          icon="i-lucide-settings-2"
+          @click="groupConfigDialogOpen = true"
         >
-          权限组映射
+          权限组配置
         </UButton>
         <UButton
           color="primary"
@@ -771,8 +876,8 @@ onMounted(() => {
     </UModal>
 
     <UModal
-      :open="groupLabelDialogOpen"
-      @update:open="groupLabelDialogOpen = $event"
+      :open="groupConfigDialogOpen"
+      @update:open="groupConfigDialogOpen = $event"
       :ui="{
         content:
           'w-full max-w-3xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
@@ -783,30 +888,41 @@ onMounted(() => {
           <template #header>
             <div class="flex flex-col gap-1">
               <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
-                权限组显示文本
+                权限组配置
               </h2>
               <p class="text-xs text-slate-500 dark:text-slate-400">
-                为权限组配置展示别名，前端渲染将优先使用映射结果。
+                管理权限组的展示文本与优先级，统一控制用户前端显示与可调整范围。
               </p>
             </div>
           </template>
-          <form class="space-y-4" @submit.prevent="saveGroupLabels">
+          <form class="space-y-4" @submit.prevent="saveGroupConfig">
             <div
               class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50/60 px-3 py-2 text-xs text-slate-500 dark:bg-slate-900/60 dark:text-slate-400"
             >
-              <span>
-                <span v-if="groupLabelMeta">
-                  版本 {{ groupLabelMeta.version }} ·
-                  {{ new Date(groupLabelMeta.updatedAt).toLocaleString() }}
-                </span>
-                <span v-else>尚未保存映射</span>
-              </span>
+              <div class="space-y-1">
+                <p>
+                  显示文本：
+                  <span v-if="groupLabelMeta">
+                    版本 {{ groupLabelMeta.version }} ·
+                    {{ new Date(groupLabelMeta.updatedAt).toLocaleString() }}
+                  </span>
+                  <span v-else>尚未保存</span>
+                </p>
+                <p>
+                  优先级：
+                  <span v-if="groupPriorityMeta">
+                    版本 {{ groupPriorityMeta.version }} ·
+                    {{ new Date(groupPriorityMeta.updatedAt).toLocaleString() }}
+                  </span>
+                  <span v-else>尚未保存</span>
+                </p>
+              </div>
               <div class="flex items-center gap-2">
                 <UButton
                   size="xs"
                   variant="ghost"
-                  :disabled="!groupLabelDirty || savingGroupLabels"
-                  @click="resetGroupLabels"
+                  :disabled="!groupConfigDirty || savingGroupConfig"
+                  @click="resetGroupConfig"
                 >
                   重置
                 </UButton>
@@ -814,62 +930,71 @@ onMounted(() => {
                   size="xs"
                   variant="ghost"
                   icon="i-lucide-plus"
-                  :disabled="savingGroupLabels"
-                  @click="addGroupLabelEntry"
+                  :disabled="savingGroupConfig"
+                  @click="addGroupConfigEntry"
                 >
-                  添加映射
+                  添加权限组
                 </UButton>
               </div>
             </div>
 
             <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
               <div
-                v-for="(entry, index) in groupLabelEntries"
+                v-for="(entry, index) in groupConfigEntries"
                 :key="entry.id"
                 class="rounded-xl border border-slate-200/70 p-4 dark:border-slate-700/70"
               >
                 <div
                   class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400"
                 >
-                  <span>映射 #{{ index + 1 }}</span>
+                  <span>权限组 #{{ index + 1 }}</span>
                   <UButton
                     size="xs"
                     variant="ghost"
                     color="neutral"
                     icon="i-lucide-trash-2"
                     :disabled="
-                      groupLabelEntries.length <= 1 || savingGroupLabels
+                      groupConfigEntries.length <= 1 || savingGroupConfig
                     "
-                    @click="removeGroupLabelEntry(entry.id)"
+                    @click="removeGroupConfigEntry(entry.id)"
                   />
                 </div>
-                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                <div class="mt-3 grid gap-3 md:grid-cols-3">
                   <label
                     class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
                   >
-                    <span
-                      class="font-medium text-slate-700 dark:text-slate-200"
+                    <span class="font-medium text-slate-700 dark:text-slate-200"
+                      >权限组标识</span
                     >
-                      权限组标识
-                    </span>
                     <UInput
                       v-model="entry.group"
-                      :disabled="savingGroupLabels"
+                      :disabled="savingGroupConfig"
                       placeholder="hydca1"
                     />
                   </label>
                   <label
                     class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
                   >
-                    <span
-                      class="font-medium text-slate-700 dark:text-slate-200"
+                    <span class="font-medium text-slate-700 dark:text-slate-200"
+                      >显示文本</span
                     >
-                      显示文本
-                    </span>
                     <UInput
                       v-model="entry.label"
-                      :disabled="savingGroupLabels"
+                      :disabled="savingGroupConfig"
                       placeholder="A1"
+                    />
+                  </label>
+                  <label
+                    class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+                  >
+                    <span class="font-medium text-slate-700 dark:text-slate-200"
+                      >优先级（越小越高）</span
+                    >
+                    <UInput
+                      v-model.number="entry.priority"
+                      :disabled="savingGroupConfig"
+                      type="number"
+                      placeholder="10"
                     />
                   </label>
                 </div>
@@ -880,17 +1005,17 @@ onMounted(() => {
               <UButton
                 type="button"
                 variant="ghost"
-                @click="groupLabelDialogOpen = false"
+                @click="groupConfigDialogOpen = false"
               >
                 取消
               </UButton>
               <UButton
                 type="submit"
                 color="primary"
-                :loading="savingGroupLabels"
-                :disabled="!groupLabelDirty"
+                :loading="savingGroupConfig"
+                :disabled="!groupConfigDirty"
               >
-                保存映射
+                保存配置
               </UButton>
             </div>
           </form>

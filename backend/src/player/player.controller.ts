@@ -16,6 +16,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  MinLength,
 } from 'class-validator';
 import { OptionalAuthGuard } from '../auth/optional-auth.guard';
 import { AuthGuard } from '../auth/auth.guard';
@@ -28,15 +29,40 @@ class PlayerReasonDto {
   reason?: string;
 }
 
-class PermissionChangeDto {
+class AuthmePasswordResetDto extends PlayerReasonDto {
+  @IsUUID()
+  serverId!: string;
+
+  @IsString()
+  @MinLength(6)
+  @MaxLength(64)
+  password!: string;
+
+  @IsOptional()
+  @IsString()
+  bindingId?: string;
+}
+
+class AuthmeForceLoginDto extends PlayerReasonDto {
+  @IsUUID()
+  serverId!: string;
+
+  @IsOptional()
+  @IsString()
+  bindingId?: string;
+}
+
+class PermissionChangeDto extends PlayerReasonDto {
   @IsString()
   @MaxLength(64)
   targetGroup!: string;
 
+  @IsUUID()
+  serverId!: string;
+
   @IsOptional()
   @IsString()
-  @MaxLength(200)
-  reason?: string;
+  bindingId?: string;
 }
 
 class RestartRequestDto {
@@ -164,19 +190,19 @@ export class PlayerController {
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: '提交 AuthMe 密码重置申请' })
-  async authmeReset(@Req() req: Request, @Body() body: PlayerReasonDto) {
-    return this.playerService.submitAuthmeResetRequest(
-      req.user!.id,
-      body.reason,
-    );
+  async authmeReset(@Req() req: Request, @Body() body: AuthmePasswordResetDto) {
+    return this.playerService.submitAuthmeResetRequest(req.user!.id, body);
   }
 
   @Post('authme/force-login')
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '提交强制登陆申请' })
-  async authmeForceLogin(@Req() req: Request, @Body() body: PlayerReasonDto) {
-    return this.playerService.submitAuthmeForceLogin(req.user!.id, body.reason);
+  @ApiOperation({ summary: '提交强制登录申请' })
+  async authmeForceLogin(
+    @Req() req: Request,
+    @Body() body: AuthmeForceLoginDto,
+  ) {
+    return this.playerService.submitAuthmeForceLogin(req.user!.id, body);
   }
 
   @Post('permissions/request-change')
@@ -188,6 +214,47 @@ export class PlayerController {
     @Body() body: PermissionChangeDto,
   ) {
     return this.playerService.submitPermissionChangeRequest(req.user!.id, body);
+  }
+
+  @Get('lifecycle-events')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '查询玩家生命周期事件（异步任务）' })
+  async lifecycleEvents(
+    @Req() req: Request,
+    @Query('sources') sources?: string,
+    @Query('limit') limit?: string,
+    @Query('id') id?: string,
+  ) {
+    const targetId = this.resolveTargetUserId(req, id);
+    const sourceList = sources
+      ? sources
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      : undefined;
+    const parsedLimit = limit ? Number(limit) : undefined;
+    const items = await this.playerService.getLifecycleEvents(targetId, {
+      sources: sourceList,
+      limit: parsedLimit,
+    });
+    return { items };
+  }
+
+  @Get('permissions/available-groups')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '查询可调整的权限组选项' })
+  async availablePermissionGroups(
+    @Req() req: Request,
+    @Query('bindingId') bindingId?: string,
+    @Query('id') id?: string,
+  ) {
+    const targetId = this.resolveTargetUserId(req, id);
+    return this.playerService.getPermissionAdjustmentOptions(
+      targetId,
+      bindingId,
+    );
   }
 
   @Post('server/restart-request')

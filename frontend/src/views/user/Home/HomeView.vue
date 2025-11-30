@@ -7,7 +7,6 @@ import { Motion } from 'motion-v'
 import dayjs from 'dayjs'
 import HydrolineTextBold from '@/assets/resources/hydroline_text_bold.svg'
 import fallbackHeroImage from '@/assets/images/image_home_background_240730.webp'
-import ContentCards from './components/ContentCards.vue'
 
 const portalStore = usePortalStore()
 const uiStore = useUiStore()
@@ -22,10 +21,11 @@ const scrolled = ref(false)
 const heroImageLoaded = ref(false)
 const homeLoaded = ref(false)
 const heroParallaxOffset = reactive({ x: 0, y: 0 })
+const parallaxEnabled = ref(true)
 const scrollLockPosition = ref(0)
 
 const heroParallaxAnimatedOffset = computed(() => {
-  if (uiStore.previewMode) {
+  if (uiStore.previewMode || !parallaxEnabled.value) {
     return { x: 0, y: 0 }
   }
   return { x: heroParallaxOffset.x, y: heroParallaxOffset.y }
@@ -91,6 +91,36 @@ function updateScrollState() {
   uiStore.setHeroInView(!scrolled.value)
 }
 
+function updateParallaxEnabled() {
+  const enabled = window.innerWidth > 1024
+  parallaxEnabled.value = enabled
+  if (!enabled) {
+    heroParallaxOffset.x = 0
+    heroParallaxOffset.y = 0
+  }
+}
+
+function handleMouseMove(event: MouseEvent) {
+  if (!parallaxEnabled.value || uiStore.previewMode) {
+    heroParallaxOffset.x = 0
+    heroParallaxOffset.y = 0
+    return
+  }
+
+  const vw = window.innerWidth || 1
+  const vh = window.innerHeight || 1
+
+  const relX = event.clientX / vw
+  const relY = event.clientY / vh
+
+  const maxOffset = 36
+  const offsetX = (relX - 0.5) * maxOffset * -1
+  const offsetY = (relY - 0.5) * maxOffset * -1
+
+  heroParallaxOffset.x = offsetX
+  heroParallaxOffset.y = offsetY
+}
+
 function updateHeroMetadata() {
   uiStore.setHeroActiveDescription(activeHeroDescription.value)
   uiStore.setHeroActiveSubtitle(
@@ -144,23 +174,13 @@ onMounted(async () => {
 
   homeLoaded.value = true
 
+  updateParallaxEnabled()
+  window.addEventListener('resize', updateParallaxEnabled)
+
   updateScrollState()
   window.addEventListener('scroll', updateScrollState, { passive: true })
 
-  window.addEventListener('mousemove', (event: MouseEvent) => {
-    const vw = window.innerWidth || 1
-    const vh = window.innerHeight || 1
-
-    const relX = event.clientX / vw
-    const relY = event.clientY / vh
-
-    const maxOffset = 16
-    const offsetX = (relX - 0.5) * maxOffset * -1
-    const offsetY = (relY - 0.5) * maxOffset * -1
-
-    heroParallaxOffset.x = offsetX
-    heroParallaxOffset.y = offsetY
-  })
+  window.addEventListener('mousemove', handleMouseMove)
 
   if (heroRef.value) {
     observer.value = new IntersectionObserver(
@@ -236,6 +256,8 @@ watch([activeHeroDescription, activeHeroSubtitle], () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', updateScrollState)
+  window.removeEventListener('resize', updateParallaxEnabled)
+  window.removeEventListener('mousemove', handleMouseMove)
   if (observer.value && heroRef.value) {
     observer.value.unobserve(heroRef.value)
     observer.value.disconnect()
@@ -263,7 +285,7 @@ function handleHeroImageErrored() {
     >
       <div
         v-if="homeLoaded && (activeHeroImage || fallbackHeroImage)"
-        class="fixed inset-0 left-16 bottom-24 z-0 flex flex-col items-center justify-center transition duration-300"
+        class="fixed top-0 left-0 lg:left-16 right-0 bottom-24 z-0 flex flex-col items-center justify-center transition duration-300"
         :class="{ 'bottom-0!': uiStore.previewMode }"
         :style="heroBackdropStyle"
       >
@@ -565,9 +587,9 @@ function handleHeroImageErrored() {
     ),
     linear-gradient(
       to right,
-      transparent,
+      transparent 1%,
       rgba(255, 255, 255, 1) 10% 90%,
-      transparent
+      transparent 99%
     );
   mask-composite: intersect;
   -webkit-mask-composite: destination-in;

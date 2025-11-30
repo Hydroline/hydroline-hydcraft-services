@@ -8,6 +8,7 @@ import { PERMISSIONS } from '../auth/services/roles.service';
 import { LuckpermsService } from './luckperms.service';
 import { UpdateLuckpermsConfigDto } from './dto/update-luckperms-config.dto';
 import { UpdateLuckpermsGroupLabelsDto } from './dto/update-luckperms-group-labels.dto';
+import { UpdateLuckpermsGroupPrioritiesDto } from './dto/update-luckperms-group-priorities.dto';
 
 @ApiTags('LuckPerms 管理')
 @ApiBearerAuth()
@@ -20,21 +21,24 @@ export class LuckpermsAdminController {
   @ApiOperation({ summary: '获取 LuckPerms 配置与状态' })
   @RequirePermissions(PERMISSIONS.CONFIG_VIEW_LUCKPERMS)
   async getOverview() {
-    const [health, configSnapshot, groupLabels] = await Promise.all([
-      this.luckpermsService.health().catch((error: unknown) => ({
-        ok: false as const,
-        stage: 'CONNECT' as const,
-        message: error instanceof Error ? error.message : 'unknown',
-      })),
-      this.luckpermsService.getConfigSnapshot(),
-      this.luckpermsService.getGroupLabelSnapshot(),
-    ]);
+    const [health, configSnapshot, groupLabels, groupPriorities] =
+      await Promise.all([
+        this.luckpermsService.health().catch((error: unknown) => ({
+          ok: false as const,
+          stage: 'CONNECT' as const,
+          message: error instanceof Error ? error.message : 'unknown',
+        })),
+        this.luckpermsService.getConfigSnapshot(),
+        this.luckpermsService.getGroupLabelSnapshot(),
+        this.luckpermsService.getGroupPrioritySnapshot(),
+      ]);
 
     return {
       health,
       config: configSnapshot.config,
       configMeta: configSnapshot.meta,
       groupLabels,
+      groupPriorities,
       system: {
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
@@ -61,6 +65,20 @@ export class LuckpermsAdminController {
     @Req() req: Request,
   ) {
     await this.luckpermsService.upsertGroupLabels(
+      dto.entries ?? [],
+      req.user?.id,
+    );
+    return this.getOverview();
+  }
+
+  @Patch('group-priorities')
+  @ApiOperation({ summary: '批量更新权限组优先级' })
+  @RequirePermissions(PERMISSIONS.CONFIG_MANAGE_LUCKPERMS)
+  async updateGroupPriorities(
+    @Body() dto: UpdateLuckpermsGroupPrioritiesDto,
+    @Req() req: Request,
+  ) {
+    await this.luckpermsService.upsertGroupPriorities(
       dto.entries ?? [],
       req.user?.id,
     );

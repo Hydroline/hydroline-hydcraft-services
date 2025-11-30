@@ -13,11 +13,11 @@ const playerStore = usePlayerPortalStore()
 let loggedPoller: ReturnType<typeof setInterval> | null = null
 const route = useRoute()
 const serverOptions = ref<Array<{ id: string; displayName: string }>>([])
-const permissionDialog = reactive({
-  open: false,
-  targetGroup: '',
-  reason: '',
-})
+const lifecycleSources = [
+  'portal.player.authme-reset',
+  'portal.player.force-login',
+  'portal.player.permission-adjust',
+]
 const restartDialog = reactive({
   open: false,
   serverId: '',
@@ -65,6 +65,22 @@ async function loadProfile() {
   await playerStore.fetchProfile({
     id: targetPlayerParam.value ?? undefined,
   })
+  await loadLifecycleEvents()
+}
+
+async function loadLifecycleEvents() {
+  if (!auth.isAuthenticated) {
+    playerStore.lifecycleEvents = []
+    return
+  }
+  try {
+    await playerStore.fetchLifecycleEvents({
+      sources: lifecycleSources,
+      id: targetPlayerParam.value ?? undefined,
+    })
+  } catch (error) {
+    console.warn('加载任务状态失败', error)
+  }
 }
 
 function stopLoggedPolling() {
@@ -113,6 +129,7 @@ watch(
   () => targetPlayerParam.value,
   () => {
     void loadProfile()
+    void loadLifecycleEvents()
     startLoggedPolling()
   },
 )
@@ -122,6 +139,7 @@ watch(
   () => {
     if (!targetPlayerParam.value) {
       void loadProfile()
+      void loadLifecycleEvents()
       startLoggedPolling()
     }
   },
@@ -138,55 +156,6 @@ watch(
     playerStore.logged = null
   },
 )
-
-async function handleAuthmeReset() {
-  try {
-    await playerStore.requestAuthmeReset()
-    toast.add({ title: '已提交 AuthMe 密码重置申请', color: 'primary' })
-  } catch (error) {
-    toast.add({
-      title: '提交失败',
-      description: error instanceof Error ? error.message : String(error),
-      color: 'error',
-    })
-  }
-}
-
-async function handleForceLogin() {
-  try {
-    await playerStore.requestForceLogin()
-    toast.add({ title: '已提交强制登陆申请', color: 'primary' })
-  } catch (error) {
-    toast.add({
-      title: '提交失败',
-      description: error instanceof Error ? error.message : String(error),
-      color: 'error',
-    })
-  }
-}
-
-async function submitPermissionChange() {
-  if (!permissionDialog.targetGroup.trim()) {
-    toast.add({ title: '请输入目标权限组', color: 'warning' })
-    return
-  }
-  try {
-    await playerStore.requestPermissionChange(
-      permissionDialog.targetGroup,
-      permissionDialog.reason,
-    )
-    toast.add({ title: '已提交权限组调整申请', color: 'primary' })
-    permissionDialog.open = false
-    permissionDialog.targetGroup = ''
-    permissionDialog.reason = ''
-  } catch (error) {
-    toast.add({
-      title: '提交失败',
-      description: error instanceof Error ? error.message : String(error),
-      color: 'error',
-    })
-  }
-}
 
 async function submitRestartRequest() {
   if (!restartDialog.serverId) {
@@ -276,8 +245,7 @@ function formatIpLocation(location: string | null | undefined) {
       :format-metric-value="formatMetricValue"
       :status-snapshot="statusSnapshot"
       :format-ip-location="formatIpLocation"
-      @authme-reset="handleAuthmeReset"
-      @force-login="handleForceLogin"
+      :server-options="serverOptions"
     />
   </section>
 </template>

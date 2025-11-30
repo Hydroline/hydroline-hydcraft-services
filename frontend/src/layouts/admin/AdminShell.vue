@@ -228,7 +228,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="relative min-h-screen bg-slate-50 dark:bg-slate-950">
+  <div class="relative min-h-screen">
     <AppLoadingBar />
 
     <header

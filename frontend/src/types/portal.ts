@@ -239,6 +239,21 @@ export interface PlayerIsLoggedResponse {
   logged: boolean
 }
 
+export interface PlayerLifecycleEvent {
+  id: string
+  source: string | null
+  eventType: string
+  occurredAt: string
+  createdAt: string
+  metadata: Record<string, unknown> | null
+}
+
+export interface PermissionAdjustmentOptions {
+  currentGroup: string | null
+  currentGroupLabel: string | null
+  options: Array<{ value: string; label: string; priority: number }>
+}
+
 export interface RankCategoryInfo {
   id: string
   name: string

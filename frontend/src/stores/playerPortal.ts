@@ -10,6 +10,8 @@ import type {
   PlayerStatsResponse,
   PlayerSummary,
   PlayerIsLoggedResponse,
+  PlayerLifecycleEvent,
+  PermissionAdjustmentOptions,
 } from '@/types/portal'
 
 type RankContextResponse = import('@/types/portal').RankContextResponse
@@ -32,6 +34,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
     rankCategories: [] as RankCategoryInfo[],
     leaderboard: null as RankLeaderboardResponse | null,
     rankContext: null as RankContextResponse | null,
+    lifecycleEvents: [] as PlayerLifecycleEvent[],
   }),
   actions: {
     authToken() {
@@ -88,36 +91,50 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       )
       return this.stats
     },
-    async requestAuthmeReset(reason?: string) {
+    async requestAuthmePasswordReset(payload: {
+      serverId: string
+      password: string
+      bindingId?: string
+      reason?: string
+    }) {
       this.submitting = true
       try {
         await apiFetch('/player/authme/reset-password', {
           method: 'POST',
-          body: { reason },
+          body: payload,
           token: this.authToken() ?? undefined,
         })
       } finally {
         this.submitting = false
       }
     },
-    async requestForceLogin(reason?: string) {
+    async requestForceLogin(payload: {
+      serverId: string
+      bindingId?: string
+      reason?: string
+    }) {
       this.submitting = true
       try {
         await apiFetch('/player/authme/force-login', {
           method: 'POST',
-          body: { reason },
+          body: payload,
           token: this.authToken() ?? undefined,
         })
       } finally {
         this.submitting = false
       }
     },
-    async requestPermissionChange(targetGroup: string, reason: string) {
+    async requestPermissionChange(payload: {
+      serverId: string
+      targetGroup: string
+      bindingId?: string
+      reason?: string
+    }) {
       this.submitting = true
       try {
         await apiFetch('/player/permissions/request-change', {
           method: 'POST',
-          body: { targetGroup, reason },
+          body: payload,
           token: this.authToken() ?? undefined,
         })
       } finally {
@@ -161,6 +178,37 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       )
       return this.rankContext
     },
+    async fetchLifecycleEvents(
+      options: { sources?: string[]; limit?: number; id?: string } = {},
+    ) {
+      const params = new URLSearchParams()
+      if (options.sources?.length) {
+        params.set('sources', options.sources.join(','))
+      }
+      if (options.limit) {
+        params.set('limit', String(options.limit))
+      }
+      if (options.id) {
+        params.set('id', options.id)
+      }
+      const query = params.toString()
+      const response = await apiFetch<{ items: PlayerLifecycleEvent[] }>(
+        `/player/lifecycle-events${query ? `?${query}` : ''}`,
+        { token: this.authToken() ?? undefined },
+      )
+      this.lifecycleEvents = response.items
+      return response.items
+    },
+    async fetchPermissionOptions(bindingId?: string, id?: string) {
+      const params = new URLSearchParams()
+      if (bindingId) params.set('bindingId', bindingId)
+      if (id) params.set('id', id)
+      const query = params.toString()
+      return apiFetch<PermissionAdjustmentOptions>(
+        `/player/permissions/available-groups${query ? `?${query}` : ''}`,
+        { token: this.authToken() ?? undefined },
+      )
+    },
     reset() {
       this.summary = null
       this.assets = null
@@ -173,6 +221,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       this.logged = null
       this.rankContext = null
       this.leaderboard = null
+      this.lifecycleEvents = []
     },
   },
 })

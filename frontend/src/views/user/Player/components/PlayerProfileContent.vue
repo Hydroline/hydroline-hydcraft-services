@@ -30,12 +30,7 @@ const props = defineProps<{
   region: PlayerRegionResponse | null
   statusSnapshot: PlayerStatusSnapshot | null
   formatIpLocation: (value: string | null | undefined) => string
-}>()
-
-const emit = defineEmits<{
-  (e: 'authme-reset'): void
-  (e: 'force-login'): void
-  (e: 'request-group-change'): void
+  serverOptions: Array<{ id: string; displayName: string }>
 }>()
 
 const playerPortalStore = usePlayerPortalStore()
@@ -818,10 +813,8 @@ function normalizeComparisonKey(value: string | null | undefined) {
       :format-date-time="props.formatDateTime"
       :format-ip-location="props.formatIpLocation"
       :is-viewing-self="props.isViewingSelf"
+      :server-options="props.serverOptions"
       @update:open="handleDetailDialogOpenChange"
-      @authme-reset="emit('authme-reset')"
-      @force-login="emit('force-login')"
-      @request-group-change="emit('request-group-change')"
     />
   </div>
 </template>

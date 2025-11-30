@@ -6,6 +6,8 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { Ip2RegionModule } from '../lib/ip2region/ip2region.module';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { AuthmeModule } from '../authme/authme.module';
+import { MinecraftModule } from '../minecraft/minecraft.module';
+import { PlayerAutomationService } from './player-automation.service';
 
 @Module({
   imports: [
@@ -14,9 +16,10 @@ import { AuthmeModule } from '../authme/authme.module';
     Ip2RegionModule,
     AttachmentsModule,
     AuthmeModule,
+    MinecraftModule,
   ],
   controllers: [PlayerController],
-  providers: [PlayerService],
+  providers: [PlayerService, PlayerAutomationService],
   exports: [PlayerService],
 })
 export class PlayerModule {}
