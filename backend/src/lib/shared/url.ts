@@ -10,4 +10,3 @@ export function buildPublicUrl(pathname: string): string {
   const baseUrl = getPublicBaseUrl();
   return new URL(pathname, baseUrl).toString();
 }
-

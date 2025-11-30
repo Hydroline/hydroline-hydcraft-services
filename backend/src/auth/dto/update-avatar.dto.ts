@@ -10,4 +10,3 @@ export class UpdateAvatarResponseDto {
   @ApiProperty({ nullable: true })
   avatarUrl!: string | null;
 }
-

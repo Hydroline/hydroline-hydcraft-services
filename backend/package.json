@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
     "start": "nest start",
     "dev": "nest start --watch",
     "start:dev": "nest start --watch",

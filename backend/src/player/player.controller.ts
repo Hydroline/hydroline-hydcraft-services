@@ -68,10 +68,7 @@ export class PlayerController {
   @Get('profile')
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: '整合获取玩家档案（可通过 id 查询）' })
-  async playerProfile(
-    @Req() req: Request,
-    @Query('id') id?: string,
-  ) {
+  async playerProfile(@Req() req: Request, @Query('id') id?: string) {
     const targetId = this.resolveTargetUserId(req, id);
     return this.playerService.getPlayerPortalData(
       req.user?.id ?? null,
@@ -149,10 +146,7 @@ export class PlayerController {
   @Get('stats')
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: '玩家统计信息' })
-  async playerStats(
-    @Req() req: Request,
-    @Query('id') id?: string,
-  ) {
+  async playerStats(@Req() req: Request, @Query('id') id?: string) {
     const targetId = this.resolveTargetUserId(req, id);
     return this.playerService.getPlayerStats(targetId);
   }

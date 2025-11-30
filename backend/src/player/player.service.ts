@@ -36,21 +36,15 @@ export class PlayerService {
   ) {}
 
   async getPlayerPortalData(viewerId: string | null, targetUserId: string) {
-    const [
-      summary,
-      rawAssets,
-      region,
-      minecraft,
-      stats,
-      statusSnapshot,
-    ] = await Promise.all([
-      this.getPlayerSummary(targetUserId),
-      this.getPlayerAssets(targetUserId),
-      this.getPlayerRegion(targetUserId),
-      this.getPlayerMinecraftData(targetUserId),
-      this.getPlayerStats(targetUserId),
-      this.getPlayerStatusSnapshot(targetUserId),
-    ]);
+    const [summary, rawAssets, region, minecraft, stats, statusSnapshot] =
+      await Promise.all([
+        this.getPlayerSummary(targetUserId),
+        this.getPlayerAssets(targetUserId),
+        this.getPlayerRegion(targetUserId),
+        this.getPlayerMinecraftData(targetUserId),
+        this.getPlayerStats(targetUserId),
+        this.getPlayerStatusSnapshot(targetUserId),
+      ]);
     const assets = {
       companies: rawAssets.companies ?? [],
       railways: rawAssets.railways ?? [],
@@ -670,19 +664,14 @@ export class PlayerService {
     try {
       return await this.authmeService.getAccount(username);
     } catch (error) {
-      this.logger.debug(
-        `无法获取 AuthMe 账号 ${username}: ${String(error)}`,
-      );
+      this.logger.debug(`无法获取 AuthMe 账号 ${username}: ${String(error)}`);
       return null;
     }
   }
 
   private async lookupLocationWithCache(
     ip: string | null | undefined,
-    cache: Map<
-      string,
-      Awaited<ReturnType<IpLocationService['lookup']>> | null
-    >,
+    cache: Map<string, Awaited<ReturnType<IpLocationService['lookup']>> | null>,
   ) {
     const normalized = normalizeIpAddress(ip);
     if (!normalized) {
@@ -731,11 +720,11 @@ export class PlayerService {
 
     return Promise.all(
       bindings.map(async (binding) => {
-      const account = await resolveAccount(binding.authmeUsername);
-      const lastLoginIp = normalizeIpAddress(account?.ip ?? null);
-      const regIp = normalizeIpAddress(account?.regip ?? null);
-      const [lastLoginLocation, regIpLocation, boundLocation] =
-        await Promise.all([
+        const account = await resolveAccount(binding.authmeUsername);
+        const lastLoginIp = normalizeIpAddress(account?.ip ?? null);
+        const regIp = normalizeIpAddress(account?.regip ?? null);
+        const [lastLoginLocation, regIpLocation, boundLocation] =
+          await Promise.all([
             this.lookupLocationWithCache(lastLoginIp, locationCache),
             this.lookupLocationWithCache(regIp, locationCache),
             includeBoundLocation
@@ -745,20 +734,20 @@ export class PlayerService {
                 )
               : Promise.resolve(null),
           ]);
-      return {
-        id: binding.id,
-        username: binding.authmeUsername,
-        realname: binding.authmeRealname,
-        uuid: binding.authmeUuid,
-        boundAt: binding.boundAt.toISOString(),
-        status: binding.status,
-        lastlogin: account?.lastlogin ?? null,
-        regdate: account?.regdate ?? null,
-        lastKnownLocation: includeBoundLocation
-          ? boundLocation?.raw ?? null
-          : null,
-        lastLoginLocation: lastLoginLocation?.raw ?? null,
-        regIpLocation: regIpLocation?.raw ?? null,
+        return {
+          id: binding.id,
+          username: binding.authmeUsername,
+          realname: binding.authmeRealname,
+          uuid: binding.authmeUuid,
+          boundAt: binding.boundAt.toISOString(),
+          status: binding.status,
+          lastlogin: account?.lastlogin ?? null,
+          regdate: account?.regdate ?? null,
+          lastKnownLocation: includeBoundLocation
+            ? (boundLocation?.raw ?? null)
+            : null,
+          lastLoginLocation: lastLoginLocation?.raw ?? null,
+          regIpLocation: regIpLocation?.raw ?? null,
         };
       }),
     );
@@ -781,11 +770,7 @@ export class PlayerService {
     const uuidCache = new Map<string, LuckpermsPlayer | null>();
     const usernameCache = new Map<string, LuckpermsPlayer | null>();
     const snapshotPromises = bindings.map((binding) =>
-      this.buildLuckpermsSnapshotForBinding(
-        binding,
-        uuidCache,
-        usernameCache,
-      ),
+      this.buildLuckpermsSnapshotForBinding(binding, uuidCache, usernameCache),
     );
     return Promise.all(snapshotPromises);
   }
@@ -826,16 +811,13 @@ export class PlayerService {
         return uuidCache.get(uuidKey) ?? null;
       }
       try {
-        const player = await this.luckpermsService.getPlayerByUuid(
-          normalizedUuid,
-        );
+        const player =
+          await this.luckpermsService.getPlayerByUuid(normalizedUuid);
         uuidCache.set(uuidKey, player);
         return player;
       } catch (error) {
         this.logger.debug(
-          `无法获取 LuckPerms 数据 (UUID: ${normalizedUuid}): ${String(
-            error,
-          )}`,
+          `无法获取 LuckPerms 数据 (UUID: ${normalizedUuid}): ${String(error)}`,
         );
         uuidCache.set(uuidKey, null);
       }
@@ -847,9 +829,8 @@ export class PlayerService {
         return usernameCache.get(lookupKey) ?? null;
       }
       try {
-        const player = await this.luckpermsService.getPlayerByUsername(
-          lookupName,
-        );
+        const player =
+          await this.luckpermsService.getPlayerByUsername(lookupName);
         usernameCache.set(lookupKey, player);
         return player;
       } catch (error) {
@@ -871,18 +852,17 @@ export class PlayerService {
     player: LuckpermsPlayer | null,
   ) {
     const realname =
-      typeof binding.authmeRealname === 'string' && binding.authmeRealname.length
+      typeof binding.authmeRealname === 'string' &&
+      binding.authmeRealname.length
         ? binding.authmeRealname.trim()
         : null;
     const username =
       player?.username && player.username.length > 0
         ? player.username
-        : realname ?? binding.authmeUsername;
+        : (realname ?? binding.authmeUsername);
     const groups = (player?.groups ?? []).map((membership) => ({
       ...membership,
-      displayName: this.luckpermsService.getGroupDisplayName(
-        membership.group,
-      ),
+      displayName: this.luckpermsService.getGroupDisplayName(membership.group),
     }));
     const primaryGroup = player?.primaryGroup ?? null;
     return {

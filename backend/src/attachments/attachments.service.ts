@@ -500,7 +500,8 @@ export class AttachmentsService implements OnModuleInit {
         name:
           (dto.name && dto.name.trim().length > 0
             ? dto.name.trim()
-            : normalizedOriginalName.replace(ext, '')) || normalizedOriginalName,
+            : normalizedOriginalName.replace(ext, '')) ||
+          normalizedOriginalName,
         originalName: normalizedOriginalName,
         fileName: randomName,
         mimeType: file.mimetype,
@@ -910,7 +911,9 @@ export class AttachmentsService implements OnModuleInit {
     return folder;
   }
 
-  async resolveUserAvatarFolder(userId: string): Promise<AttachmentFolder | null> {
+  async resolveUserAvatarFolder(
+    userId: string,
+  ): Promise<AttachmentFolder | null> {
     return this.resolveFolderByPath(userId, ['userAvatar']);
   }
 

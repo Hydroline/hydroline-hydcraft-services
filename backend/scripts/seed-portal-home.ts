@@ -33,7 +33,9 @@ async function main() {
       config.cards = { ...DEFAULT_PORTAL_HOME_CONFIG.cards };
       mutated = true;
     } else {
-      for (const [cardId, defaults] of Object.entries(DEFAULT_PORTAL_HOME_CONFIG.cards)) {
+      for (const [cardId, defaults] of Object.entries(
+        DEFAULT_PORTAL_HOME_CONFIG.cards,
+      )) {
         if (!config.cards[cardId]) {
           config.cards[cardId] = { ...defaults };
           mutated = true;
@@ -64,10 +66,12 @@ async function main() {
           description: '欧文',
         });
         if (attachment) {
-          const rawDescription =
-            (attachment.metadata as Record<string, unknown> | undefined)?.description;
+          const rawDescription = (
+            attachment.metadata as Record<string, unknown> | undefined
+          )?.description;
           const description =
-            typeof rawDescription === 'string' && rawDescription.trim().length > 0
+            typeof rawDescription === 'string' &&
+            rawDescription.trim().length > 0
               ? rawDescription
               : 'Hydroline 城景';
 
@@ -87,7 +91,9 @@ async function main() {
     }
 
     if (!mutated) {
-      logger.log('Portal home configuration already present, no changes applied.');
+      logger.log(
+        'Portal home configuration already present, no changes applied.',
+      );
       return;
     }
 

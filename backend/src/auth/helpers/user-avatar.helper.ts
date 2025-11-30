@@ -13,7 +13,9 @@ export async function enrichUserAvatar<T extends MaybeUser>(
   attachmentsService: AttachmentsService,
   user: T,
   latestAttachment?: LatestAttachment,
-): Promise<T & { avatarAttachmentId: string | null; avatarUrl: string | null }> {
+): Promise<
+  T & { avatarAttachmentId: string | null; avatarUrl: string | null }
+> {
   const currentAttachmentId =
     (user?.avatarAttachmentId as string | null | undefined) ?? null;
   const effectiveAttachmentId =

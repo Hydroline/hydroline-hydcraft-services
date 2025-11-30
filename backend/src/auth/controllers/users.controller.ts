@@ -183,9 +183,8 @@ export class UsersController {
     const previousAvatarAttachmentId =
       (existingUser as any)?.avatarAttachmentId ?? null;
 
-    const avatarFolder = await this.attachmentsService.resolveUserAvatarFolder(
-      userId,
-    );
+    const avatarFolder =
+      await this.attachmentsService.resolveUserAvatarFolder(userId);
 
     const attachment = await this.attachmentsService.uploadAttachment(
       userId,

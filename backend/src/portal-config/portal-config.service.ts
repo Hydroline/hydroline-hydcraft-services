@@ -35,8 +35,7 @@ export class PortalConfigService {
   constructor(
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
-  ) {
-  }
+  ) {}
 
   getCardRegistry(): PortalCardRegistryEntry[] {
     return PORTAL_CARD_REGISTRY;
@@ -380,7 +379,9 @@ export class PortalConfigService {
       items.map((item) => this.resolveBackground(item)),
     );
     return resolvedItems.filter(
-      (item): item is {
+      (
+        item,
+      ): item is {
         imageUrl: string;
         id: string;
         description: string | null;
@@ -392,9 +393,7 @@ export class PortalConfigService {
     );
   }
 
-  private async resolveBackground(
-    item: PortalHomeBackgroundConfig,
-  ): Promise<{
+  private async resolveBackground(item: PortalHomeBackgroundConfig): Promise<{
     imageUrl: string;
     id: string;
     description: string | null;
@@ -417,10 +416,10 @@ export class PortalConfigService {
         id: item.id,
         imageUrl: buildPublicUrl(`/attachments/public/${attachment.id}`),
         description: item.description ?? null,
-          title: item.title ?? null,
-          subtitle: item.subtitle ?? null,
-          shootAt: item.shootAt ?? null,
-          photographer: item.photographer ?? null,
+        title: item.title ?? null,
+        subtitle: item.subtitle ?? null,
+        shootAt: item.shootAt ?? null,
+        photographer: item.photographer ?? null,
       };
     } catch (error) {
       this.logger.warn(
@@ -568,5 +567,4 @@ export class PortalConfigService {
       );
     }
   }
-
 }
