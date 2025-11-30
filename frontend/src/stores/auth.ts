@@ -789,6 +789,43 @@ export const useAuthStore = defineStore('auth', {
       this.setUser(result.user)
       return result.user
     },
+    async addMinecraftNickname(payload: { nickname: string; isPrimary?: boolean }) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const result = await apiFetch<{ user: RawUser }>('/auth/me/minecraft-profiles', {
+        method: 'POST',
+        token: this.token,
+        body: payload,
+      })
+      this.setUser(result.user)
+      return result.user
+    },
+    async updateMinecraftNickname(profileId: string, payload: { nickname?: string; isPrimary?: boolean }) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const endpoint = `/auth/me/minecraft-profiles/${encodeURIComponent(profileId)}`
+      const result = await apiFetch<{ user: RawUser }>(endpoint, {
+        method: 'PATCH',
+        token: this.token,
+        body: payload,
+      })
+      this.setUser(result.user)
+      return result.user
+    },
+    async removeMinecraftNickname(profileId: string) {
+      if (!this.token) {
+        throw new ApiError(401, '未登录')
+      }
+      const endpoint = `/auth/me/minecraft-profiles/${encodeURIComponent(profileId)}`
+      const result = await apiFetch<{ user: RawUser }>(endpoint, {
+        method: 'DELETE',
+        token: this.token,
+      })
+      this.setUser(result.user)
+      return result.user
+    },
     clear() {
       this.setToken(null)
       this.setRefreshToken(null)

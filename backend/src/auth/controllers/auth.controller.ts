@@ -36,6 +36,8 @@ import { AttachmentsService } from '../../attachments/attachments.service';
 import { enrichUserAvatar } from '../helpers/user-avatar.helper';
 import { UpdateAvatarResponseDto } from '../dto/update-avatar.dto';
 import { ChangePasswordWithCodeDto } from '../dto/change-password-with-code.dto';
+import { CreateMinecraftProfileDto } from '../dto/create-minecraft-profile.dto';
+import { UpdateMinecraftProfileDto } from '../dto/update-minecraft-profile.dto';
 import {
   AddPhoneContactDto,
   UpdatePhoneContactDto,
@@ -565,6 +567,58 @@ export class AuthController {
     };
   }
 
+  @Post('me/minecraft-profiles')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '新增当前用户的惯用昵称' })
+  async addCurrentUserMinecraftProfile(
+    @Req() req: Request,
+    @Body() dto: CreateMinecraftProfileDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    await this.usersService.addMinecraftProfile(userId, dto);
+    const user = await this.reloadCurrentUser(userId);
+    return { user };
+  }
+
+  @Patch('me/minecraft-profiles/:profileId')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '更新当前用户的惯用昵称' })
+  async updateCurrentUserMinecraftProfile(
+    @Req() req: Request,
+    @Param('profileId') profileId: string,
+    @Body() dto: UpdateMinecraftProfileDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    await this.usersService.updateMinecraftProfile(userId, profileId, dto);
+    const user = await this.reloadCurrentUser(userId);
+    return { user };
+  }
+
+  @Delete('me/minecraft-profiles/:profileId')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '删除当前用户的惯用昵称' })
+  async removeCurrentUserMinecraftProfile(
+    @Req() req: Request,
+    @Param('profileId') profileId: string,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    await this.usersService.removeMinecraftProfile(userId, profileId);
+    const user = await this.reloadCurrentUser(userId);
+    return { user };
+  }
+
   // split: sessions only (same shape as GET /auth/sessions)
   @Get('me/sessions')
   @UseGuards(AuthGuard)
@@ -742,9 +796,8 @@ export class AuthController {
     const previousAvatarAttachmentId =
       (existingUser as any)?.avatarAttachmentId ?? null;
 
-    const avatarFolder = await this.attachmentsService.resolveUserAvatarFolder(
-      userId,
-    );
+    const avatarFolder =
+      await this.attachmentsService.resolveUserAvatarFolder(userId);
 
     const attachment = await this.attachmentsService.uploadAttachment(
       userId,
@@ -796,6 +849,17 @@ export class AuthController {
     });
   }
 
+  private async reloadCurrentUser(userId: string) {
+    const user = await this.usersService.getSessionUser(userId);
+    const enrichedBindings = await this.enrichAuthmeBindings(
+      (user as Record<string, unknown>)?.['authmeBindings'],
+    );
+    const withBindings = enrichedBindings
+      ? { ...(user as any), authmeBindings: enrichedBindings }
+      : (user as any);
+    return enrichUserAvatar(this.attachmentsService, withBindings);
+  }
+
   private async enrichAuthmeBindings(bindings: unknown) {
     if (!Array.isArray(bindings) || bindings.length === 0) {
       return null;
@@ -833,5 +897,4 @@ export class AuthController {
       }),
     );
   }
-
 }

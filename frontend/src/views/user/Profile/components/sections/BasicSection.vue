@@ -50,6 +50,11 @@ const props = defineProps<{
     lastLoginIp?: string | null
     lastLoginIpDisplay?: string | null
     roleNames?: string[]
+    rbacLabels?: Array<{
+      id?: string | null
+      name?: string
+      color?: string | null
+    }>
   }
   contactSummary?: {
     email?: {
@@ -128,19 +133,29 @@ const fallbackDial = computed(() => {
   return entry?.dial ?? ''
 })
 const fallbackPhoneDisplay = computed(() => {
-  const dial = fallbackDial.value
   const number = normalizeString(props.modelValue.phone)
-  if (!dial) return number
-  return number ? `${dial} ${number}` : dial
+  if (!number) return ''
+  const dial = fallbackDial.value
+  return dial ? `${dial} ${number}` : number
 })
 const phoneDisplay = computed(() => {
   const preferred = normalizeString(phoneContact.value?.display)
   if (preferred) return preferred
   return fallbackPhoneDisplay.value
 })
-const phoneVerificationActive = computed(
-  () => Boolean(props.phoneVerificationEnabled),
+const phoneVerificationActive = computed(() =>
+  Boolean(props.phoneVerificationEnabled),
 )
+
+const rbacLabels = computed(() => {
+  const list = props.meta?.rbacLabels
+  if (!Array.isArray(list)) return []
+  return list.filter((entry) => Boolean(entry)) as Array<{
+    id?: string | null
+    name?: string
+    color?: string | null
+  }>
+})
 
 const editingBasic = ref(false)
 const editingRegion = ref(false)
@@ -317,7 +332,7 @@ defineExpose({ forceEdit })
             >
           </template>
         </div>
-    </div>
+      </div>
 
       <div
         class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
@@ -363,7 +378,9 @@ defineExpose({ forceEdit })
               alt="用户头像"
               class="h-full w-full object-cover"
             />
-            <span class="flex h-full w-full items-center justify-center text-xs font-semibold">
+            <span
+              class="flex h-full w-full items-center justify-center text-xs font-semibold"
+            >
               头像
             </span>
           </div>
@@ -484,7 +501,7 @@ defineExpose({ forceEdit })
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
         >
-          权限组
+          RBAC 权限组
         </div>
         <div class="flex-1">
           <div
@@ -494,7 +511,7 @@ defineExpose({ forceEdit })
             <UBadge
               v-for="role in props.meta.roleNames"
               :key="role"
-              variant="soft"
+              variant="outline"
               class="text-xs"
             >
               {{ role }}
@@ -502,6 +519,36 @@ defineExpose({ forceEdit })
           </div>
           <p v-else class="text-sm text-slate-400 dark:text-slate-500">
             暂无权限组
+          </p>
+        </div>
+      </div>
+
+      <div
+        class="flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 md:flex-row md:items-center md:gap-6"
+      >
+        <div
+          class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
+        >
+          RBAC 标签
+        </div>
+        <div class="flex-1">
+          <div v-if="rbacLabels.length" class="flex flex-wrap gap-2">
+            <UBadge
+              v-for="label in rbacLabels"
+              :key="label.id"
+              variant="outline"
+              class="text-xs"
+              :style="
+                label.color
+                  ? { backgroundColor: label.color + '22', color: label.color }
+                  : undefined
+              "
+            >
+              {{ label.name }}
+            </UBadge>
+          </div>
+          <p v-else class="text-sm text-slate-400 dark:text-slate-500">
+            暂无标签
           </p>
         </div>
       </div>

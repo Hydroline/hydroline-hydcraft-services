@@ -455,6 +455,34 @@ const roleNames = computed(() => {
   return Array.from(new Set(names))
 })
 
+const rbacLabels = computed(() => {
+  const entries = ((auth.user as Record<string, any> | null)
+    ?.permissionLabels ?? []) as any[]
+  if (!Array.isArray(entries) || entries.length === 0) return []
+  return entries
+    .map((link) => link?.label)
+    .filter((label): label is Record<string, any> => Boolean(label))
+    .map((label) => {
+      const nameRaw =
+        typeof label.name === 'string' && label.name.trim().length > 0
+          ? label.name.trim()
+          : null
+      const keyRaw =
+        typeof label.key === 'string' && label.key.trim().length > 0
+          ? label.key.trim()
+          : null
+      return {
+        id: typeof label.id === 'string' ? label.id : (keyRaw ?? nameRaw),
+        name: nameRaw ?? keyRaw ?? '未命名',
+        color:
+          typeof label.color === 'string' && label.color.trim().length > 0
+            ? label.color.trim()
+            : null,
+      }
+    })
+    .filter((label) => Boolean(label.id))
+})
+
 const lastLoginIpDisplay = computed(() => {
   const ip = lastLoginIp.value
   if (!ip) return ''
@@ -654,6 +682,7 @@ watch(
         lastLoginIp: lastLoginIp,
         lastLoginIpDisplay: lastLoginIpDisplay,
         roleNames: roleNames,
+        rbacLabels: rbacLabels,
       }"
       :saving="saving"
       :reset-signal="resetSignal"

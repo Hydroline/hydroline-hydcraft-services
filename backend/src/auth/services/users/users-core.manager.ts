@@ -373,6 +373,23 @@ export async function getSessionUser(ctx: UsersServiceContext, userId: string) {
         },
         orderBy: { createdAt: 'asc' },
       },
+      minecraftIds: {
+        select: {
+          id: true,
+          userId: true,
+          nickname: true,
+          isPrimary: true,
+          source: true,
+          verifiedAt: true,
+          verificationNote: true,
+          metadata: true,
+          authmeBindingId: true,
+          authmeUuid: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      },
       authmeBindings: {
         select: {
           id: true,
@@ -493,6 +510,20 @@ export async function getSessionUser(ctx: UsersServiceContext, userId: string) {
       : Promise.resolve(null),
     composeAuthmeBindingSnapshots(ctx, user.authmeBindings),
   ]);
+  const nicknames = (user.minecraftIds ?? []).map((profile) => ({
+    id: profile.id,
+    userId: profile.userId,
+    nickname: profile.nickname ?? null,
+    isPrimary: profile.isPrimary,
+    source: profile.source,
+    verifiedAt: profile.verifiedAt ?? null,
+    verificationNote: profile.verificationNote ?? null,
+    metadata: profile.metadata ?? null,
+    authmeBindingId: profile.authmeBindingId ?? null,
+    authmeUuid: profile.authmeUuid ?? null,
+    createdAt: profile.createdAt,
+    updatedAt: profile.updatedAt,
+  }));
 
   const authmeBindings = await Promise.all(
     bindingData.bindings.map(async (binding) => {
@@ -517,6 +548,7 @@ export async function getSessionUser(ctx: UsersServiceContext, userId: string) {
 
   return {
     ...user,
+    nicknames,
     lastLoginIp: normalizedLastLoginIp,
     lastLoginIpLocation: lastLoginLocation?.display ?? null,
     lastLoginIpLocationRaw: lastLoginLocation?.raw ?? null,
@@ -534,6 +566,7 @@ export async function getSessionUser(ctx: UsersServiceContext, userId: string) {
     lastLoginIpLocationRaw: string | null;
     security: typeof security;
     accounts: typeof user.accounts;
+    nicknames: typeof nicknames;
   };
 }
 
