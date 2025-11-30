@@ -213,7 +213,8 @@ async function confirmDeleteAttachment() {
     :ui="{
       overlay: 'fixed inset-0 z-[205]',
       wrapper: 'z-[210]',
-      content: 'w-full max-w-lg z-[215]',
+      content:
+        'w-full max-w-lg z-[215] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
     }"
   >
     <template #content>
@@ -474,7 +475,11 @@ async function confirmDeleteAttachment() {
   <UModal
     :open="deleteConfirmModalOpen"
     @update:open="closeDeleteConfirm"
-    :ui="{ content: 'w-full max-w-md z-[1101]', overlay: 'z-[1100]' }"
+    :ui="{
+      content:
+        'w-full max-w-md z-[1101] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      overlay: 'z-[1100]',
+    }"
   >
     <template #content>
       <div class="space-y-4 p-6 text-sm">

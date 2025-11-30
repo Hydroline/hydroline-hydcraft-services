@@ -613,7 +613,10 @@ async function setPrimaryBinding(bindingId: string | null) {
           if (!value) closeHistoryDialog()
         }
       "
-      :ui="{ content: 'w-full max-w-2xl' }"
+      :ui="{
+        content:
+          'w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <UCard>
@@ -771,6 +774,7 @@ async function setPrimaryBinding(bindingId: string | null) {
           if (!value) handleCloseUnbindDialog()
         }
       "
+      :ui="{ content: 'w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]' }"
     >
       <template #content>
         <UCard>
@@ -833,6 +837,7 @@ async function setPrimaryBinding(bindingId: string | null) {
           if (!value) closeNicknameDialog()
         }
       "
+      :ui="{ content: 'w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]' }"
     >
       <template #content>
         <UCard>
@@ -902,6 +907,7 @@ async function setPrimaryBinding(bindingId: string | null) {
           if (!value) closeDeleteNickname()
         }
       "
+      :ui="{ content: 'w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]' }"
     >
       <template #content>
         <UCard>

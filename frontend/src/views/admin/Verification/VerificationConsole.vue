@@ -518,7 +518,10 @@ watch(
     <UModal
       :open="configDialogOpen"
       @update:open="updateConfigDialog"
-      :ui="{ content: 'w-full max-w-3xl' }"
+      :ui="{
+        content:
+          'w-full max-w-3xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">
@@ -644,7 +647,10 @@ watch(
     <UModal
       :open="testMailDialogOpen"
       @update:open="updateTestMailDialog"
-      :ui="{ content: 'w-full max-w-2xl' }"
+      :ui="{
+        content:
+          'w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">

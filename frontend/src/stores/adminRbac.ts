@@ -50,9 +50,12 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
       }
       this.loadingPermissions = true
       try {
-        const data = await apiFetch<AdminPermissionEntry[]>('/auth/permissions', {
-          token: auth.token,
-        })
+        const data = await apiFetch<AdminPermissionEntry[]>(
+          '/auth/permissions',
+          {
+            token: auth.token,
+          },
+        )
         this.permissions = data
         return data
       } finally {
@@ -69,9 +72,12 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
       }
       this.loadingLabels = true
       try {
-        const data = await apiFetch<AdminPermissionLabelEntry[]>('/auth/permission-labels', {
-          token: auth.token,
-        })
+        const data = await apiFetch<AdminPermissionLabelEntry[]>(
+          '/auth/permission-labels',
+          {
+            token: auth.token,
+          },
+        )
         this.labels = data
         return data
       } finally {
@@ -88,9 +94,12 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
       }
       this.loadingCatalog = true
       try {
-        const data = await apiFetch<AdminPermissionCatalogEntry[]>('/auth/permissions/catalog', {
-          token: auth.token,
-        })
+        const data = await apiFetch<AdminPermissionCatalogEntry[]>(
+          '/auth/permissions/catalog',
+          {
+            token: auth.token,
+          },
+        )
         this.catalog = data
         return data
       } finally {
@@ -109,7 +118,12 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
       })
     },
     // Role CRUD
-    async createRole(payload: { key: string; name: string; description?: string | null; permissionKeys: string[] }) {
+    async createRole(payload: {
+      key: string
+      name: string
+      description?: string | null
+      permissionKeys: string[]
+    }) {
       const auth = useAuthStore()
       if (!auth.token) throw new Error('未登录，无法创建角色')
       this.submitting = true
@@ -124,7 +138,10 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
         this.submitting = false
       }
     },
-    async updateRole(roleId: string, payload: { name?: string; description?: string | null }) {
+    async updateRole(
+      roleId: string,
+      payload: { name?: string; description?: string | null },
+    ) {
       const auth = useAuthStore()
       if (!auth.token) throw new Error('未登录，无法更新角色')
       this.submitting = true
@@ -163,13 +180,16 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
           method: 'DELETE',
           token: auth.token,
         })
-        this.roles = this.roles.filter(r => r.id !== roleId)
+        this.roles = this.roles.filter((r) => r.id !== roleId)
       } finally {
         this.submitting = false
       }
     },
     // Permission CRUD
-    async createPermission(payload: { key: string; description?: string | null }) {
+    async createPermission(payload: {
+      key: string
+      description?: string | null
+    }) {
       const auth = useAuthStore()
       if (!auth.token) throw new Error('未登录，无法创建权限')
       this.submitting = true
@@ -185,7 +205,10 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
         this.submitting = false
       }
     },
-    async updatePermission(permissionId: string, payload: { description?: string | null }) {
+    async updatePermission(
+      permissionId: string,
+      payload: { description?: string | null },
+    ) {
       const auth = useAuthStore()
       if (!auth.token) throw new Error('未登录，无法更新权限')
       this.submitting = true
@@ -210,14 +233,20 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
           method: 'DELETE',
           token: auth.token,
         })
-        this.permissions = this.permissions.filter(p => p.id !== permissionId)
+        this.permissions = this.permissions.filter((p) => p.id !== permissionId)
         await this.fetchCatalog(true)
       } finally {
         this.submitting = false
       }
     },
     // Permission Label CRUD
-    async createLabel(payload: { key: string; name: string; description?: string | null; color?: string | null; permissionKeys: string[] }) {
+    async createLabel(payload: {
+      key: string
+      name: string
+      description?: string | null
+      color?: string | null
+      permissionKeys: string[]
+    }) {
       const auth = useAuthStore()
       if (!auth.token) throw new Error('未登录，无法创建权限标签')
       this.submitting = true
@@ -233,7 +262,15 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
         this.submitting = false
       }
     },
-    async updateLabel(labelId: string, payload: { name?: string; description?: string | null; color?: string | null; permissionKeys?: string[] }) {
+    async updateLabel(
+      labelId: string,
+      payload: {
+        name?: string
+        description?: string | null
+        color?: string | null
+        permissionKeys?: string[]
+      },
+    ) {
       const auth = useAuthStore()
       if (!auth.token) throw new Error('未登录，无法更新权限标签')
       this.submitting = true
@@ -258,7 +295,7 @@ export const useAdminRbacStore = defineStore('admin-rbac', {
           method: 'DELETE',
           token: auth.token,
         })
-        this.labels = this.labels.filter(l => l.id !== labelId)
+        this.labels = this.labels.filter((l) => l.id !== labelId)
         await this.fetchCatalog(true)
       } finally {
         this.submitting = false

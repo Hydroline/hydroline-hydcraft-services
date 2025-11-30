@@ -28,7 +28,11 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <UModal :open="props.open" @update:open="emit('update:open', $event)">
+  <UModal
+    :open="props.open"
+    @update:open="emit('update:open', $event)"
+    :ui="{ content: 'w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]' }"
+  >
     <template #content>
       <UCard>
         <template #header>

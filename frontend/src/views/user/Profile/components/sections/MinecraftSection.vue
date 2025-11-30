@@ -58,9 +58,7 @@ function bindingAvatarUrl(binding: {
   realname?: string | null
 }) {
   const identifier = bindingIdentifier(binding) || 'Steve'
-  return `https://mc-heads.hydcraft.cn/avatar/${encodeURIComponent(
-    identifier,
-  )}`
+  return `https://mc-heads.hydcraft.cn/avatar/${encodeURIComponent(identifier)}`
 }
 </script>
 
@@ -134,7 +132,8 @@ function bindingAvatarUrl(binding: {
                   :src="bindingAvatarUrl(b)"
                   class="h-6 w-6 rounded-md border border-slate-200 object-cover dark:border-slate-700"
                   :class="{
-                    'opacity-0 absolute': !imageLoadStates[bindingIdentifier(b)],
+                    'opacity-0 absolute':
+                      !imageLoadStates[bindingIdentifier(b)],
                   }"
                   @load="imageLoadStates[bindingIdentifier(b)] = true"
                   @error="imageLoadStates[bindingIdentifier(b)] = true"

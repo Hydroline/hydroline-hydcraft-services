@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
@@ -7,13 +7,11 @@ import { usePlayerPortalStore } from '@/stores/playerPortal'
 import { apiFetch } from '@/utils/api'
 import PlayerLoginPrompt from './components/PlayerLoginPrompt.vue'
 import PlayerProfileContent from './components/PlayerProfileContent.vue'
-import PlayerPermissionDialog from './components/PlayerPermissionDialog.vue'
-import PlayerRestartDialog from './components/PlayerRestartDialog.vue'
 
 const auth = useAuthStore()
 const playerStore = usePlayerPortalStore()
+let loggedPoller: ReturnType<typeof setInterval> | null = null
 const route = useRoute()
-const statsPeriod = ref('30d')
 const serverOptions = ref<Array<{ id: string; displayName: string }>>([])
 const permissionDialog = reactive({
   open: false,
@@ -25,7 +23,6 @@ const restartDialog = reactive({
   serverId: '',
   reason: '',
 })
-const actionsPage = ref(1)
 const toast = useToast()
 
 const targetPlayerParam = computed(() => {
@@ -48,14 +45,10 @@ const isViewingSelf = computed(() => {
 })
 
 const summary = computed(() => playerStore.summary)
-
-const assets = computed(() => playerStore.assets)
 const region = computed(() => playerStore.region)
 const minecraft = computed(() => playerStore.minecraft)
 const stats = computed(() => playerStore.stats)
-const actions = computed(() => playerStore.actions)
 const statusSnapshot = computed(() => playerStore.statusSnapshot)
-const storeLoading = computed(() => playerStore.loading)
 
 async function loadServerOptions() {
   const publicServers = await apiFetch<{
@@ -64,30 +57,63 @@ async function loadServerOptions() {
   serverOptions.value = publicServers.servers ?? []
 }
 
-async function loadProfile(actionsPageOverride?: number) {
+async function loadProfile() {
   if (!canViewProfile.value) {
     playerStore.reset()
     return
   }
-  const nextPage = actionsPageOverride ?? actionsPage.value
-  actionsPage.value = nextPage
   await playerStore.fetchProfile({
     id: targetPlayerParam.value ?? undefined,
-    period: statsPeriod.value,
-    actionsPage: nextPage,
   })
+}
+
+function stopLoggedPolling() {
+  if (loggedPoller) {
+    clearInterval(loggedPoller)
+    loggedPoller = null
+  }
+}
+
+async function refreshLoggedStatus() {
+  if (!canViewProfile.value) {
+    playerStore.logged = null
+    return
+  }
+  const targetId = targetPlayerParam.value ?? undefined
+  try {
+    await playerStore.fetchLoggedStatus({ id: targetId })
+  } catch {
+    // ignore polling errors
+  }
+}
+
+function startLoggedPolling() {
+  stopLoggedPolling()
+  if (!canViewProfile.value) {
+    playerStore.logged = null
+    return
+  }
+  void refreshLoggedStatus()
+  loggedPoller = setInterval(() => {
+    void refreshLoggedStatus()
+  }, 60 * 1000)
 }
 
 onMounted(() => {
   void loadServerOptions()
-  void loadProfile(1)
+  void loadProfile()
+  startLoggedPolling()
+})
+
+onBeforeUnmount(() => {
+  stopLoggedPolling()
 })
 
 watch(
-  () => [targetPlayerParam.value, statsPeriod.value],
+  () => targetPlayerParam.value,
   () => {
-    actionsPage.value = 1
-    void loadProfile(1)
+    void loadProfile()
+    startLoggedPolling()
   },
 )
 
@@ -95,19 +121,23 @@ watch(
   () => auth.isAuthenticated,
   () => {
     if (!targetPlayerParam.value) {
-      actionsPage.value = 1
-      void loadProfile(1)
+      void loadProfile()
+      startLoggedPolling()
     }
   },
 )
 
-async function refreshActions(page = 1) {
-  actionsPage.value = page
-  await playerStore.fetchActions(
-    actionsPage.value,
-    targetPlayerParam.value ?? undefined,
-  )
-}
+watch(
+  () => canViewProfile.value,
+  (available) => {
+    if (available) {
+      startLoggedPolling()
+      return
+    }
+    stopLoggedPolling()
+    playerStore.logged = null
+  },
+)
 
 async function handleAuthmeReset() {
   try {
@@ -222,7 +252,7 @@ function formatIpLocation(location: string | null | undefined) {
   <Transition name="opacity-motion">
     <div
       v-if="summary?.avatarUrl"
-      class="absolute top-0 left-0 md:left-16 right-0 h-1/5 md:h-2/3 pointer-events-none select-none mask-[linear-gradient(to_bottom,#fff_-20%,transparent_80%)] filter-[blur(32px)_saturate(250%)_opacity(0.2)] dark:filter-[blur(48px)_saturate(200%)_opacity(0.8)]"
+      class="absolute top-0 left-0 lg:left-16 right-0 h-1/5 md:h-2/3 pointer-events-none select-none mask-[linear-gradient(to_bottom,#fff_-20%,transparent_80%)] filter-[blur(32px)_saturate(250%)_opacity(0.2)] dark:filter-[blur(48px)_saturate(200%)_opacity(0.8)]"
     >
       <img
         :src="summary.avatarUrl"
@@ -240,41 +270,14 @@ function formatIpLocation(location: string | null | undefined) {
       :is-viewing-self="isViewingSelf"
       :summary="summary"
       :region="region"
-      :actions="actions"
       :minecraft="minecraft"
       :stats="stats"
-      :stats-period="statsPeriod"
       :format-date-time="formatDateTime"
       :format-metric-value="formatMetricValue"
       :status-snapshot="statusSnapshot"
       :format-ip-location="formatIpLocation"
-      @update:stats-period="statsPeriod = $event"
-      @refresh-actions="refreshActions"
       @authme-reset="handleAuthmeReset"
       @force-login="handleForceLogin"
-      @open-permission-dialog="permissionDialog.open = true"
-      @open-restart-dialog="restartDialog.open = true"
-    />
-
-    <PlayerPermissionDialog
-      :open="permissionDialog.open"
-      :target-group="permissionDialog.targetGroup"
-      :reason="permissionDialog.reason"
-      @update:open="permissionDialog.open = $event"
-      @update:target-group="permissionDialog.targetGroup = $event"
-      @update:reason="permissionDialog.reason = $event"
-      @submit="submitPermissionChange"
-    />
-
-    <PlayerRestartDialog
-      :open="restartDialog.open"
-      :server-id="restartDialog.serverId"
-      :reason="restartDialog.reason"
-      :server-options="serverOptions"
-      @update:open="restartDialog.open = $event"
-      @update:server-id="restartDialog.serverId = $event"
-      @update:reason="restartDialog.reason = $event"
-      @submit="submitRestartRequest"
     />
   </section>
 </template>

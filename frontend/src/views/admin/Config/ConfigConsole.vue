@@ -670,7 +670,11 @@ onMounted(() => {
     <UModal
       :open="namespaceDetailOpen"
       @update:open="namespaceDetailOpen = $event"
-      :ui="{ overlay: 'z-[50]', content: 'z-[50] w-full max-w-4xl' }"
+      :ui="{
+        overlay: 'z-[50]',
+        content:
+          'z-[50] w-full max-w-4xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <UCard>
@@ -799,7 +803,11 @@ onMounted(() => {
 
     <UModal
       v-model:open="editModalOpen"
-      :ui="{ overlay: 'z-[60]', content: 'z-[60] w-full max-w-2xl' }"
+      :ui="{
+        overlay: 'z-[60]',
+        content:
+          'z-[60] w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <form class="space-y-4 p-6" @submit.prevent="saveEdit">
@@ -843,7 +851,11 @@ onMounted(() => {
 
     <UModal
       v-model:open="createEntryModalOpen"
-      :ui="{ overlay: 'z-[60]', content: 'z-[60] w-full max-w-2xl' }"
+      :ui="{
+        overlay: 'z-[60]',
+        content:
+          'z-[60] w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <form class="space-y-4 p-6 text-sm" @submit.prevent="createEntry">
@@ -909,7 +921,11 @@ onMounted(() => {
 
     <UModal
       v-model:open="namespaceModalOpen"
-      :ui="{ overlay: 'z-[60]', content: 'z-[60] w-full max-w-lg' }"
+      :ui="{
+        overlay: 'z-[60]',
+        content:
+          'z-[60] w-full max-w-lg w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <form class="space-y-4 p-6 text-sm" @submit.prevent="submitNamespace">
@@ -977,7 +993,11 @@ onMounted(() => {
 
     <UModal
       v-model:open="deleteModalOpen"
-      :ui="{ overlay: 'z-[60]', content: 'z-[60] w-full max-w-md' }"
+      :ui="{
+        overlay: 'z-[60]',
+        content:
+          'z-[60] w-full max-w-md w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-4 p-6 text-sm">

@@ -587,7 +587,10 @@ onBeforeUnmount(() => {
     <UModal
       :open="addPhoneDialog.open"
       @update:open="updateAddPhoneDialog"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="{
+        content:
+          'w-full max-w-md w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">
@@ -647,7 +650,10 @@ onBeforeUnmount(() => {
     <UModal
       :open="editPhoneDialog.open"
       @update:open="updateEditPhoneDialog"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="{
+        content:
+          'w-full max-w-md w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">
@@ -695,7 +701,10 @@ onBeforeUnmount(() => {
     <UModal
       :open="verificationDialog.open"
       @update:open="updateVerificationDialog"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="{
+        content:
+          'w-full max-w-md w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">
@@ -768,7 +777,10 @@ onBeforeUnmount(() => {
     <UModal
       :open="deletePhoneDialog.open"
       @update:open="updateDeletePhoneDialog"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="{
+        content:
+          'w-full max-w-md w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">

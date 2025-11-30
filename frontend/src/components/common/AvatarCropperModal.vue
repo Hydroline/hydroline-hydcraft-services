@@ -91,7 +91,7 @@ async function initializeCropperFromImage() {
         ready.value = true
       },
     })
-    // 兜底：若 ready 事件未及时触发，保证遮罩能关闭
+
     ready.value = true
   } catch (error) {
     console.error('[avatar-cropper] init failed', error)
@@ -136,7 +136,9 @@ function baseFileName() {
   return withoutExt.length > 0 ? withoutExt : 'avatar'
 }
 
-function handleAction(action: 'zoomIn' | 'zoomOut' | 'rotateL' | 'rotateR' | 'reset') {
+function handleAction(
+  action: 'zoomIn' | 'zoomOut' | 'rotateL' | 'rotateR' | 'reset',
+) {
   if (!cropper.value) return
   switch (action) {
     case 'zoomIn':
@@ -196,133 +198,132 @@ function handleConfirm() {
   <UModal
     :open="props.open && Boolean(props.imageUrl)"
     :ui="{
-      container: 'items-start justify-center p-4 sm:p-6',
-      content: 'w-full max-w-4xl',
+      content:
+        'w-full max-w-4xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
     }"
     @update:open="updateOpen"
   >
     <template #content>
       <UCard :ui="{ body: 'space-y-6' }">
-      <template #header>
-        <div class="flex flex-col gap-1">
-          <p class="text-base font-semibold text-slate-900 dark:text-white">
-            裁剪头像
-          </p>
-          <p class="text-sm text-slate-500 dark:text-slate-400">
-            调整裁剪区域后保存，将替换当前头像
-          </p>
-        </div>
-      </template>
-
-      <div
-        class="grid gap-6 md:grid-cols-[minmax(0,1fr)_220px] md:items-start"
-      >
-        <div class="min-h-[320px] rounded-2xl border border-slate-200/70 p-3 dark:border-slate-700/70">
-          <div
-            v-if="props.imageUrl"
-            data-avatar-cropper-stage
-            class="relative w-full overflow-hidden rounded-xl bg-slate-50 dark:bg-slate-800 h-[320px] sm:h-[360px] md:h-[420px] lg:h-[480px]"
-          >
-            <img
-              ref="imageRef"
-              :src="props.imageUrl"
-              alt="待裁剪头像"
-              class="block h-full w-full select-none object-contain"
-              @load="initializeCropperFromImage"
-              @error="handleImageError"
-            />
-            <div
-              v-if="!ready"
-              class="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-900/5 text-sm text-slate-500 dark:bg-slate-900/30 dark:text-slate-300"
-            >
-              图片加载中…
-            </div>
-          </div>
-          <div
-            v-else
-            class="flex h-full min-h-[320px] items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-          >
-            请先选择一张图片
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-4">
-          <div
-            class="rounded-2xl border border-slate-200/70 p-3 dark:border-slate-700/70"
-          >
-            <div
-              data-avatar-preview
-              :data-avatar-preview-id="instanceId"
-              class="overflow-hidden mx-auto h-32 w-32 rounded-xl bg-slate-100 dark:bg-slate-800 sm:h-36 sm:w-36 md:h-40 md:w-40"
-            ></div>
-            <p class="pt-3 text-xs text-slate-500 dark:text-slate-400">
-              预览（1:1）
+        <template #header>
+          <div class="flex flex-col gap-1">
+            <p class="text-base font-semibold text-slate-900 dark:text-white">
+              裁剪头像
             </p>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <UButton
-              icon="i-lucide-zoom-in"
-              variant="ghost"
-              size="sm"
-              @click="handleAction('zoomIn')"
+        </template>
+
+        <div
+          class="grid gap-6 md:grid-cols-[minmax(0,1fr)_220px] md:items-start"
+        >
+          <div
+            class="min-h-80 rounded-2xl border border-slate-200/70 p-3 dark:border-slate-700/70"
+          >
+            <div
+              v-if="props.imageUrl"
+              data-avatar-cropper-stage
+              class="relative w-full overflow-hidden rounded-xl bg-slate-50 dark:bg-slate-800 h-80 sm:h-[360px] md:h-[420px] lg:h-[480px]"
             >
-              放大
-            </UButton>
-            <UButton
-              icon="i-lucide-zoom-out"
-              variant="ghost"
-              size="sm"
-              @click="handleAction('zoomOut')"
+              <img
+                ref="imageRef"
+                :src="props.imageUrl"
+                alt="待裁剪头像"
+                class="block h-full w-full select-none object-contain"
+                @load="initializeCropperFromImage"
+                @error="handleImageError"
+              />
+              <div
+                v-if="!ready"
+                class="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-900/5 text-sm text-slate-500 dark:bg-slate-900/30 dark:text-slate-300"
+              >
+                图片加载中…
+              </div>
+            </div>
+            <div
+              v-else
+              class="flex h-full min-h-[320px] items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400"
             >
-              缩小
-            </UButton>
-            <UButton
-              icon="i-lucide-rotate-ccw"
-              variant="ghost"
-              size="sm"
-              @click="handleAction('rotateL')"
+              请先选择一张图片
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-4">
+            <div
+              class="rounded-2xl border border-slate-200/70 p-3 dark:border-slate-700/70"
             >
-              左旋
-            </UButton>
-            <UButton
-              icon="i-lucide-rotate-cw"
-              variant="ghost"
-              size="sm"
-              @click="handleAction('rotateR')"
+              <div
+                data-avatar-preview
+                :data-avatar-preview-id="instanceId"
+                class="overflow-hidden mx-auto h-32 w-32 rounded-xl bg-slate-100 dark:bg-slate-800 sm:h-36 sm:w-36 md:h-40 md:w-40"
+              ></div>
+              <p class="pt-3 text-xs text-slate-500 dark:text-slate-400">
+                预览（1:1）
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <UButton
+                icon="i-lucide-zoom-in"
+                variant="ghost"
+                size="sm"
+                @click="handleAction('zoomIn')"
+              >
+                放大
+              </UButton>
+              <UButton
+                icon="i-lucide-zoom-out"
+                variant="ghost"
+                size="sm"
+                @click="handleAction('zoomOut')"
+              >
+                缩小
+              </UButton>
+              <UButton
+                icon="i-lucide-rotate-ccw"
+                variant="ghost"
+                size="sm"
+                @click="handleAction('rotateL')"
+              >
+                左旋
+              </UButton>
+              <UButton
+                icon="i-lucide-rotate-cw"
+                variant="ghost"
+                size="sm"
+                @click="handleAction('rotateR')"
+              >
+                右旋
+              </UButton>
+              <UButton
+                icon="i-lucide-refresh-ccw"
+                variant="ghost"
+                size="sm"
+                @click="handleAction('reset')"
+              >
+                重置
+              </UButton>
+            </div>
+            <p
+              v-if="internalError"
+              class="text-sm text-danger-500 dark:text-danger-400"
             >
-              右旋
-            </UButton>
+              {{ internalError }}
+            </p>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" @click="updateOpen(false)">取消</UButton>
             <UButton
-              icon="i-lucide-refresh-ccw"
-              variant="ghost"
-              size="sm"
-              @click="handleAction('reset')"
+              color="primary"
+              :disabled="!canConfirm"
+              :loading="props.submitting || exporting"
+              @click="handleConfirm"
             >
-              重置
+              {{ props.confirmLabel }}
             </UButton>
           </div>
-          <p
-            v-if="internalError"
-            class="text-sm text-danger-500 dark:text-danger-400"
-          >
-            {{ internalError }}
-          </p>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="ghost" @click="updateOpen(false)">取消</UButton>
-          <UButton
-            color="primary"
-            :disabled="!canConfirm"
-            :loading="props.submitting || exporting"
-            @click="handleConfirm"
-          >
-            {{ props.confirmLabel }}
-          </UButton>
-        </div>
-      </template>
+        </template>
       </UCard>
     </template>
   </UModal>

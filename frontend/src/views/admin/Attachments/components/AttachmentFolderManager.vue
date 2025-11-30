@@ -74,7 +74,9 @@ const folderForm = reactive({
 })
 
 const filteredFolderOptions = computed(() =>
-  props.folderOptions.filter((option) => option.value !== editingFolderId.value),
+  props.folderOptions.filter(
+    (option) => option.value !== editingFolderId.value,
+  ),
 )
 
 function resetFolderForm() {
@@ -223,7 +225,8 @@ watch(
     :ui="{
       overlay: 'fixed inset-0 z-[160]',
       wrapper: 'z-[165]',
-      content: 'w-full max-w-lg z-[170]',
+      content:
+        'w-full max-w-lg z-[170] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
     }"
   >
     <template #content>
@@ -453,7 +456,11 @@ watch(
   <UModal
     :open="deleteFolderConfirmOpen"
     @update:open="closeFolderDeleteConfirm"
-    :ui="{ content: 'w-full max-w-md z-[1101]', overlay: 'z-[1100]' }"
+    :ui="{
+      content:
+        'w-full max-w-md z-[1101] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      overlay: 'z-[1100]',
+    }"
   >
     <template #content>
       <div class="space-y-4 p-6 text-sm">

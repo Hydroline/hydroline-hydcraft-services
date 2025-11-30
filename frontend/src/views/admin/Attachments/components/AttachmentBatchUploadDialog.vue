@@ -239,7 +239,8 @@ watch(
     :ui="{
       overlay: 'fixed inset-0 z-[190]',
       wrapper: 'z-[195]',
-      content: 'w-full max-w-5xl z-[200]',
+      content:
+        'w-full max-w-5xl z-[200] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
     }"
   >
     <template #content>

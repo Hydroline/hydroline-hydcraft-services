@@ -71,18 +71,11 @@ export class PlayerController {
   async playerProfile(
     @Req() req: Request,
     @Query('id') id?: string,
-    @Query('period') period?: string,
-    @Query('actionsPage') actionsPage?: string,
   ) {
     const targetId = this.resolveTargetUserId(req, id);
-    const pageNumber = actionsPage ? Number(actionsPage) : undefined;
     return this.playerService.getPlayerPortalData(
       req.user?.id ?? null,
       targetId,
-      {
-        period,
-        actionsPage: Number.isFinite(pageNumber) ? pageNumber : undefined,
-      },
     );
   }
 
@@ -158,11 +151,19 @@ export class PlayerController {
   @ApiOperation({ summary: '玩家统计信息' })
   async playerStats(
     @Req() req: Request,
-    @Query('period') period?: string,
     @Query('id') id?: string,
   ) {
     const targetId = this.resolveTargetUserId(req, id);
-    return this.playerService.getPlayerStats(targetId, period);
+    return this.playerService.getPlayerStats(targetId);
+  }
+
+  @Get('is-logged')
+  @UseGuards(OptionalAuthGuard)
+  @ApiOperation({ summary: '判断玩家是否在线' })
+  async playerIsLogged(@Req() req: Request, @Query('id') id?: string) {
+    const targetId = this.resolveTargetUserId(req, id);
+    const logged = await this.playerService.getPlayerLoggedStatus(targetId);
+    return { logged };
   }
 
   @Post('authme/reset-password')

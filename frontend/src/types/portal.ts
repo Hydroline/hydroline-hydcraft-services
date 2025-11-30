@@ -127,6 +127,7 @@ export interface PlayerSummary {
     name: string
     color: string | null
   }>
+  luckperms: PlayerLuckpermsSnapshot[]
 }
 
 export interface PlayerLoginCluster {
@@ -146,24 +147,23 @@ export interface PlayerLoginMap {
   clusters: PlayerLoginCluster[]
 }
 
-export interface PlayerActionItem {
-  id: string
-  action: string
-  createdAt: string
-  reason: string | null
-  operator: { id: string; email: string; displayName: string } | null
-  binding: { id: string; username: string } | null
-  payload: Record<string, unknown> | null
+export interface PlayerLuckpermsGroupSnapshot {
+  group: string
+  server: string | null
+  world: string | null
+  expiry: number | null
+  contexts: Record<string, string> | null
+  displayName: string | null
 }
 
-export interface PlayerActionsResponse {
-  pagination: {
-    total: number
-    page: number
-    pageSize: number
-    pageCount: number
-  }
-  items: PlayerActionItem[]
+export interface PlayerLuckpermsSnapshot {
+  authmeUsername: string
+  username: string | null
+  uuid: string | null
+  primaryGroup: string | null
+  primaryGroupDisplayName: string | null
+  groups: PlayerLuckpermsGroupSnapshot[]
+  synced: boolean
 }
 
 export interface PlayerAssetsResponse {
@@ -228,12 +228,15 @@ export interface PlayerPortalProfileResponse {
   viewerId: string | null
   targetId: string
   summary: PlayerSummary
-  actions: PlayerActionsResponse
   assets: PlayerAssetsResponse
   region: PlayerRegionResponse
   minecraft: PlayerMinecraftResponse
   stats: PlayerStatsResponse
   statusSnapshot: PlayerStatusSnapshot | null
+}
+
+export interface PlayerIsLoggedResponse {
+  logged: boolean
 }
 
 export interface RankCategoryInfo {

@@ -5,7 +5,6 @@ import JsBarcode from 'jsbarcode'
 import type { SkinViewer } from 'skinview3d'
 import { playerStatusOptions } from '@/constants/status'
 import type {
-  PlayerActionsResponse,
   PlayerMinecraftResponse,
   PlayerStatusSnapshot,
   PlayerRegionResponse,
@@ -16,14 +15,16 @@ import {
   countries,
   municipalities,
 } from '@/views/user/Profile/components/region-data'
+import PlayerBindingDetailDialog from './PlayerBindingDetailDialog.vue'
+import { usePlayerPortalStore } from '@/stores/playerPortal'
+
+type PlayerAuthmeBinding = PlayerSummary['authmeBindings'][number]
 
 const props = defineProps<{
   isViewingSelf: boolean
   summary: PlayerSummary | null
-  actions: PlayerActionsResponse | null
   minecraft: PlayerMinecraftResponse | null
   stats: PlayerStatsResponse | null
-  statsPeriod: string
   formatDateTime: (value: string | null | undefined) => string
   formatMetricValue: (value: number, unit: string) => string
   region: PlayerRegionResponse | null
@@ -32,13 +33,13 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:statsPeriod', value: string): void
-  (e: 'refresh-actions', page: number): void
   (e: 'authme-reset'): void
   (e: 'force-login'): void
-  (e: 'open-permission-dialog'): void
-  (e: 'open-restart-dialog'): void
+  (e: 'request-group-change'): void
 }>()
+
+const playerPortalStore = usePlayerPortalStore()
+const isPlayerLogged = computed(() => Boolean(playerPortalStore.logged))
 
 function resolveBindingIdentifier(
   binding:
@@ -65,11 +66,6 @@ const primaryAvatarUrl = computed(() => {
   return `https://mc-heads.hydcraft.cn/avatar/${encodeURIComponent(
     identifier,
   )}/64`
-})
-
-const statsPeriodModel = computed({
-  get: () => props.statsPeriod,
-  set: (value: string) => emit('update:statsPeriod', value),
 })
 
 const barcodeCanvas = ref<HTMLCanvasElement | null>(null)
@@ -312,6 +308,52 @@ const statusLabel = computed(() => {
 onMounted(() => {
   void generateBarcode()
 })
+
+const detailDialogOpen = ref(false)
+const selectedBinding = ref<PlayerAuthmeBinding | null>(null)
+
+const selectedBindingLuckperms = computed(() => {
+  const binding = selectedBinding.value
+  const luckperms = props.summary?.luckperms
+  if (!binding || !luckperms) return null
+  return (
+    luckperms.find((entry) => matchBindingLuckperms(binding, entry)) ?? null
+  )
+})
+
+function openBindingDetail(binding: PlayerAuthmeBinding) {
+  selectedBinding.value = binding
+  detailDialogOpen.value = true
+}
+
+function handleDetailDialogOpenChange(value: boolean) {
+  detailDialogOpen.value = value
+  if (!value) {
+    selectedBinding.value = null
+  }
+}
+
+function matchBindingLuckperms(
+  binding: PlayerAuthmeBinding,
+  entry: PlayerSummary['luckperms'][number],
+) {
+  const bindingUuid = normalizeComparisonKey(binding.uuid)
+  const entryUuid = normalizeComparisonKey(entry.uuid)
+  if (bindingUuid && entryUuid) {
+    return bindingUuid === entryUuid
+  }
+  const bindingUsername = normalizeComparisonKey(binding.username)
+  const entryUsername = normalizeComparisonKey(entry.authmeUsername)
+  return Boolean(
+    bindingUsername && entryUsername && bindingUsername === entryUsername,
+  )
+}
+
+function normalizeComparisonKey(value: string | null | undefined) {
+  if (!value) return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed.toLowerCase() : null
+}
 </script>
 
 <template>
@@ -580,7 +622,7 @@ onMounted(() => {
           私信
         </UButton>
 
-        <RouterLink v-else to="/profile/basic" class="block w-full">
+        <RouterLink v-else to="/profile/minecraft" class="block w-full">
           <UButton
             class="justify-center items-center w-full"
             color="primary"
@@ -601,12 +643,14 @@ onMounted(() => {
           >
             游戏账户
           </div>
-          <div class="flex gap-2">
+          <div class="grid gap-4 md:grid-cols-4">
             <div v-if="props.summary" class="space-y-3 text-sm">
               <div
                 v-for="binding in props.summary.authmeBindings"
                 :key="binding.id"
-                class="w-42 rounded-xl p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800"
+                class="w-42 rounded-xl p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 relative hover:shadow-inner hover:outline-primary-400 outline-2 outline-transparent transition duration-200 cursor-pointer"
+                role="button"
+                @click="openBindingDetail(binding)"
               >
                 <div class="flex justify-center items-center gap-3">
                   <canvas
@@ -697,10 +741,16 @@ onMounted(() => {
 
                       <div
                         v-if="binding.lastlogin"
-                        class="text-xs text-slate-500 dark:text-slate-500"
+                        class="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1"
                       >
-                        {{ dayjs().diff(dayjs(binding.lastlogin), 'day') }}
-                        天前登录过
+                        <span
+                          v-if="isPlayerLogged"
+                          class="inline-flex h-2 w-2 rounded-full bg-emerald-500"
+                        />
+                        <span>
+                          {{ dayjs().diff(dayjs(binding.lastlogin), 'day') }}
+                          天前登录过
+                        </span>
                       </div>
                     </div>
                   </UPopover>
@@ -716,50 +766,6 @@ onMounted(() => {
             <USkeleton v-else class="h-28 w-full" />
           </div>
         </div>
-
-        <div>
-          <div
-            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
-          >
-            游戏账户控制
-          </div>
-          <div v-if="props.isViewingSelf">
-            <div class="grid gap-3 md:grid-cols-1">
-              <UButton
-                class="justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
-                color="neutral"
-                variant="soft"
-                @click="emit('authme-reset')"
-              >
-                AuthMe 密码重置
-              </UButton>
-              <UButton
-                class="justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
-                color="neutral"
-                variant="soft"
-                @click="emit('force-login')"
-              >
-                强制登陆
-              </UButton>
-              <UButton
-                class="justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
-                color="neutral"
-                variant="soft"
-                @click="emit('open-permission-dialog')"
-              >
-                权限组调整申请
-              </UButton>
-              <UButton
-                class="justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/70"
-                color="neutral"
-                variant="soft"
-                @click="emit('open-restart-dialog')"
-              >
-                炸服重启申请
-              </UButton>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="flex flex-col gap-4">
@@ -767,24 +773,15 @@ onMounted(() => {
           <div
             class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
           >
-            <span>账户统计信息</span>
-            <USelectMenu
-              :model-value="statsPeriodModel"
-              :items="[
-                { label: '近 30 天', value: '30d' },
-                { label: '近 7 天', value: '7d' },
-                { label: '全部', value: 'all' },
-              ]"
-              class="w-24"
-              size="sm"
-            />
+            <span>站内统计信息</span>
           </div>
+
           <div>
-            <div v-if="props.stats" class="grid gap-4 md:grid-cols-2">
+            <div v-if="props.stats" class="grid gap-4 md:grid-cols-4">
               <div
                 v-for="metric in props.stats.metrics"
                 :key="metric.id"
-                class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/90 backdrop-blur dark:bg-slate-800/70"
+                class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
               >
                 <p class="text-xs text-slate-500 dark:text-slate-500">
                   {{ metric.label }}
@@ -798,6 +795,33 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <div class="flex flex-col gap-4">
+        <div>
+          <div
+            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
+          >
+            <span>游戏统计信息</span>
+          </div>
+
+          <div>
+            <div v-if="props.stats" class="grid gap-4 md:grid-cols-4"></div>
+            <USkeleton v-else class="h-28 w-full" />
+          </div>
+        </div>
+      </div>
     </div>
+    <PlayerBindingDetailDialog
+      :open="detailDialogOpen"
+      :binding="selectedBinding"
+      :luckperms-entry="selectedBindingLuckperms"
+      :format-date-time="props.formatDateTime"
+      :format-ip-location="props.formatIpLocation"
+      :is-viewing-self="props.isViewingSelf"
+      @update:open="handleDetailDialogOpenChange"
+      @authme-reset="emit('authme-reset')"
+      @force-login="emit('force-login')"
+      @request-group-change="emit('request-group-change')"
+    />
   </div>
 </template>

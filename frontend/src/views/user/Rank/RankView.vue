@@ -10,9 +10,7 @@ const selectedPeriod = ref('30d')
 const loading = computed(() => playerPortalStore.loading)
 
 const categories = computed(() => playerPortalStore.rankCategories)
-const leaderboard = computed(
-  () => playerPortalStore.leaderboard?.items ?? [],
-)
+const leaderboard = computed(() => playerPortalStore.leaderboard?.items ?? [])
 const pagination = computed(
   () => playerPortalStore.leaderboard?.pagination ?? null,
 )
@@ -77,7 +75,9 @@ function formatValue(value: number) {
 
 <template>
   <section class="mx-auto w-full max-w-5xl px-4 py-10">
-    <header class="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <header
+      class="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+    >
       <div>
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
           排行榜
@@ -89,10 +89,12 @@ function formatValue(value: number) {
       <div class="flex flex-wrap gap-3">
         <USelectMenu
           v-model="selectedCategory"
-          :options="categories.map((entry) => ({
-            label: entry.name,
-            value: entry.id,
-          }))"
+          :options="
+            categories.map((entry) => ({
+              label: entry.name,
+              value: entry.id,
+            }))
+          "
           class="w-44"
         />
         <USelectMenu
@@ -127,15 +129,23 @@ function formatValue(value: number) {
         </UButton>
       </div>
 
-      <div class="overflow-hidden rounded-xl border border-slate-200/70 dark:border-slate-800/70">
-        <div class="hidden bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-600 dark:bg-slate-800/50 dark:text-slate-300 md:grid md:grid-cols-[80px_1fr_120px] md:px-6 md:py-3">
+      <div
+        class="overflow-hidden rounded-xl border border-slate-200/70 dark:border-slate-800/70"
+      >
+        <div
+          class="hidden bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-600 dark:bg-slate-800/50 dark:text-slate-300 md:grid md:grid-cols-[80px_1fr_120px] md:px-6 md:py-3"
+        >
           <div>#</div>
           <div>玩家</div>
           <div class="text-right">数值</div>
         </div>
         <div v-if="loading" class="p-6">
           <div class="space-y-3">
-            <USkeleton v-for="n in 5" :key="n" class="h-10 w-full rounded-full" />
+            <USkeleton
+              v-for="n in 5"
+              :key="n"
+              class="h-10 w-full rounded-full"
+            />
           </div>
         </div>
         <div v-else>
@@ -148,12 +158,16 @@ function formatValue(value: number) {
                 highlightUserId && item.user.id === highlightUserId,
             }"
           >
-            <div class="text-base font-semibold text-slate-500 dark:text-slate-400 md:text-xl">
+            <div
+              class="text-base font-semibold text-slate-500 dark:text-slate-400 md:text-xl"
+            >
               {{ item.rank }}
             </div>
             <div class="flex flex-col">
               <span class="font-medium">
-                {{ item.user.displayName || item.user.minecraftName || '未知玩家' }}
+                {{
+                  item.user.displayName || item.user.minecraftName || '未知玩家'
+                }}
               </span>
               <span class="text-xs text-slate-500 dark:text-slate-400">
                 {{ item.user.minecraftName || item.user.email || item.user.id }}
@@ -163,7 +177,10 @@ function formatValue(value: number) {
               {{ formatValue(item.value) }}
             </div>
           </div>
-          <div v-if="!leaderboard.length" class="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+          <div
+            v-if="!leaderboard.length"
+            class="p-6 text-center text-sm text-slate-500 dark:text-slate-400"
+          >
             暂无数据，稍后再试。
           </div>
         </div>
@@ -187,9 +204,7 @@ function formatValue(value: number) {
     >
       <template #header>
         <div>
-          <p class="font-medium text-slate-900 dark:text-white">
-            最近排名快照
-          </p>
+          <p class="font-medium text-slate-900 dark:text-white">最近排名快照</p>
           <p class="text-sm text-slate-500 dark:text-slate-400">
             包含你附近的玩家，便于比较
           </p>
@@ -204,7 +219,9 @@ function formatValue(value: number) {
           <div>
             <p class="font-semibold text-slate-800 dark:text-slate-100">
               #{{ item.rank }} ·
-              {{ item.user.displayName || item.user.minecraftName || '未知玩家' }}
+              {{
+                item.user.displayName || item.user.minecraftName || '未知玩家'
+              }}
             </p>
             <p class="text-xs text-slate-500 dark:text-slate-400">
               {{ item.user.minecraftName || item.user.email || item.user.id }}
@@ -217,7 +234,10 @@ function formatValue(value: number) {
       </div>
     </UCard>
 
-    <div v-if="pagination" class="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
+    <div
+      v-if="pagination"
+      class="mt-6 text-center text-xs text-slate-500 dark:text-slate-400"
+    >
       第 {{ pagination.page }} / {{ pagination.pageCount }} 页 · 共
       {{ pagination.total }} 位玩家
     </div>

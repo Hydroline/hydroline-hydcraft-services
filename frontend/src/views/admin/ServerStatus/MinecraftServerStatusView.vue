@@ -1309,7 +1309,8 @@ async function controlMcsm(
       :open="deleteConfirmDialogOpen"
       @update:open="deleteConfirmDialogOpen = $event"
       :ui="{
-        content: 'w-full max-w-sm',
+        content:
+          'w-full max-w-sm w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
         wrapper: 'z-[140]',
         overlay: 'z-[130]',
       }"

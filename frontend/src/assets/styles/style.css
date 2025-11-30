@@ -32,9 +32,9 @@
 
 :root {
   --font-family:
-    'Bricolage Grotesque', 'Helvetica Neue', 'Helvetica', 'Roboto', 'BlinkMacSystemFont',
-    'MiSans', 'HarmonyOS Sans SC', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+    'Bricolage Grotesque', 'Helvetica Neue', 'Helvetica', 'Roboto',
+    'BlinkMacSystemFont', 'MiSans', 'HarmonyOS Sans SC', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
   line-height: 1.5;
   font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
@@ -46,17 +46,21 @@
 
 html {
   scroll-behavior: smooth;
-  background: radial-gradient(ellipse at left bottom,
-      var(--color-surface-0) 0% 50%,
-      var(--color-surface-1) 120% 175%);
+  background: radial-gradient(
+    ellipse at left bottom,
+    var(--color-surface-0) 0% 50%,
+    var(--color-surface-1) 120% 175%
+  );
 }
 
 body {
   margin: 0;
   padding: 0;
-  background: radial-gradient(ellipse at left bottom,
-      var(--color-surface-0) 0% 50%,
-      var(--color-surface-1) 120% 175%);
+  background: radial-gradient(
+    ellipse at left bottom,
+    var(--color-surface-0) 0% 50%,
+    var(--color-surface-1) 120% 175%
+  );
 }
 
 *,

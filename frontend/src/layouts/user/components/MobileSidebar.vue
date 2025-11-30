@@ -162,7 +162,11 @@ const handleNavigate = () => {
                 v-if="item.isFallback"
                 :key="`${item.icon}-${item.name}`"
                 as="div"
-                :initial="{ opacity: 0.7, scale: 0.88, filter: 'drop-shadow(0 0 0 rgba(99, 102, 241, 0))' }"
+                :initial="{
+                  opacity: 0.7,
+                  scale: 0.88,
+                  filter: 'drop-shadow(0 0 0 rgba(99, 102, 241, 0))',
+                }"
                 :animate="{
                   opacity: 1,
                   scale: 1,

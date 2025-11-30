@@ -789,19 +789,28 @@ export const useAuthStore = defineStore('auth', {
       this.setUser(result.user)
       return result.user
     },
-    async addMinecraftNickname(payload: { nickname: string; isPrimary?: boolean }) {
+    async addMinecraftNickname(payload: {
+      nickname: string
+      isPrimary?: boolean
+    }) {
       if (!this.token) {
         throw new ApiError(401, '未登录')
       }
-      const result = await apiFetch<{ user: RawUser }>('/auth/me/minecraft-profiles', {
-        method: 'POST',
-        token: this.token,
-        body: payload,
-      })
+      const result = await apiFetch<{ user: RawUser }>(
+        '/auth/me/minecraft-profiles',
+        {
+          method: 'POST',
+          token: this.token,
+          body: payload,
+        },
+      )
       this.setUser(result.user)
       return result.user
     },
-    async updateMinecraftNickname(profileId: string, payload: { nickname?: string; isPrimary?: boolean }) {
+    async updateMinecraftNickname(
+      profileId: string,
+      payload: { nickname?: string; isPrimary?: boolean },
+    ) {
       if (!this.token) {
         throw new ApiError(401, '未登录')
       }

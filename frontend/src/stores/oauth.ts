@@ -67,10 +67,10 @@ export const useOAuthStore = defineStore('oauth-admin', {
     },
     async fetchProxyEnv() {
       const token = this.requireToken()
-      this.proxyEnv = await apiFetch<{ proxyUrl: string | null; hasProxyKey: boolean }>(
-        '/auth/oauth/proxy-env',
-        { token },
-      )
+      this.proxyEnv = await apiFetch<{
+        proxyUrl: string | null
+        hasProxyKey: boolean
+      }>('/auth/oauth/proxy-env', { token })
     },
     async testProxyConnectivity() {
       const token = this.requireToken()
@@ -86,7 +86,7 @@ export const useOAuthStore = defineStore('oauth-admin', {
       const token = this.requireToken()
       const qs = new URLSearchParams()
       if (url) qs.set('url', url)
-      const targetProviderId = providerId ?? (this.providers[0]?.id ?? '')
+      const targetProviderId = providerId ?? this.providers[0]?.id ?? ''
       const path =
         qs.toString().length > 0
           ? `/auth/oauth/providers/${targetProviderId}/proxy-test?${qs.toString()}`

@@ -10,20 +10,21 @@ const ui = useUiStore()
 
 const isAuthenticated = computed(() => auth.isAuthenticated)
 
-const sessions = ref<Array<{
-  id: string
-  createdAt: string
-  updatedAt: string
-  ipAddress: string | null
-  ipLocation: string | null
-  userAgent: string | null
-  isCurrent: boolean
-}>>([])
+const sessions = ref<
+  Array<{
+    id: string
+    createdAt: string
+    updatedAt: string
+    ipAddress: string | null
+    ipLocation: string | null
+    userAgent: string | null
+    isCurrent: boolean
+  }>
+>([])
 const sessionsLoading = ref(false)
 const sessionsLoaded = ref(false)
 const sessionsError = ref('')
 const revokingSessionId = ref<string | null>(null)
-
 
 onMounted(() => {
   if (auth.isAuthenticated) {
@@ -107,9 +108,16 @@ async function handleRevokeSession(sessionId: string) {
       @revoke="handleRevokeSession"
     />
   </div>
-  <UCard v-else class="flex flex-col items-center gap-4 bg-white/85 py-12 text-center shadow-sm backdrop-blur-sm dark:bg-slate-900/65">
-    <h2 class="text-xl font-semibold text-slate-900 dark:text-white">需要登录</h2>
-    <p class="max-w-sm text-sm text-slate-600 dark:text-slate-300">登录后可管理活跃会话。</p>
+  <UCard
+    v-else
+    class="flex flex-col items-center gap-4 bg-white/85 py-12 text-center shadow-sm backdrop-blur-sm dark:bg-slate-900/65"
+  >
+    <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
+      需要登录
+    </h2>
+    <p class="max-w-sm text-sm text-slate-600 dark:text-slate-300">
+      登录后可管理活跃会话。
+    </p>
     <UButton color="primary" @click="openLoginDialog">立即登录</UButton>
   </UCard>
 </template>

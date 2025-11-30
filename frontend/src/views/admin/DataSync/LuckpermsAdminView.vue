@@ -577,7 +577,10 @@ onMounted(() => {
     <UModal
       :open="configDialogOpen"
       @update:open="configDialogOpen = $event"
-      :ui="{ content: 'w-full max-w-3xl' }"
+      :ui="{
+        content:
+          'w-full max-w-3xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <UCard>
@@ -770,7 +773,10 @@ onMounted(() => {
     <UModal
       :open="groupLabelDialogOpen"
       @update:open="groupLabelDialogOpen = $event"
-      :ui="{ content: 'w-full max-w-3xl' }"
+      :ui="{
+        content:
+          'w-full max-w-3xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <UCard>

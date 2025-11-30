@@ -37,9 +37,12 @@ export const usePortalStore = defineStore('portal', {
       }
       this.adminLoading = true
       try {
-        const data = await apiFetch<AdminOverviewData>('/portal/admin/overview', {
-          token: auth.token,
-        })
+        const data = await apiFetch<AdminOverviewData>(
+          '/portal/admin/overview',
+          {
+            token: auth.token,
+          },
+        )
         this.admin = data
         return data
       } finally {

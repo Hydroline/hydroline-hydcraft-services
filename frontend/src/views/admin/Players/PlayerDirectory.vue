@@ -121,7 +121,9 @@ function bindingUser(entry: (typeof rows.value)[number]['binding']) {
   return entry.user.profile?.displayName ?? entry.user.email ?? entry.user.id
 }
 
-function resolvePlayerAvatarIdentifier(entry: AdminPlayerEntry | null | undefined) {
+function resolvePlayerAvatarIdentifier(
+  entry: AdminPlayerEntry | null | undefined,
+) {
   if (!entry) return null
   const authmeRealname = entry.authme?.realname?.trim()
   if (authmeRealname) return authmeRealname
@@ -714,7 +716,10 @@ function openBeaconForPlayer(
   <UModal
     :open="bindDialogOpen"
     @update:open="bindDialogOpen = $event"
-    :ui="{ content: 'w-full max-w-2xl' }"
+    :ui="{
+      content:
+        'w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
   >
     <template #content>
       <div class="space-y-4 p-6 text-sm">
@@ -756,7 +761,10 @@ function openBeaconForPlayer(
   <UModal
     :open="entryDialogOpen"
     @update:open="entryDialogOpen = $event"
-    :ui="{ content: 'w-full max-w-2xl' }"
+    :ui="{
+      content:
+        'w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
   >
     <template #content>
       <form class="space-y-4 p-6 text-sm" @submit.prevent="submitEntry">

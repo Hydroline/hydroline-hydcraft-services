@@ -40,7 +40,10 @@ function closeDialog() {
   <UModal
     :open="props.open"
     @update:open="(value) => emit('update:open', value)"
-    :ui="{ content: 'w-full max-w-3xl' }"
+    :ui="{
+      content:
+        'w-full max-w-3xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
   >
     <template #content>
       <div class="flex h-full max-h-[85vh] flex-col">

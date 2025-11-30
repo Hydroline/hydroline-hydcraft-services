@@ -43,8 +43,8 @@ export const useAdminAttachmentsStore = defineStore('admin-attachments', {
         Object.prototype.hasOwnProperty.call(options, 'folderId') &&
         options.folderId !== undefined
       const folderIdValue = folderSpecified
-        ? options.folderId ?? null
-        : this.filters.folderId ?? null
+        ? (options.folderId ?? null)
+        : (this.filters.folderId ?? null)
       const folderId = folderIdValue ?? undefined
       const tagKeys = options.tagKeys ?? this.filters.tagKeys ?? []
       const page = options.page ?? this.pagination.page

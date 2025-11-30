@@ -35,7 +35,9 @@ export function registerAuthGuards(router: Router) {
 
     const requiredPermissions = toArray(to.meta.requiresPermissions)
     if (requiredPermissions.length > 0) {
-      const hasPermission = requiredPermissions.every((permission) => auth.permissionKeys.includes(permission))
+      const hasPermission = requiredPermissions.every((permission) =>
+        auth.permissionKeys.includes(permission),
+      )
       if (!hasPermission) {
         return { name: 'home' }
       }

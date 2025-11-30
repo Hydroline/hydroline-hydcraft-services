@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { zh_cn } from '@nuxt/ui/locale'
+import { useRoute } from 'vue-router'
 
 const appTooltipConfig = {
   delayDuration: 150,
@@ -16,15 +17,23 @@ const appToasterConfig = {
 
 const authStore = useAuthStore()
 const { loading, initialized, refreshing } = storeToRefs(authStore)
+const route = useRoute()
 
 const showSessionLoader = computed(
   () => (!initialized.value && loading.value) || refreshing.value,
+)
+const layoutKey = computed(
+  () => (route.meta.layout as string) ?? 'default-layout',
 )
 </script>
 
 <template>
   <UApp :locale="zh_cn" :tooltip="appTooltipConfig" :toaster="appToasterConfig">
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <Transition mode="out-in" appear name="layout-fade">
+        <component :is="Component" :key="layoutKey" />
+      </Transition>
+    </RouterView>
     <Transition
       appear
       enter-active-class="transition-opacity duration-200 ease-out"
@@ -53,3 +62,15 @@ const showSessionLoader = computed(
     </Transition>
   </UApp>
 </template>
+
+<style scoped>
+.layout-fade-enter-active,
+.layout-fade-leave-active {
+  transition: opacity 250ms ease;
+}
+
+.layout-fade-enter-from,
+.layout-fade-leave-to {
+  opacity: 0;
+}
+</style>

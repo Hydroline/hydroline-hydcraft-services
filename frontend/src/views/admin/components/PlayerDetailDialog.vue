@@ -38,7 +38,9 @@ watch(
   },
 )
 
-function resolvePreferredPlayerIdentifier(entry: AdminPlayerEntry | null): string | null {
+function resolvePreferredPlayerIdentifier(
+  entry: AdminPlayerEntry | null,
+): string | null {
   if (!entry) return null
   const realname = entry.authme?.realname?.trim()
   if (realname) return realname
@@ -130,9 +132,9 @@ async function updateViewer() {
       canvas,
       width,
       height,
-        skin: `https://mc-heads.hydcraft.cn/skin/${encodeURIComponent(
-          identifier,
-        )}`,
+      skin: `https://mc-heads.hydcraft.cn/skin/${encodeURIComponent(
+        identifier,
+      )}`,
     })
     instance.autoRotate = true
     instance.zoom = 0.95
@@ -217,10 +219,7 @@ function fmtIso(value?: string | null) {
 }
 
 const usernameDisplay = computed(
-  () =>
-    resolvePreferredPlayerIdentifier(player.value) ??
-    props.username ??
-    '—',
+  () => resolvePreferredPlayerIdentifier(player.value) ?? props.username ?? '—',
 )
 const realnameDisplay = computed(
   () =>
@@ -297,7 +296,10 @@ function openBoundUser() {
   <UModal
     :open="props.open"
     @update:open="(value) => emit('update:open', value)"
-    :ui="{ content: 'w-full max-w-4xl' }"
+    :ui="{
+      content:
+        'w-full max-w-4xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
   >
     <template #content>
       <div class="flex h-full max-h-[90vh] flex-col">

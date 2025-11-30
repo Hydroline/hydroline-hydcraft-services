@@ -330,7 +330,11 @@ async function confirmUnbind() {
   <UModal
     :open="isConfirmModalOpen"
     @update:open="closeUnbindConfirm"
-    :ui="{ content: 'w-full max-w-md z-[1101]', overlay: 'z-[1100]' }"
+    :ui="{
+      content:
+        'w-full max-w-md z-[1101] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      overlay: 'z-[1100]',
+    }"
   >
     <template #content>
       <div class="space-y-4 p-6 text-sm">

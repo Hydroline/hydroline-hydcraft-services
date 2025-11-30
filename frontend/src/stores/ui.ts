@@ -15,16 +15,19 @@ function getSystemTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') {
     return 'light'
   }
-  
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light'
 }
 
 export const useUiStore = defineStore('ui', {
   state: () => ({
     loadingCount: 0,
-    themeMode: (typeof window !== 'undefined'
-      ? (localStorage.getItem(THEME_KEY) as ThemeMode | null)
-      : null) ?? 'system',
+    themeMode:
+      (typeof window !== 'undefined'
+        ? (localStorage.getItem(THEME_KEY) as ThemeMode | null)
+        : null) ?? 'system',
     loginDialogOpen: false,
     heroInView: true,
     heroActiveDescription: '',
@@ -61,11 +64,13 @@ export const useUiStore = defineStore('ui', {
         return
       }
       applyTheme(this.themeMode)
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (this.themeMode === 'system') {
-          applyTheme('system')
-        }
-      })
+      window
+        .matchMedia('(prefers-color-scheme: dark)')
+        .addEventListener('change', () => {
+          if (this.themeMode === 'system') {
+            applyTheme('system')
+          }
+        })
     },
     openLoginDialog() {
       this.loginDialogOpen = true

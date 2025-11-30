@@ -922,7 +922,13 @@ watch(
   </div>
 
   <!-- 角色编辑弹窗 -->
-  <UModal v-model:open="roleModalOpen" :ui="{ content: 'w-full max-w-2xl' }">
+  <UModal
+    v-model:open="roleModalOpen"
+    :ui="{
+      content:
+        'w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
+  >
     <template #content>
       <form class="space-y-4 p-6 text-sm" @submit.prevent="submitRole">
         <header class="flex items-center justify-between">
@@ -1004,7 +1010,13 @@ watch(
   </UModal>
 
   <!-- 标签编辑弹窗 -->
-  <UModal v-model:open="labelModalOpen" :ui="{ content: 'w-full max-w-2xl' }">
+  <UModal
+    v-model:open="labelModalOpen"
+    :ui="{
+      content:
+        'w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
+  >
     <template #content>
       <form class="space-y-4 p-6 text-sm" @submit.prevent="submitLabel">
         <header class="flex items-center justify-between">
@@ -1101,7 +1113,13 @@ watch(
   </UModal>
 
   <!-- 自助申请弹窗 -->
-  <UModal v-model:open="selfModalOpen" :ui="{ content: 'w-full max-w-2xl' }">
+  <UModal
+    v-model:open="selfModalOpen"
+    :ui="{
+      content:
+        'w-full max-w-2xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
+  >
     <template #content>
       <form class="space-y-4 p-6 text-sm" @submit.prevent="submitSelfAssign">
         <header class="flex items-center justify-between">

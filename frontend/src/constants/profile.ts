@@ -14,9 +14,7 @@ export const phoneRegions: Array<{
   { code: 'TW', name: '中国台湾 +886', dial: '+886' },
 ]
 
-export const languageOptions = [
-  { label: '中文（简体）', value: 'zh-CN' },
-]
+export const languageOptions = [{ label: '中文（简体）', value: 'zh-CN' }]
 
 const regionZhMap: Record<string, string> = {
   Africa: '非洲',
@@ -46,14 +44,19 @@ const cityZhMap: Record<string, string> = {
   Seoul: '首尔',
 }
 
-export function getTimezoneOptionsZh(): Array<{ label: string; value: string }> {
+export function getTimezoneOptionsZh(): Array<{
+  label: string
+  value: string
+}> {
   const tzs = getTimezones()
   return tzs.map((tz) => {
     // tz like "Asia/Shanghai", "America/Los_Angeles"
     const [region, rest] = tz.split('/')
     const regionZh = regionZhMap[region] || region
     const cityZh = cityZhMap[rest] || (rest ? rest.replaceAll('_', ' ') : '')
-    const label = cityZh ? `${regionZh} / ${cityZh} (${tz})` : `${regionZh} (${tz})`
+    const label = cityZh
+      ? `${regionZh} / ${cityZh} (${tz})`
+      : `${regionZh} (${tz})`
     return { label, value: tz }
   })
 }

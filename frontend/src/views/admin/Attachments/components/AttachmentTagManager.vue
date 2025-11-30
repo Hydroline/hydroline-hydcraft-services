@@ -182,7 +182,8 @@ watch(
     :ui="{
       overlay: 'fixed inset-0 z-[150]',
       wrapper: 'z-[155]',
-      content: 'w-full max-w-lg z-[160]',
+      content:
+        'w-full max-w-lg z-[160] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
     }"
   >
     <template #content>
@@ -265,7 +266,8 @@ watch(
         :ui="{
           overlay: 'fixed inset-0 z-[210]',
           wrapper: 'z-[215]',
-          content: 'w-full max-w-lg z-[220]',
+          content:
+            'w-full max-w-lg z-[220] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
         }"
       >
         <template #content>
@@ -343,7 +345,8 @@ watch(
         :ui="{
           overlay: 'fixed inset-0 z-[210]',
           wrapper: 'z-[215]',
-          content: 'w-full max-w-lg z-[220]',
+          content:
+            'w-full max-w-lg z-[220] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
         }"
       >
         <template #content>
@@ -421,7 +424,11 @@ watch(
   <UModal
     :open="deleteTagConfirmOpen"
     @update:open="closeDeleteTagConfirm"
-    :ui="{ content: 'w-full max-w-md z-[1101]', overlay: 'z-[1100]' }"
+    :ui="{
+      content:
+        'w-full max-w-md z-[1101] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      overlay: 'z-[1100]',
+    }"
   >
     <template #content>
       <div class="space-y-4 p-6 text-sm">

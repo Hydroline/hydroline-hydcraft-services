@@ -9,13 +9,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IpLocationService } from '../lib/ip2region/ip-location.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { AuthmeService } from '../authme/authme.service';
+import { LuckpermsService } from '../luckperms/luckperms.service';
 import { buildPublicUrl } from '../lib/shared/url';
 import { buildPagination } from '../lib/shared/pagination';
 import { normalizeIpAddress } from '../lib/ip2region/ip-normalizer';
-import { resolvePlayerPeriodStart } from './player-period.util';
+import type { LuckpermsPlayer } from '../luckperms/luckperms.interfaces';
 import type {
   PlayerLoginCluster,
   PortalOwnershipOverview,
+  PlayerLuckpermsSnapshot,
 } from './player.types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -30,41 +32,23 @@ export class PlayerService {
     private readonly ipLocationService: IpLocationService,
     private readonly attachmentsService: AttachmentsService,
     private readonly authmeService: AuthmeService,
+    private readonly luckpermsService: LuckpermsService,
   ) {}
 
-  async getPlayerPortalData(
-    viewerId: string | null,
-    targetUserId: string,
-    options: {
-      period?: string;
-      actionsPage?: number;
-      actionsPageSize?: number;
-    } = {},
-  ) {
-    const period = options.period ?? '30d';
-    const actionsPage = Math.max(options.actionsPage ?? 1, 1);
-    const actionsPageSize = Math.min(
-      Math.max(options.actionsPageSize ?? 10, 1),
-      50,
-    );
+  async getPlayerPortalData(viewerId: string | null, targetUserId: string) {
     const [
       summary,
       rawAssets,
       region,
       minecraft,
       stats,
-      actions,
       statusSnapshot,
     ] = await Promise.all([
       this.getPlayerSummary(targetUserId),
       this.getPlayerAssets(targetUserId),
       this.getPlayerRegion(targetUserId),
       this.getPlayerMinecraftData(targetUserId),
-      this.getPlayerStats(targetUserId, period),
-      this.getPlayerActions(targetUserId, {
-        page: actionsPage,
-        pageSize: actionsPageSize,
-      }),
+      this.getPlayerStats(targetUserId),
       this.getPlayerStatusSnapshot(targetUserId),
     ]);
     const assets = {
@@ -79,7 +63,6 @@ export class PlayerService {
       region,
       minecraft,
       stats,
-      actions,
       statusSnapshot,
     };
   }
@@ -177,8 +160,16 @@ export class PlayerService {
     if (!user) {
       throw new NotFoundException('用户不存在');
     }
-    const location = await this.ipLocationService.lookup(user.lastLoginIp);
-    const ownership = await this.computeOwnershipOverview(userId);
+    const locationPromise = this.ipLocationService.lookup(user.lastLoginIp);
+    const ownershipPromise = this.computeOwnershipOverview(userId);
+    const luckpermsPromise = this.buildLuckpermsSnapshots(
+      user.authmeBindings ?? [],
+    );
+    const [location, ownership, luckperms] = await Promise.all([
+      locationPromise,
+      ownershipPromise,
+      luckpermsPromise,
+    ]);
 
     let avatarUrl: string | null = null;
     if (user.avatarAttachmentId) {
@@ -255,6 +246,7 @@ export class PlayerService {
             color: string | null;
           } => Boolean(label),
         ),
+      luckperms,
       ownership,
     };
   }
@@ -505,29 +497,35 @@ export class PlayerService {
     };
   }
 
-  async getPlayerStats(userId: string, period: string | undefined) {
-    const since = resolvePlayerPeriodStart(period);
-    const [sessions, bindingEvents, attachments] = await Promise.all([
+  async getPlayerLoggedStatus(userId: string) {
+    const bindings = await this.prisma.userAuthmeBinding.findMany({
+      where: { userId },
+      select: { authmeUsername: true },
+      orderBy: { boundAt: 'desc' },
+    });
+    for (const binding of bindings) {
+      const account = await this.fetchAuthmeAccount(binding.authmeUsername);
+      if (account?.isLogged) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async getPlayerStats(userId: string) {
+    const [sessions, attachments] = await Promise.all([
       this.prisma.session.findMany({
         where: {
           userId,
-          createdAt: since ? { gte: since } : undefined,
         },
         select: {
           createdAt: true,
           updatedAt: true,
         },
       }),
-      this.prisma.authmeBindingHistory.count({
-        where: {
-          userId,
-          createdAt: since ? { gte: since } : undefined,
-        },
-      }),
       this.prisma.attachment.count({
         where: {
           ownerId: userId,
-          createdAt: since ? { gte: since } : undefined,
         },
       }),
     ]);
@@ -542,7 +540,7 @@ export class PlayerService {
     ).size;
 
     return {
-      period: period ?? '30d',
+      period: 'all',
       generatedAt: new Date().toISOString(),
       metrics: [
         {
@@ -556,12 +554,6 @@ export class PlayerService {
           label: '上线次数',
           value: sessions.length,
           unit: 'times',
-        },
-        {
-          id: 'binding-events',
-          label: '绑定历史事件',
-          value: bindingEvents,
-          unit: 'events',
         },
         {
           id: 'attachment-uploads',
@@ -770,6 +762,156 @@ export class PlayerService {
         };
       }),
     );
+  }
+
+  private async buildLuckpermsSnapshots(
+    bindings: Array<{
+      authmeUsername: string;
+      authmeRealname: string | null;
+      authmeUuid: string | null;
+    }>,
+  ) {
+    if (
+      bindings.length === 0 ||
+      !this.luckpermsService ||
+      !this.luckpermsService.isEnabled()
+    ) {
+      return [];
+    }
+    const uuidCache = new Map<string, LuckpermsPlayer | null>();
+    const usernameCache = new Map<string, LuckpermsPlayer | null>();
+    const snapshotPromises = bindings.map((binding) =>
+      this.buildLuckpermsSnapshotForBinding(
+        binding,
+        uuidCache,
+        usernameCache,
+      ),
+    );
+    return Promise.all(snapshotPromises);
+  }
+
+  private async buildLuckpermsSnapshotForBinding(
+    binding: {
+      authmeUsername: string;
+      authmeRealname: string | null;
+      authmeUuid: string | null;
+    },
+    uuidCache: Map<string, LuckpermsPlayer | null>,
+    usernameCache: Map<string, LuckpermsPlayer | null>,
+  ) {
+    const player = await this.lookupLuckpermsPlayer(
+      binding,
+      uuidCache,
+      usernameCache,
+    );
+    return this.createLuckpermsSnapshot(binding, player);
+  }
+
+  private async lookupLuckpermsPlayer(
+    binding: {
+      authmeUsername: string;
+      authmeRealname: string | null;
+      authmeUuid: string | null;
+    },
+    uuidCache: Map<string, LuckpermsPlayer | null>,
+    usernameCache: Map<string, LuckpermsPlayer | null>,
+  ) {
+    if (!this.luckpermsService.isEnabled()) {
+      return null;
+    }
+    const normalizedUuid = this.normalizeLookupKey(binding.authmeUuid);
+    if (normalizedUuid) {
+      const uuidKey = normalizedUuid.toLowerCase();
+      if (uuidCache.has(uuidKey)) {
+        return uuidCache.get(uuidKey) ?? null;
+      }
+      try {
+        const player = await this.luckpermsService.getPlayerByUuid(
+          normalizedUuid,
+        );
+        uuidCache.set(uuidKey, player);
+        return player;
+      } catch (error) {
+        this.logger.debug(
+          `无法获取 LuckPerms 数据 (UUID: ${normalizedUuid}): ${String(
+            error,
+          )}`,
+        );
+        uuidCache.set(uuidKey, null);
+      }
+    }
+    const lookupName = this.resolveLookupName(binding);
+    if (lookupName) {
+      const lookupKey = lookupName.toLowerCase();
+      if (usernameCache.has(lookupKey)) {
+        return usernameCache.get(lookupKey) ?? null;
+      }
+      try {
+        const player = await this.luckpermsService.getPlayerByUsername(
+          lookupName,
+        );
+        usernameCache.set(lookupKey, player);
+        return player;
+      } catch (error) {
+        this.logger.debug(
+          `无法获取 LuckPerms 数据 (用户名: ${lookupName}): ${String(error)}`,
+        );
+        usernameCache.set(lookupKey, null);
+      }
+    }
+    return null;
+  }
+
+  private createLuckpermsSnapshot(
+    binding: {
+      authmeUsername: string;
+      authmeRealname: string | null;
+      authmeUuid: string | null;
+    },
+    player: LuckpermsPlayer | null,
+  ) {
+    const realname =
+      typeof binding.authmeRealname === 'string' && binding.authmeRealname.length
+        ? binding.authmeRealname.trim()
+        : null;
+    const username =
+      player?.username && player.username.length > 0
+        ? player.username
+        : realname ?? binding.authmeUsername;
+    const groups = (player?.groups ?? []).map((membership) => ({
+      ...membership,
+      displayName: this.luckpermsService.getGroupDisplayName(
+        membership.group,
+      ),
+    }));
+    const primaryGroup = player?.primaryGroup ?? null;
+    return {
+      authmeUsername: binding.authmeUsername,
+      username,
+      uuid: player?.uuid ?? binding.authmeUuid ?? null,
+      primaryGroup,
+      primaryGroupDisplayName:
+        this.luckpermsService.getGroupDisplayName(primaryGroup),
+      groups,
+      synced: Boolean(player),
+    } as PlayerLuckpermsSnapshot;
+  }
+
+  private resolveLookupName(binding: {
+    authmeUsername: string;
+    authmeRealname: string | null;
+  }) {
+    const realname = this.normalizeLookupKey(binding.authmeRealname);
+    if (realname) {
+      return realname;
+    }
+    return this.normalizeLookupKey(binding.authmeUsername);
+  }
+
+  private normalizeLookupKey(value: string | null | undefined) {
+    if (!value) return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 
   private async getPlayerStatusSnapshot(userId: string) {

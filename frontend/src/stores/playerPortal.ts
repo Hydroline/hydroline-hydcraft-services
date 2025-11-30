@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { apiFetch } from '@/utils/api'
 import { useAuthStore } from '@/stores/auth'
 import type {
-  PlayerActionsResponse,
   PlayerAssetsResponse,
   PlayerMinecraftResponse,
   PlayerStatusSnapshot,
@@ -10,6 +9,7 @@ import type {
   PlayerRegionResponse,
   PlayerStatsResponse,
   PlayerSummary,
+  PlayerIsLoggedResponse,
 } from '@/types/portal'
 
 type RankContextResponse = import('@/types/portal').RankContextResponse
@@ -19,7 +19,6 @@ type RankCategoryInfo = import('@/types/portal').RankCategoryInfo
 export const usePlayerPortalStore = defineStore('player-portal', {
   state: () => ({
     summary: null as PlayerSummary | null,
-    actions: null as PlayerActionsResponse | null,
     assets: null as PlayerAssetsResponse | null,
     region: null as PlayerRegionResponse | null,
     minecraft: null as PlayerMinecraftResponse | null,
@@ -27,6 +26,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
     statusSnapshot: null as PlayerStatusSnapshot | null,
     viewerId: null as string | null,
     targetUserId: null as string | null,
+    logged: null as boolean | null,
     loading: false,
     submitting: false,
     rankCategories: [] as RankCategoryInfo[],
@@ -38,17 +38,13 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       const auth = useAuthStore()
       return auth.token ?? null
     },
-    async fetchProfile(options: {
-      id?: string
-      period?: string
-      actionsPage?: number
-    } = {}) {
+    async fetchProfile(
+      options: {
+        id?: string
+      } = {},
+    ) {
       const params = new URLSearchParams()
       if (options.id) params.set('id', options.id)
-      if (options.period) params.set('period', options.period)
-      if (options.actionsPage) {
-        params.set('actionsPage', String(options.actionsPage))
-      }
       this.loading = true
       try {
         const query = params.toString()
@@ -57,7 +53,6 @@ export const usePlayerPortalStore = defineStore('player-portal', {
           { token: this.authToken() ?? undefined },
         )
         this.summary = response.summary
-        this.actions = response.actions
         this.assets = response.assets
         this.region = response.region
         this.minecraft = response.minecraft
@@ -70,17 +65,16 @@ export const usePlayerPortalStore = defineStore('player-portal', {
         this.loading = false
       }
     },
-    async fetchActions(page = 1, id?: string) {
-      const params = new URLSearchParams({ page: String(page) })
-      const effectiveId = id ?? this.targetUserId
-      if (effectiveId) {
-        params.set('id', effectiveId)
-      }
-      this.actions = await apiFetch<PlayerActionsResponse>(
-        `/player/actions?${params.toString()}`,
+    async fetchLoggedStatus(options: { id?: string } = {}) {
+      const params = new URLSearchParams()
+      if (options.id) params.set('id', options.id)
+      const query = params.toString()
+      const response = await apiFetch<PlayerIsLoggedResponse>(
+        `/player/is-logged${query ? `?${query}` : ''}`,
         { token: this.authToken() ?? undefined },
       )
-      return this.actions
+      this.logged = response.logged
+      return response.logged
     },
     async fetchStats(period = '30d', id?: string) {
       const params = new URLSearchParams({ period })
@@ -169,7 +163,6 @@ export const usePlayerPortalStore = defineStore('player-portal', {
     },
     reset() {
       this.summary = null
-      this.actions = null
       this.assets = null
       this.region = null
       this.minecraft = null
@@ -177,6 +170,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       this.statusSnapshot = null
       this.viewerId = null
       this.targetUserId = null
+      this.logged = null
       this.rankContext = null
       this.leaderboard = null
     },

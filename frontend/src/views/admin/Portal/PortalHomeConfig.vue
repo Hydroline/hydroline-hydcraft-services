@@ -178,17 +178,20 @@ const selectedCardEntry = computed(() => {
 
 const modalUi = {
   detail: {
-    content: 'w-full max-w-md z-[185]',
+    content:
+      'w-full max-w-md z-[185] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
     wrapper: 'z-[180]',
     overlay: 'z-[170]',
   },
   cards: {
-    content: 'w-full max-w-md z-[195]',
+    content:
+      'w-full max-w-md z-[195] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
     wrapper: 'z-[190]',
     overlay: 'z-[180]',
   },
   form: {
-    content: 'w-full max-w-md z-[190]',
+    content:
+      'w-full max-w-md z-[190] w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
     wrapper: 'z-[185]',
     overlay: 'z-[175]',
   },

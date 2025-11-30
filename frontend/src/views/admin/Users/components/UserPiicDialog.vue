@@ -53,7 +53,9 @@ async function confirmPiicRegeneration() {
   <UModal
     :open="open"
     @update:open="$emit('update:open', $event)"
-    :ui="{ content: 'w-full max-w-lg' }"
+    :ui="{
+      content: 'w-full max-w-lg w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
   >
     <template #content>
       <div class="space-y-4 p-6 text-sm">

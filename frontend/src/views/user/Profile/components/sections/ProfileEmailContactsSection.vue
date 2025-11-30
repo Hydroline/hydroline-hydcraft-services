@@ -440,7 +440,10 @@ onBeforeUnmount(() => {
     <UModal
       :open="addEmailDialog.open"
       @update:open="updateAddEmailDialog"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="{
+        content:
+          'w-full max-w-md w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">
@@ -487,7 +490,10 @@ onBeforeUnmount(() => {
     <UModal
       :open="verificationDialog.open"
       @update:open="updateVerificationDialog"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="{
+        content:
+          'w-full max-w-md w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">
@@ -562,7 +568,10 @@ onBeforeUnmount(() => {
     <UModal
       :open="deleteEmailDialog.open"
       @update:open="updateDeleteEmailDialog"
-      :ui="{ content: 'w-full max-w-md' }"
+      :ui="{
+        content:
+          'w-full max-w-md w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
     >
       <template #content>
         <div class="space-y-5 p-6">

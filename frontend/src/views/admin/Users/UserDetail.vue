@@ -1039,7 +1039,8 @@ onBeforeUnmount(() => {
     :open="deleteConfirmDialogOpen"
     @update:open="deleteConfirmDialogOpen = $event"
     :ui="{
-      content: 'z-[1105] w-full max-w-sm',
+      content:
+        'z-[1105] w-full max-w-sm w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
       wrapper: 'z-[1104] items-center justify-center',
       overlay: 'z-[1103]',
     }"
@@ -1071,7 +1072,10 @@ onBeforeUnmount(() => {
   <UModal
     :open="contactsListDialogOpen"
     @update:open="contactsListDialogOpen = $event"
-    :ui="{ content: 'w-full max-w-3xl' }"
+    :ui="{
+      content:
+        'w-full max-w-3xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
   >
     <template #content>
       <div class="space-y-5 p-6 text-sm">
@@ -1176,7 +1180,9 @@ onBeforeUnmount(() => {
   <UModal
     :open="contactDialogOpen"
     @update:open="contactDialogOpen = $event"
-    :ui="{ content: 'w-full max-w-lg' }"
+    :ui="{
+      content: 'w-full max-w-lg w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
   >
     <template #content>
       <div class="space-y-5 p-6 text-sm">

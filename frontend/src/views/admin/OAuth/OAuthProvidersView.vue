@@ -55,7 +55,7 @@ async function runProxyConnectivityTest() {
       title: (result as any).ok ? '已收到 Proxy 响应' : 'Proxy 不可用',
       description: (result as any).ok
         ? `status=${result.status ?? 'unknown'}, elapsed=${result.elapsedMs ?? '-'}ms`
-        : result.error ?? 'Unknown error',
+        : (result.error ?? 'Unknown error'),
       color: (result as any).ok ? 'success' : 'error',
     })
   } catch (error) {
@@ -290,7 +290,10 @@ function closeForm() {
       </div>
     </div>
 
-    <UModal v-model:open="formModalOpen">
+    <UModal
+      v-model:open="formModalOpen"
+      :ui="{ content: 'w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]' }"
+    >
       <template #content>
         <div class="space-y-4 p-6">
           <div class="flex justify-between items-center gap-4">
@@ -365,7 +368,8 @@ function closeForm() {
               </div>
               <USwitch v-model="form.providerProxyEnabled" />
               <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-500">
-                启用后，后端将通过配置的 PROXY 服务中转 OAuth HTTP 请求，用于规避直连受限（仅对该 Provider 生效）。
+                启用后，后端将通过配置的 PROXY 服务中转 OAuth HTTP
+                请求，用于规避直连受限（仅对该 Provider 生效）。
               </p>
             </div>
 
@@ -406,7 +410,10 @@ function closeForm() {
       </template>
     </UModal>
 
-    <UModal v-model:open="proxyTestModalOpen">
+    <UModal
+      v-model:open="proxyTestModalOpen"
+      :ui="{ content: 'w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]' }"
+    >
       <template #content>
         <div class="space-y-4 p-6">
           <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
@@ -452,10 +459,7 @@ function closeForm() {
               </span>
             </div>
             <!-- 无需展示响应体，仅显示错误信息（若有） -->
-            <div
-              v-if="proxyTestResult.error"
-              class="text-rose-500 text-[11px]"
-            >
+            <div v-if="proxyTestResult.error" class="text-rose-500 text-[11px]">
               {{ proxyTestResult.error }}
             </div>
           </div>

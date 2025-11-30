@@ -132,7 +132,13 @@ export const useAdminUsersStore = defineStore('admin-users', {
       })
       await this.fetch({ page: this.pagination.page })
     },
-    updateUserAvatar(userId: string, payload: { avatarUrl?: string | null; avatarAttachmentId?: string | null }) {
+    updateUserAvatar(
+      userId: string,
+      payload: {
+        avatarUrl?: string | null
+        avatarAttachmentId?: string | null
+      },
+    ) {
       const target = this.items.find((item) => item.id === userId)
       if (!target) return
       target.avatarUrl = payload.avatarUrl ?? null

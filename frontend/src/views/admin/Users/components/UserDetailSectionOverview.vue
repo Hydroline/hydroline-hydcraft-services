@@ -117,9 +117,7 @@ const primaryMinecraftAvatarIdentifier = computed(() => {
 
 const primaryMinecraftAvatarUrl = computed(() => {
   const identifier = primaryMinecraftAvatarIdentifier.value ?? 'Steve'
-  return `https://mc-heads.hydcraft.cn/avatar/${encodeURIComponent(
-    identifier,
-  )}`
+  return `https://mc-heads.hydcraft.cn/avatar/${encodeURIComponent(identifier)}`
 })
 
 type EmailContactDisplay = {
@@ -311,12 +309,7 @@ const statusSnapshotSummary = computed(() => {
                 更换头像
               </div>
             </button>
-            <UserAvatar
-              v-else
-              :src="undefined"
-              :alt="'用户头像'"
-              size="lg"
-            />
+            <UserAvatar v-else :src="undefined" :alt="'用户头像'" size="lg" />
             <div
               v-if="avatarUploading"
               class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/60 text-xs text-white"

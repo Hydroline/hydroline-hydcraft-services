@@ -1,8 +1,8 @@
-@import "tailwindcss";
-@import "@nuxt/ui";
+@import 'tailwindcss';
+@import '@nuxt/ui';
 
 @theme {
-  --font-mono: "JetBrains Mono", "Fira Code", Consolas, Monaco, monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
 
   /* 基于 hsl(200 55% 48%) 的主色系 */
   --color-primary-25: hsl(200 55% 98%);
@@ -85,17 +85,51 @@
     --color-surface-4__s: 12%;
     --color-surface-4__l: 72%;
 
-    --color-primary: hsl(var(--color-primary__h), var(--color-primary__s), var(--color-primary__l));
-    --color-primary--hover: hsl(var(--color-primary__h), var(--color-primary__s), calc(var(--color-primary__l) * 1.12));
-    --color-primary--active: hsl(var(--color-primary__h), var(--color-primary__s), calc(var(--color-primary__l) * 0.88));
+    --color-primary: hsl(
+      var(--color-primary__h),
+      var(--color-primary__s),
+      var(--color-primary__l)
+    );
+    --color-primary--hover: hsl(
+      var(--color-primary__h),
+      var(--color-primary__s),
+      calc(var(--color-primary__l) * 1.12)
+    );
+    --color-primary--active: hsl(
+      var(--color-primary__h),
+      var(--color-primary__s),
+      calc(var(--color-primary__l) * 0.88)
+    );
 
-    --color-surface-0: hsl(var(--color-primary__h), var(--color-surface-0__s), var(--color-surface-0__l));
-    --color-surface-1: hsl(var(--color-primary__h), var(--color-surface-1__s), var(--color-surface-1__l));
-    --color-surface-2: hsl(var(--color-primary__h), var(--color-surface-2__s), var(--color-surface-2__l));
-    --color-surface-3: hsl(var(--color-primary__h), var(--color-surface-3__s), var(--color-surface-3__l));
-    --color-surface-4: hsl(var(--color-primary__h), var(--color-surface-4__s), var(--color-surface-4__l));
+    --color-surface-0: hsl(
+      var(--color-primary__h),
+      var(--color-surface-0__s),
+      var(--color-surface-0__l)
+    );
+    --color-surface-1: hsl(
+      var(--color-primary__h),
+      var(--color-surface-1__s),
+      var(--color-surface-1__l)
+    );
+    --color-surface-2: hsl(
+      var(--color-primary__h),
+      var(--color-surface-2__s),
+      var(--color-surface-2__l)
+    );
+    --color-surface-3: hsl(
+      var(--color-primary__h),
+      var(--color-surface-3__s),
+      var(--color-surface-3__l)
+    );
+    --color-surface-4: hsl(
+      var(--color-primary__h),
+      var(--color-surface-4__s),
+      var(--color-surface-4__l)
+    );
 
-    --color-light: var(--color-primary__h), var(--color-surface-0__s), var(--color-surface-0__l);
+    --color-light:
+      var(--color-primary__h), var(--color-surface-0__s),
+      var(--color-surface-0__l);
     --color-dark: var(--color-primary__h), 28%, 12%;
 
     --border-color-base: rgba(21, 31, 43, 0.08);
@@ -106,10 +140,28 @@
 
     --box-shadow-diverge: 0 14px 32px rgba(18, 33, 45, 0.08);
 
-    --background-color-primary--hover: hsl(var(--color-primary__h), var(--color-primary__s), 95%);
-    --background-color-primary--active: hsl(var(--color-primary__h), var(--color-primary__s), 90%);
-    --background-color-overlay: hsla(var(--color-primary__h), var(--color-surface-1__s), var(--color-surface-1__l), 0.96);
-    --background-color-overlay--lighter: hsla(var(--color-primary__h), var(--color-surface-1__s), var(--color-surface-1__l), 0.62);
+    --background-color-primary--hover: hsl(
+      var(--color-primary__h),
+      var(--color-primary__s),
+      95%
+    );
+    --background-color-primary--active: hsl(
+      var(--color-primary__h),
+      var(--color-primary__s),
+      90%
+    );
+    --background-color-overlay: hsla(
+      var(--color-primary__h),
+      var(--color-surface-1__s),
+      var(--color-surface-1__l),
+      0.96
+    );
+    --background-color-overlay--lighter: hsla(
+      var(--color-primary__h),
+      var(--color-surface-1__s),
+      var(--color-surface-1__l),
+      0.62
+    );
 
     --background-light-0: hsla(var(--color-light), 0.08);
     --background-light-0--active: hsla(var(--color-light), 0.05);
@@ -223,8 +275,16 @@
     --color-surface-4__s: 10%;
     --color-surface-4__l: 36%;
 
-    --color-primary--hover: hsl(var(--color-primary__h), var(--color-primary__s), calc(var(--color-primary__l) * 1.05));
-    --color-primary--active: hsl(var(--color-primary__h), var(--color-primary__s), calc(var(--color-primary__l) * 0.9));
+    --color-primary--hover: hsl(
+      var(--color-primary__h),
+      var(--color-primary__s),
+      calc(var(--color-primary__l) * 1.05)
+    );
+    --color-primary--active: hsl(
+      var(--color-primary__h),
+      var(--color-primary__s),
+      calc(var(--color-primary__l) * 0.9)
+    );
 
     --border-color-base: rgba(10, 18, 27, 0.7);
     --border-color-base--lighter: rgba(38, 58, 77, 0.45);
@@ -234,8 +294,18 @@
 
     --box-shadow-diverge: 0 18px 38px rgba(5, 10, 16, 0.55);
 
-    --background-color-overlay: hsla(var(--color-primary__h), var(--color-surface-2__s), var(--color-surface-2__l), 0.92);
-    --background-color-overlay--lighter: hsla(var(--color-primary__h), var(--color-surface-2__s), var(--color-surface-2__l), 0.55);
+    --background-color-overlay: hsla(
+      var(--color-primary__h),
+      var(--color-surface-2__s),
+      var(--color-surface-2__l),
+      0.92
+    );
+    --background-color-overlay--lighter: hsla(
+      var(--color-primary__h),
+      var(--color-surface-2__s),
+      var(--color-surface-2__l),
+      0.55
+    );
 
     --background-light-0: hsla(var(--color-light), 0.05);
     --background-light-0--active: hsla(var(--color-light), 0.02);

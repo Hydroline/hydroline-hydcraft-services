@@ -1,16 +1,20 @@
 import { defineStore } from 'pinia'
 import { apiFetch } from '@/utils/api'
 import { useAuthStore } from './auth'
-import type { AdminPlayerEntry, AdminPlayerListResponse, AdminBindingHistoryEntry } from '@/types/admin'
+import type {
+  AdminPlayerEntry,
+  AdminPlayerListResponse,
+  AdminBindingHistoryEntry,
+} from '@/types/admin'
 
 type SortOrder = 'asc' | 'desc'
 
 interface FetchPlayersOptions {
-  keyword?: string;
-  page?: number;
-  pageSize?: number;
-  sortField?: string;
-  sortOrder?: SortOrder;
+  keyword?: string
+  page?: number
+  pageSize?: number
+  sortField?: string
+  sortOrder?: SortOrder
 }
 
 export const useAdminPlayersStore = defineStore('admin-players', {
@@ -54,9 +58,12 @@ export const useAdminPlayersStore = defineStore('admin-players', {
       if (sortOrder) params.set('sortOrder', sortOrder)
       this.loading = true
       try {
-        const data = await apiFetch<AdminPlayerListResponse>(`/auth/players?${params.toString()}`, {
-          token: auth.token,
-        })
+        const data = await apiFetch<AdminPlayerListResponse>(
+          `/auth/players?${params.toString()}`,
+          {
+            token: auth.token,
+          },
+        )
         this.items = data.items
         this.pagination = data.pagination
         this.keyword = keyword
@@ -80,13 +87,27 @@ export const useAdminPlayersStore = defineStore('admin-players', {
         body: payload,
       })
     },
-  async fetchHistory(username: string, page = 1, pageSize = 20) {
+    async fetchHistory(username: string, page = 1, pageSize = 20) {
       const auth = useAuthStore()
       if (!auth.token) throw new Error('未登录，无法查询历史')
-      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
-      return apiFetch<{ items: AdminBindingHistoryEntry[]; pagination: { total: number; page: number; pageSize: number; pageCount: number } }>(`/auth/players/${encodeURIComponent(username)}/history?${params.toString()}`, {
-        token: auth.token,
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
       })
+      return apiFetch<{
+        items: AdminBindingHistoryEntry[]
+        pagination: {
+          total: number
+          page: number
+          pageSize: number
+          pageCount: number
+        }
+      }>(
+        `/auth/players/${encodeURIComponent(username)}/history?${params.toString()}`,
+        {
+          token: auth.token,
+        },
+      )
     },
     async bindToUser(username: string, userId: string) {
       const auth = useAuthStore()

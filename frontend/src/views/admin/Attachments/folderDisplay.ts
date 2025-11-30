@@ -12,7 +12,7 @@ export function formatFolderPathDisplay(path?: string | null): string | null {
   const trimmed = path.trim()
   if (!trimmed) return null
   const normalized = normalizePath(trimmed)
-  
+
   for (const [folderKey, folderLabel] of Object.entries(SPECIAL_FOLDERS)) {
     if (normalized === folderKey) {
       return folderLabel
