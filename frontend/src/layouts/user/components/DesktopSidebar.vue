@@ -22,10 +22,17 @@ const { isSidebarCollapsed, mainNav, currentPath } = toRefs(props)
 
 const router = useRouter()
 
+const isPathActive = (item: NavItem, path: string) => {
+  if (item.to === '/') {
+    return path === '/'
+  }
+  return path === item.to || path.startsWith(`${item.to}/`)
+}
+
 const displayNav = computed<NavItem[]>(() => {
   const items = mainNav.value
   const activePath = currentPath.value
-  const hasCurrent = items.some((item) => item.to === activePath)
+  const hasCurrent = items.some((item) => isPathActive(item, activePath))
 
   if (hasCurrent) {
     return items
@@ -140,7 +147,7 @@ const handleToggle = () => {
             :to="item.to"
             class="group flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors"
             :class="[
-              currentPath === item.to || item.isFallback
+              isPathActive(item, currentPath) || item.isFallback
                 ? 'bg-primary-50 text-primary-600 dark:bg-primary-950/30 dark:text-primary-400'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
               isSidebarCollapsed ? 'justify-center px-2' : '',

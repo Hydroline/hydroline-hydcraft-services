@@ -16,6 +16,7 @@ import {
   municipalities,
 } from '@/views/user/Profile/components/region-data'
 import PlayerBindingDetailDialog from './PlayerBindingDetailDialog.vue'
+import PlayerGameStatsPanel from './PlayerGameStatsPanel.vue'
 import { usePlayerPortalStore } from '@/stores/playerPortal'
 
 type PlayerAuthmeBinding = PlayerSummary['authmeBindings'][number]
@@ -35,6 +36,8 @@ const props = defineProps<{
 
 const playerPortalStore = usePlayerPortalStore()
 const isPlayerLogged = computed(() => Boolean(playerPortalStore.logged))
+const toast = useToast()
+const isRefreshingStats = ref(false)
 
 function resolveBindingIdentifier(
   binding:
@@ -258,6 +261,8 @@ const hasRegionData = computed(() => {
   )
 })
 
+const hasSummary = computed(() => Boolean(props.summary))
+
 const showCityLevel = computed(() => {
   if (!isChina.value) return false
   if (!regionCity.value) return false
@@ -349,15 +354,33 @@ function normalizeComparisonKey(value: string | null | undefined) {
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed.toLowerCase() : null
 }
+
+async function handleStatsRefresh() {
+  if (isRefreshingStats.value) return
+  isRefreshingStats.value = true
+  try {
+    const period = props.stats?.period ?? '30d'
+    await playerPortalStore.refreshStats(period)
+    toast.add({ title: '游戏统计信息已刷新', color: 'primary' })
+  } catch (error) {
+    toast.add({
+      title: '刷新失败',
+      description: error instanceof Error ? error.message : String(error),
+      color: 'error',
+    })
+  } finally {
+    isRefreshingStats.value = false
+  }
+}
 </script>
 
 <template>
   <div class="mt-8 grid gap-8 lg:grid-cols-[320px_1fr]">
-    <div class="space-y-7 pt-6">
-      <div>
-        <div v-if="props.summary" class="space-y-3">
-          <div class="flex flex-col gap-3">
-            <div class="flex gap-2 select-none">
+    <div class="space-y-8 pt-6">
+      <div class="space-y-3">
+        <div class="flex flex-col gap-3">
+          <div class="flex gap-2 select-none">
+            <template v-if="props.summary">
               <img
                 v-if="props.summary.avatarUrl"
                 :src="props.summary.avatarUrl"
@@ -375,12 +398,22 @@ function normalizeComparisonKey(value: string | null | undefined) {
                 "
                 class="h-18 w-18 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
               />
+            </template>
+            <template v-else>
+              <USkeleton
+                class="h-18 w-18 rounded-xl border border-slate-200 bg-slate-200/70 dark:bg-slate-700"
+              />
+              <USkeleton
+                class="h-18 w-18 rounded-xl border border-slate-200 bg-slate-200/70 dark:bg-slate-700"
+              />
+            </template>
 
+            <div class="flex items-center">
               <UTooltip
-                :text="`共 ${props.summary.authmeBindings.length} 个账户`"
+                v-if="props.summary?.authmeBindings?.length > 1"
+                :text="`共 ${props.summary?.authmeBindings?.length ?? 0} 个账户`"
               >
                 <UButton
-                  v-if="props.summary.authmeBindings.length > 1"
                   class="w-6 h-6 flex justify-center items-center rounded-full mt-auto"
                   variant="ghost"
                   size="sm"
@@ -389,15 +422,17 @@ function normalizeComparisonKey(value: string | null | undefined) {
                 </UButton>
               </UTooltip>
             </div>
+          </div>
 
-            <div>
-              <div
-                class="flex items-center gap-1 font-semibold text-slate-700 dark:text-white"
-              >
+          <div>
+            <div
+              class="flex items-center gap-1 font-semibold text-slate-700 dark:text-white"
+            >
+              <template v-if="props.summary">
                 <div>
                   <span class="text-2xl">
                     {{
-                      props.summary.minecraftProfiles[0].nickname ||
+                      props.summary.minecraftProfiles[0]?.nickname ||
                       props.summary.authmeBindings[0]?.realname
                     }}
                   </span>
@@ -435,16 +470,30 @@ function normalizeComparisonKey(value: string | null | undefined) {
                     size="xs"
                   />
                 </div>
-              </div>
+              </template>
+              <template v-else>
+                <div class="flex-1 flex flex-col gap-1">
+                  <USkeleton class="h-6 w-32" />
+                  <USkeleton class="h-4 w-24" />
+                </div>
+                <div class="flex items-center gap-2">
+                  <USkeleton class="h-6 w-6 rounded-full" />
+                  <USkeleton class="h-6 w-6 rounded-full" />
+                </div>
+              </template>
+            </div>
 
-              <div class="text-xs text-slate-500 dark:text-slate-500">
+            <template v-if="props.summary">
+              <div class="text-xs text-slate-500 dark:text-slate-500 mt-1">
                 {{ props.summary.id }}
               </div>
+            </template>
+            <template v-else>
+              <USkeleton class="h-4 w-40 mt-1" />
+            </template>
 
-              <div
-                v-if="props.summary?.rbacLabels?.length"
-                class="flex flex-wrap gap-1 mt-1"
-              >
+            <template v-if="props.summary?.rbacLabels?.length">
+              <div class="flex flex-wrap gap-1 mt-1">
                 <UBadge
                   v-for="label in props.summary?.rbacLabels"
                   :key="label.id"
@@ -463,44 +512,52 @@ function normalizeComparisonKey(value: string | null | undefined) {
                   {{ label.name || label.key }}
                 </UBadge>
               </div>
-            </div>
+            </template>
+            <template v-else-if="!props.summary">
+              <div class="flex gap-2 mt-1">
+                <USkeleton class="h-5 w-16" />
+                <USkeleton class="h-5 w-16" />
+              </div>
+            </template>
           </div>
         </div>
-        <USkeleton v-else class="h-160 w-full" />
       </div>
 
-      <div v-if="props.summary">
-        <div
-          class="flex flex-col p-2.5 pb-1.5 mb-4 rounded-lg border border-slate-300/75 dark:border-slate-600/75 select-none"
-          v-if="props.summary"
-        >
-          <div class="justify-center items-center select-none">
-            <canvas
-              ref="barcodeCanvas"
-              class="object-cover w-full h-full dark:filter-[invert(1)]"
-            >
-            </canvas>
-          </div>
-
-          <UTooltip text="玩家身份标识码（PIIC）">
-            <div
-              class="text-center text-xs text-slate-700 dark:text-slate-200 leading-normal"
-            >
-              {{ props.summary.piic }}
-            </div>
-          </UTooltip>
+      <div class="flex flex-col mb-1 rounded-lg select-none">
+        <div class="justify-center items-center select-none">
+          <canvas
+            ref="barcodeCanvas"
+            class="object-cover w-full h-full dark:filter-[invert(1)]"
+          >
+          </canvas>
         </div>
 
-        <div
-          class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-200"
-        >
-          <div class="md:col-span-2">
-            <div class="text-xs text-slate-500 dark:text-slate-500">
-              用户信息
-            </div>
-            <div
-              class="flex items-center flex-wrap break-all gap-2 text-base font-semibold text-slate-800 dark:text-slate-300"
-            >
+        <UTooltip text="玩家身份标识码（PIIC）">
+          <div
+            class="text-center text-xs text-slate-700 dark:text-slate-200 leading-normal tracking-widest"
+          >
+            <template v-if="props.summary?.piic">
+              {{ props.summary.piic }}
+            </template>
+            <template v-else-if="hasSummary">
+              <span class="text-slate-400">—</span>
+            </template>
+            <template v-else>
+              <USkeleton class="mx-auto h-4 w-32" />
+            </template>
+          </div>
+        </UTooltip>
+      </div>
+
+      <div
+        class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-200"
+      >
+        <div class="md:col-span-2">
+          <div class="text-xs text-slate-500 dark:text-slate-500">用户信息</div>
+          <div
+            class="flex items-center flex-wrap break-all gap-2 text-base font-semibold text-slate-800 dark:text-slate-300"
+          >
+            <template v-if="props.summary">
               <span>
                 {{ props.summary.displayName }}
               </span>
@@ -522,14 +579,22 @@ function normalizeComparisonKey(value: string | null | undefined) {
                   </UBadge>
                 </div>
               </div>
-            </div>
+            </template>
+            <template v-else>
+              <div class="flex flex-col gap-1 w-full">
+                <USkeleton class="h-4 w-32" />
+                <USkeleton class="h-4 w-28" />
+              </div>
+            </template>
           </div>
+        </div>
 
-          <div v-if="hasRegionData">
-            <div class="text-xs text-slate-500 dark:text-slate-500">地区</div>
-            <div
-              class="text-base font-semibold text-slate-800 dark:text-slate-300 space-y-0"
-            >
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-500">地区</div>
+          <div
+            class="text-base font-semibold text-slate-800 dark:text-slate-300 space-y-0"
+          >
+            <template v-if="hasSummary && hasRegionData">
               <div class="flex flex-wrap gap-0.5">
                 <span v-if="displayCountryLabel">{{
                   displayCountryLabel
@@ -540,68 +605,117 @@ function normalizeComparisonKey(value: string | null | undefined) {
                   {{ regionDistrict }}
                 </span>
               </div>
-            </div>
+            </template>
+            <template v-else-if="hasSummary">
+              <span class="text-slate-400">—</span>
+            </template>
+            <template v-else>
+              <USkeleton class="h-4 w-32" />
+            </template>
           </div>
+        </div>
 
-          <div>
-            <div class="text-xs text-slate-500 dark:text-slate-500">
-              入服时间
-            </div>
-            <div
-              class="text-base font-semibold text-slate-800 dark:text-slate-300"
-            >
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-500">入服时间</div>
+          <div
+            class="text-base font-semibold text-slate-800 dark:text-slate-300"
+          >
+            <template v-if="props.summary?.joinDate">
               {{ dayjs(props.summary.joinDate).format('YYYY/MM/DD') }}
-            </div>
+            </template>
+            <template v-else-if="hasSummary">
+              <span class="text-slate-400">—</span>
+            </template>
+            <template v-else>
+              <USkeleton class="h-5 w-24" />
+            </template>
           </div>
+        </div>
 
-          <div v-if="props.statusSnapshot">
-            <div class="text-xs text-slate-500 dark:text-slate-500">
-              用户状态
-            </div>
-            <div
-              class="text-base font-semibold text-slate-800 dark:text-slate-300"
-            >
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-500">用户状态</div>
+          <div
+            class="text-base font-semibold text-slate-800 dark:text-slate-300"
+          >
+            <template v-if="props.statusSnapshot">
               {{ statusLabel }}
-            </div>
+            </template>
+            <template v-else-if="hasSummary">
+              <span class="text-slate-400">—</span>
+            </template>
+            <template v-else>
+              <USkeleton class="h-5 w-24" />
+            </template>
           </div>
+        </div>
 
-          <div v-if="formattedBirthday">
-            <div class="text-xs text-slate-500 dark:text-slate-500">生日</div>
-            <div
-              class="text-base font-semibold text-slate-800 dark:text-slate-300"
-            >
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-500">生日</div>
+          <div
+            class="text-base font-semibold text-slate-800 dark:text-slate-300"
+          >
+            <template v-if="formattedBirthday">
               {{ formattedBirthday }}
-            </div>
+            </template>
+            <template v-else-if="hasSummary">
+              <span class="text-slate-400">—</span>
+            </template>
+            <template v-else>
+              <USkeleton class="h-5 w-24" />
+            </template>
           </div>
+        </div>
 
-          <div>
-            <div class="text-xs text-slate-500 dark:text-slate-500">
-              注册时间
-            </div>
-            <div
-              class="text-base font-semibold text-slate-800 dark:text-slate-300"
-            >
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-500">注册时间</div>
+          <div
+            class="text-base font-semibold text-slate-800 dark:text-slate-300"
+          >
+            <template v-if="props.summary?.createdAt">
               {{ props.formatDateTime(props.summary.createdAt) }}
-            </div>
+            </template>
+            <template v-else-if="hasSummary">
+              <span class="text-slate-400">—</span>
+            </template>
+            <template v-else>
+              <USkeleton class="h-5 w-24" />
+            </template>
           </div>
+        </div>
 
-          <div>
-            <div class="text-xs text-slate-500 dark:text-slate-500">
-              最近登录
-            </div>
-            <div
-              class="text-base font-semibold text-slate-800 dark:text-slate-300 flex flex-col"
-            >
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-500">最近登录</div>
+          <div
+            class="text-base font-semibold text-slate-800 dark:text-slate-300 flex flex-col"
+          >
+            <template v-if="props.summary?.lastLoginAt">
               <span>
                 {{ props.formatDateTime(props.summary.lastLoginAt) }}
               </span>
+            </template>
+            <template v-else-if="hasSummary">
+              <span class="text-slate-400">—</span>
+            </template>
+            <template v-else>
+              <USkeleton class="h-5 w-36" />
+            </template>
+            <template v-if="summaryLastLoginLocationDisplay">
               <span
-                v-if="summaryLastLoginLocationDisplay"
                 class="text-xs font-normal text-slate-500 dark:text-slate-500"
               >
                 {{ summaryLastLoginLocationDisplay }}
               </span>
-            </div>
+            </template>
+            <template v-else-if="hasSummary">
+              <span
+                class="text-xs font-normal text-slate-500 dark:text-slate-500"
+              >
+                —
+              </span>
+            </template>
+            <template v-else>
+              <USkeleton class="h-3 w-32 mt-1" />
+            </template>
           </div>
         </div>
       </div>
@@ -611,18 +725,13 @@ function normalizeComparisonKey(value: string | null | undefined) {
           v-if="!props.isViewingSelf"
           class="justify-center items-center w-full"
           color="primary"
-          variant="soft"
         >
           <UIcon name="i-lucide-message-square" />
           私信
         </UButton>
 
         <RouterLink v-else to="/profile/minecraft" class="block w-full">
-          <UButton
-            class="justify-center items-center w-full"
-            color="primary"
-            variant="outline"
-          >
+          <UButton class="justify-center items-center w-full" color="primary">
             <UIcon name="i-lucide-pencil-line" />
             修改用户信息
           </UButton>
@@ -636,9 +745,68 @@ function normalizeComparisonKey(value: string | null | undefined) {
           <div
             class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
           >
+            <span>站内统计信息</span>
+          </div>
+
+          <div>
+            <div class="grid gap-2 md:grid-cols-4">
+              <template v-if="props.stats">
+                <div
+                  v-for="metric in props.stats.metrics"
+                  :key="metric.id"
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    {{ metric.label }}
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ props.formatMetricValue(metric.value, metric.unit) }}
+                  </p>
+                </div>
+              </template>
+              <template v-else>
+                <div
+                  class="col-span-2 row-span-2 rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+                >
+                  <USkeleton class="h-28" />
+                </div>
+                <div
+                  v-for="index in 9"
+                  :key="`stat-placeholder-${index}`"
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+                >
+                  <USkeleton class="h-4 w-24" />
+                  <USkeleton class="h-8 w-full mt-2" />
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-4">
+        <div>
+          <div>
+            <PlayerGameStatsPanel
+              :stats="props.stats"
+              :is-viewing-self="props.isViewingSelf"
+              :refreshing="isRefreshingStats"
+              @refresh="handleStatsRefresh"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-4">
+        <div>
+          <div
+            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
+          >
             游戏账户
           </div>
-          <div class="grid gap-4 md:grid-cols-4">
+          <div class="grid gap-2 md:grid-cols-4">
             <div v-if="props.summary" class="space-y-3 text-sm">
               <div
                 v-for="binding in props.summary.authmeBindings"
@@ -758,49 +926,6 @@ function normalizeComparisonKey(value: string | null | undefined) {
                 暂无 AuthMe 绑定
               </div>
             </div>
-            <USkeleton v-else class="h-28 w-full" />
-          </div>
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-4">
-        <div>
-          <div
-            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
-          >
-            <span>站内统计信息</span>
-          </div>
-
-          <div>
-            <div v-if="props.stats" class="grid gap-4 md:grid-cols-4">
-              <div
-                v-for="metric in props.stats.metrics"
-                :key="metric.id"
-                class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
-              >
-                <p class="text-xs text-slate-500 dark:text-slate-500">
-                  {{ metric.label }}
-                </p>
-                <p class="text-xl font-semibold text-slate-900 dark:text-white">
-                  {{ props.formatMetricValue(metric.value, metric.unit) }}
-                </p>
-              </div>
-            </div>
-            <USkeleton v-else class="h-28 w-full" />
-          </div>
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-4">
-        <div>
-          <div
-            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
-          >
-            <span>游戏统计信息</span>
-          </div>
-
-          <div>
-            <div v-if="props.stats" class="grid gap-4 md:grid-cols-4"></div>
             <USkeleton v-else class="h-28 w-full" />
           </div>
         </div>

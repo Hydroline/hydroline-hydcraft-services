@@ -207,6 +207,53 @@ export interface PlayerStatsResponse {
     value: number
     unit: string
   }>
+  gameStats?: PlayerGameStatsResponse | null
+}
+
+export interface PlayerGameStatsResponse {
+  identity: { uuid: string | null; name: string | null }
+  identityMissing: boolean
+  updatedAt: string
+  servers: PlayerGameServerStat[]
+}
+
+export interface PlayerGameServerStat {
+  serverId: string
+  serverName: string
+  beaconEnabled: boolean
+  beaconConfigured: boolean
+  metrics: PlayerGameServerMetrics | null
+  lastMtrLog: PlayerGameMtrLog | null
+  fetchedAt: string | null
+  error: string | null
+  errorMessage: string | null
+  mtrError: string | null
+  mtrErrorMessage: string | null
+}
+
+export interface PlayerGameServerMetrics {
+  walkOneCm: number | null
+  flyOneCm: number | null
+  swimOneCm: number | null
+  totalWorldTime: number | null
+  playerKills: number | null
+  deaths: number | null
+  jump: number | null
+  playTime: number | null
+  useWand: number | null
+  leaveGame: number | null
+}
+
+export interface PlayerGameMtrLog {
+  id: number | null
+  timestamp: string | null
+  rawTimestamp: string | null
+  changeType: string | null
+  entryName: string | null
+  entryId: string | null
+  className: string | null
+  dimensionContext: string | null
+  description: string | null
 }
 
 export interface PlayerStatusSnapshot {

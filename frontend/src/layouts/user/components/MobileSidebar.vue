@@ -40,11 +40,18 @@ const {
 
 const router = useRouter()
 
+const isPathActive = (item: NavItem, path: string) => {
+  if (item.to === '/') {
+    return path === '/'
+  }
+  return path === item.to || path.startsWith(`${item.to}/`)
+}
+
 const displayNav = computed<NavItem[]>(() => {
   const items = mainNav.value
   const activePath = currentPath.value
 
-  if (items.some((item) => item.to === activePath)) {
+  if (items.some((item) => isPathActive(item, activePath))) {
     return items
   }
 
@@ -152,7 +159,7 @@ const handleNavigate = () => {
               :to="item.to"
               class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition"
               :class="[
-                currentPath === item.to || item.isFallback
+                isPathActive(item, currentPath) || item.isFallback
                   ? 'bg-primary-100/80 text-primary-600 dark:bg-primary-500/20 dark:text-primary-100'
                   : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white',
               ]"

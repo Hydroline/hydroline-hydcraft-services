@@ -91,6 +91,17 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       )
       return this.stats
     },
+    async refreshStats(period = '30d') {
+      this.stats = await apiFetch<PlayerStatsResponse>(
+        '/player/stats/refresh',
+        {
+          method: 'POST',
+          body: { period },
+          token: this.authToken() ?? undefined,
+        },
+      )
+      return this.stats
+    },
     async requestAuthmePasswordReset(payload: {
       serverId: string
       password: string

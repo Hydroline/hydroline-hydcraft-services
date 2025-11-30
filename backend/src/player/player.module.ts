@@ -8,6 +8,7 @@ import { AttachmentsModule } from '../attachments/attachments.module';
 import { AuthmeModule } from '../authme/authme.module';
 import { MinecraftModule } from '../minecraft/minecraft.module';
 import { PlayerAutomationService } from './player-automation.service';
+import { RedisModule } from '../lib/redis/redis.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PlayerAutomationService } from './player-automation.service';
     AttachmentsModule,
     AuthmeModule,
     MinecraftModule,
+    RedisModule,
   ],
   controllers: [PlayerController],
   providers: [PlayerService, PlayerAutomationService],

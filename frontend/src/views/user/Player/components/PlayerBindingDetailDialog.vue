@@ -710,7 +710,7 @@ async function submitPermissionChange() {
                 <span>
                   {{ permissionGroupLabel }}
                 </span>
-                <span>
+                <span v-if="props.isViewingSelf">
                   <UButton
                     class="text-[10px]"
                     variant="soft"

@@ -20,9 +20,80 @@ import type {
   PlayerLuckpermsSnapshot,
 } from './player.types';
 import { PlayerAutomationService } from './player-automation.service';
+import { MinecraftServerService } from '../minecraft/minecraft-server.service';
+import { RedisService } from '../lib/redis/redis.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_LOGIN_MAP_RANGE_DAYS = 30;
+const PLAYER_STATS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const PLAYER_STATS_CACHE_VERSION = 'v2';
+const PLAYER_GAME_METRIC_KEYS = {
+  walkOneCm: 'minecraft:custom:minecraft:walk_one_cm',
+  flyOneCm: 'minecraft:custom:minecraft:fly_one_cm',
+  swimOneCm: 'minecraft:custom:minecraft:swim_one_cm',
+  totalWorldTime: 'minecraft:custom:minecraft:total_world_time',
+  playerKills: 'minecraft:custom:minecraft:player_kills',
+  deaths: 'minecraft:custom:minecraft:deaths',
+  jump: 'minecraft:custom:minecraft:jump',
+  playTime: 'minecraft:custom:minecraft:play_time',
+  useWand: 'minecraft:custom:minecraft:use_wand',
+  leaveGame: 'minecraft:custom:minecraft:leave_game',
+} as const;
+const PLAYER_GAME_METRIC_KEY_LIST = Object.values(PLAYER_GAME_METRIC_KEYS);
+
+type PlayerBeaconIdentity = {
+  uuid: string | null;
+  name: string | null;
+};
+
+type PlayerGameServerDescriptor = {
+  serverId: string;
+  serverName: string;
+  beaconEnabled: boolean;
+  beaconConfigured: boolean;
+};
+
+type PlayerGameServerMetrics = {
+  walkOneCm: number | null;
+  flyOneCm: number | null;
+  swimOneCm: number | null;
+  totalWorldTime: number | null;
+  playerKills: number | null;
+  deaths: number | null;
+  jump: number | null;
+  playTime: number | null;
+  useWand: number | null;
+  leaveGame: number | null;
+};
+
+type PlayerMtrLogSummary = {
+  id: number | null;
+  timestamp: string | null;
+  rawTimestamp: string | null;
+  changeType: string | null;
+  entryName: string | null;
+  entryId: string | null;
+  className: string | null;
+  dimensionContext: string | null;
+  description: string | null;
+};
+
+type PlayerGameServerStat = PlayerGameServerDescriptor & {
+  metrics: PlayerGameServerMetrics | null;
+  lastMtrLog: PlayerMtrLogSummary | null;
+  fetchedAt: string | null;
+  error: string | null;
+  errorMessage: string | null;
+  mtrError: string | null;
+  mtrErrorMessage: string | null;
+};
+
+type PlayerGameStatsPayload = {
+  identity: PlayerBeaconIdentity;
+  identityMissing: boolean;
+  updatedAt: string;
+  servers: PlayerGameServerStat[];
+};
 
 @Injectable()
 export class PlayerService {
@@ -35,6 +106,8 @@ export class PlayerService {
     private readonly authmeService: AuthmeService,
     private readonly luckpermsService: LuckpermsService,
     private readonly automation: PlayerAutomationService,
+    private readonly minecraftServerService: MinecraftServerService,
+    private readonly redis: RedisService,
   ) {}
 
   async getPlayerPortalData(viewerId: string | null, targetUserId: string) {
@@ -508,35 +581,119 @@ export class PlayerService {
     return false;
   }
 
-  async getPlayerStats(userId: string) {
-    const [sessions, attachments] = await Promise.all([
-      this.prisma.session.findMany({
-        where: {
-          userId,
-        },
-        select: {
-          createdAt: true,
-          updatedAt: true,
-        },
-      }),
-      this.prisma.attachment.count({
-        where: {
-          ownerId: userId,
-        },
-      }),
-    ]);
+  async getPlayerStats(
+    userId: string,
+    options: { period?: string | null; forceRefresh?: boolean } = {},
+  ) {
+    const period = this.normalizeStatsPeriod(options.period);
+    const cacheKey = this.buildPlayerStatsCacheKey(userId, period);
+    if (!options.forceRefresh) {
+      const cached =
+        await this.redis.get<
+          Awaited<ReturnType<PlayerService['computePlayerStatsPayload']>>
+        >(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const [sessions, attachments, profile, bindings, servers] =
+      await Promise.all([
+        this.prisma.session.findMany({
+          where: {
+            userId,
+          },
+          select: {
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+        this.prisma.attachment.count({
+          where: {
+            ownerId: userId,
+          },
+        }),
+        this.prisma.userProfile.findUnique({
+          where: { userId },
+          select: {
+            primaryAuthmeBindingId: true,
+          },
+        }),
+        this.prisma.userAuthmeBinding.findMany({
+          where: { userId },
+          orderBy: { boundAt: 'asc' },
+          select: {
+            id: true,
+            authmeUuid: true,
+            authmeUsername: true,
+            authmeRealname: true,
+          },
+        }),
+        this.prisma.minecraftServer.findMany({
+          where: { isActive: true },
+          select: {
+            id: true,
+            displayName: true,
+            beaconEnabled: true,
+            beaconEndpoint: true,
+            beaconKey: true,
+          },
+          orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+        }),
+      ]);
+
+    const payload = await this.computePlayerStatsPayload({
+      sessions,
+      attachments,
+      period,
+      profile,
+      bindings,
+      servers,
+    });
+
+    await this.redis.set(cacheKey, payload, PLAYER_STATS_CACHE_TTL_MS);
+    return payload;
+  }
+
+  private async computePlayerStatsPayload(params: {
+    sessions: Array<{ createdAt: Date; updatedAt: Date | null }>;
+    attachments: number;
+    period: string;
+    profile: { primaryAuthmeBindingId: string | null } | null;
+    bindings: Array<{
+      id: string;
+      authmeUuid: string | null;
+      authmeUsername: string;
+      authmeRealname: string | null;
+    }>;
+    servers: Array<{
+      id: string;
+      displayName: string;
+      beaconEnabled: boolean | null;
+      beaconEndpoint: string | null;
+      beaconKey: string | null;
+    }>;
+  }) {
     const now = Date.now();
-    const playSeconds = sessions.reduce((total, session) => {
+    const playSeconds = params.sessions.reduce((total, session) => {
       const end = session.updatedAt?.getTime() ?? now;
       const duration = Math.max(0, (end - session.createdAt.getTime()) / 1000);
       return total + duration;
     }, 0);
     const activeDays = new Set(
-      sessions.map((session) => session.createdAt.toISOString().slice(0, 10)),
+      params.sessions.map((session) =>
+        session.createdAt.toISOString().slice(0, 10),
+      ),
     ).size;
 
+    const identity = this.resolvePlayerBeaconIdentity(
+      params.profile,
+      params.bindings,
+    );
+    const gameStats = await this.buildPlayerGameStats(identity, params.servers);
+
     return {
-      period: 'all',
+      period: params.period,
       generatedAt: new Date().toISOString(),
       metrics: [
         {
@@ -548,13 +705,13 @@ export class PlayerService {
         {
           id: 'login-count',
           label: '上线次数',
-          value: sessions.length,
+          value: params.sessions.length,
           unit: 'times',
         },
         {
           id: 'attachment-uploads',
           label: '附件上传',
-          value: attachments,
+          value: params.attachments,
           unit: 'files',
         },
         {
@@ -564,7 +721,265 @@ export class PlayerService {
           unit: 'days',
         },
       ],
+      gameStats,
     };
+  }
+
+  private normalizeStatsPeriod(period?: string | null) {
+    const trimmed = period?.trim();
+    if (!trimmed) return '30d';
+    return trimmed;
+  }
+
+  private buildPlayerStatsCacheKey(userId: string, period: string) {
+    return `player:stats:${PLAYER_STATS_CACHE_VERSION}:${userId}:${period}`;
+  }
+
+  private resolvePlayerBeaconIdentity(
+    profile: { primaryAuthmeBindingId: string | null } | null,
+    bindings: Array<{
+      id: string;
+      authmeUuid: string | null;
+      authmeUsername: string;
+      authmeRealname: string | null;
+    }>,
+  ): PlayerBeaconIdentity {
+    if (!bindings.length) {
+      return { uuid: null, name: null };
+    }
+    const preferred = bindings.find(
+      (binding) => binding.id === profile?.primaryAuthmeBindingId,
+    );
+    const target = preferred ?? bindings[0];
+    const uuid = this.normalizeLookupKey(target.authmeUuid);
+    const name = this.resolveLookupName({
+      authmeUsername: target.authmeUsername,
+      authmeRealname: target.authmeRealname,
+    });
+    return { uuid, name };
+  }
+
+  private async buildPlayerGameStats(
+    identity: PlayerBeaconIdentity,
+    servers: Array<{
+      id: string;
+      displayName: string;
+      beaconEnabled: boolean | null;
+      beaconEndpoint: string | null;
+      beaconKey: string | null;
+    }>,
+  ): Promise<PlayerGameStatsPayload> {
+    const descriptors: PlayerGameServerDescriptor[] = servers.map((server) => ({
+      serverId: server.id,
+      serverName: server.displayName,
+      beaconEnabled: Boolean(server.beaconEnabled),
+      beaconConfigured: Boolean(
+        server.beaconEnabled && server.beaconEndpoint && server.beaconKey,
+      ),
+    }));
+
+    const base: PlayerGameStatsPayload = {
+      identity,
+      identityMissing: !identity.uuid && !identity.name,
+      updatedAt: new Date().toISOString(),
+      servers: [],
+    };
+
+    if (!descriptors.length) {
+      return { ...base, servers: [] };
+    }
+
+    if (!identity.uuid && !identity.name) {
+      return {
+        ...base,
+        servers: descriptors.map((server) => ({
+          ...server,
+          metrics: null,
+          lastMtrLog: null,
+          fetchedAt: null,
+          error: 'IDENTITY_NOT_FOUND',
+          errorMessage: '未找到玩家的 AuthMe 绑定，无法查询 Beacon 数据',
+          mtrError: null,
+          mtrErrorMessage: null,
+        })),
+      };
+    }
+
+    const results = await Promise.all(
+      descriptors.map((server) =>
+        this.fetchGameStatsForServer(server, identity).catch((error) => ({
+          ...server,
+          metrics: null,
+          lastMtrLog: null,
+          fetchedAt: new Date().toISOString(),
+          error: 'BEACON_REQUEST_FAILED',
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : String(error ?? '未知错误'),
+          mtrError: null,
+          mtrErrorMessage: null,
+        })),
+      ),
+    );
+
+    return { ...base, servers: results };
+  }
+
+  private async fetchGameStatsForServer(
+    server: PlayerGameServerDescriptor,
+    identity: PlayerBeaconIdentity,
+  ): Promise<PlayerGameServerStat> {
+    if (!server.beaconEnabled) {
+      return {
+        ...server,
+        metrics: null,
+        lastMtrLog: null,
+        fetchedAt: null,
+        error: 'BEACON_DISABLED',
+        errorMessage: '服务器未启用 Beacon，无法查询数据',
+        mtrError: null,
+        mtrErrorMessage: null,
+      };
+    }
+    if (!server.beaconConfigured) {
+      return {
+        ...server,
+        metrics: null,
+        lastMtrLog: null,
+        fetchedAt: null,
+        error: 'BEACON_NOT_CONFIGURED',
+        errorMessage: 'Beacon 配置不完整，无法查询数据',
+        mtrError: null,
+        mtrErrorMessage: null,
+      };
+    }
+
+    let metrics: PlayerGameServerMetrics | null = null;
+    let error: string | null = null;
+    let errorMessage: string | null = null;
+    try {
+      const statsResponse =
+        await this.minecraftServerService.getBeaconPlayerStats(
+          server.serverId,
+          {
+            playerUuid: identity.uuid ?? undefined,
+            playerName: identity.name ?? undefined,
+            keys: PLAYER_GAME_METRIC_KEY_LIST,
+            page: 1,
+            pageSize: PLAYER_GAME_METRIC_KEY_LIST.length,
+          },
+        );
+      metrics = this.extractGameMetrics(statsResponse.result);
+    } catch (err) {
+      error = 'BEACON_STATS_FAILED';
+      errorMessage = err instanceof Error ? err.message : String(err);
+    }
+
+    let lastMtrLog: PlayerMtrLogSummary | null = null;
+    let mtrError: string | null = null;
+    let mtrErrorMessage: string | null = null;
+    try {
+      const mtrResponse = await this.minecraftServerService.getBeaconMtrLogs(
+        server.serverId,
+        {
+          playerUuid: identity.uuid ?? undefined,
+          playerName: identity.name ?? undefined,
+          page: 1,
+          pageSize: 1,
+          order: 'desc',
+          orderColumn: 'timestamp',
+        },
+      );
+      lastMtrLog = this.extractLatestMtrLog(mtrResponse.result);
+    } catch (err) {
+      mtrError = 'BEACON_MTR_FAILED';
+      mtrErrorMessage = err instanceof Error ? err.message : String(err);
+    }
+
+    return {
+      ...server,
+      metrics,
+      lastMtrLog,
+      fetchedAt: new Date().toISOString(),
+      error,
+      errorMessage,
+      mtrError,
+      mtrErrorMessage,
+    };
+  }
+
+  private extractGameMetrics(result: any): PlayerGameServerMetrics | null {
+    if (!result || result.success === false) {
+      throw new Error(
+        result?.error ?? 'Beacon 未返回玩家统计信息 (get_player_stats)',
+      );
+    }
+    const stats = result.stats ?? {};
+    const readNumber = (key: string) => {
+      const value = stats?.[key];
+      if (value === undefined || value === null) return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    return {
+      walkOneCm: readNumber(PLAYER_GAME_METRIC_KEYS.walkOneCm) ?? 0,
+      flyOneCm: readNumber(PLAYER_GAME_METRIC_KEYS.flyOneCm) ?? 0,
+      swimOneCm: readNumber(PLAYER_GAME_METRIC_KEYS.swimOneCm) ?? 0,
+      totalWorldTime: readNumber(PLAYER_GAME_METRIC_KEYS.totalWorldTime) ?? 0,
+      playerKills: readNumber(PLAYER_GAME_METRIC_KEYS.playerKills) ?? 0,
+      deaths: readNumber(PLAYER_GAME_METRIC_KEYS.deaths) ?? 0,
+      jump: readNumber(PLAYER_GAME_METRIC_KEYS.jump) ?? 0,
+      playTime: readNumber(PLAYER_GAME_METRIC_KEYS.playTime) ?? 0,
+      useWand: readNumber(PLAYER_GAME_METRIC_KEYS.useWand) ?? 0,
+      leaveGame: readNumber(PLAYER_GAME_METRIC_KEYS.leaveGame) ?? 0,
+    };
+  }
+
+  private extractLatestMtrLog(result: any): PlayerMtrLogSummary | null {
+    if (!result || result.success === false) {
+      return null;
+    }
+    const records = Array.isArray(result.records) ? result.records : [];
+    if (!records.length) {
+      return null;
+    }
+    const record = records[0];
+    const timestamp = this.parseMtrTimestamp(record?.timestamp ?? null);
+    const descriptorParts = [
+      typeof record?.change_type === 'string'
+        ? record.change_type.trim().toUpperCase()
+        : null,
+      record?.entry_name ?? record?.entry_id ?? record?.class_name ?? null,
+    ].filter((part): part is string => Boolean(part));
+
+    return {
+      id:
+        typeof record?.id === 'number'
+          ? record.id
+          : Number.isFinite(Number(record?.id))
+            ? Number(record.id)
+            : null,
+      timestamp: timestamp.iso,
+      rawTimestamp: timestamp.raw,
+      changeType: record?.change_type ?? null,
+      entryName: record?.entry_name ?? null,
+      entryId: record?.entry_id ?? null,
+      className: record?.class_name ?? null,
+      dimensionContext: record?.dimension_context ?? null,
+      description: descriptorParts.length ? descriptorParts.join(' · ') : null,
+    };
+  }
+
+  private parseMtrTimestamp(raw: string | null | undefined) {
+    if (!raw) {
+      return { iso: null, raw: null };
+    }
+    const parsed = Date.parse(raw);
+    if (Number.isNaN(parsed)) {
+      return { iso: null, raw };
+    }
+    return { iso: new Date(parsed).toISOString(), raw };
   }
 
   async submitAuthmeResetRequest(

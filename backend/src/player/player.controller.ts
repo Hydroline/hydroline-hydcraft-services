@@ -75,6 +75,12 @@ class RestartRequestDto {
   reason!: string;
 }
 
+class PlayerStatsRefreshDto {
+  @IsOptional()
+  @IsString()
+  period?: string;
+}
+
 @ApiTags('玩家档案接口')
 @Controller('player')
 export class PlayerController {
@@ -172,9 +178,27 @@ export class PlayerController {
   @Get('stats')
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: '玩家统计信息' })
-  async playerStats(@Req() req: Request, @Query('id') id?: string) {
+  async playerStats(
+    @Req() req: Request,
+    @Query('id') id?: string,
+    @Query('period') period?: string,
+  ) {
     const targetId = this.resolveTargetUserId(req, id);
-    return this.playerService.getPlayerStats(targetId);
+    return this.playerService.getPlayerStats(targetId, { period });
+  }
+
+  @Post('stats/refresh')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '强制刷新玩家统计信息' })
+  async refreshPlayerStats(
+    @Req() req: Request,
+    @Body() body: PlayerStatsRefreshDto,
+  ) {
+    return this.playerService.getPlayerStats(req.user!.id, {
+      period: body.period,
+      forceRefresh: true,
+    });
   }
 
   @Get('is-logged')
