@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { ApiError, apiFetch } from '@/utils/api'
 import type { RegionValue } from '@/views/user/Profile/components/RegionSelector.vue'
@@ -24,6 +24,7 @@ import UserBindingDialog from './components/UserBindingDialog.vue'
 import UserMinecraftNicknameDialog from './components/UserMinecraftNicknameDialog.vue'
 import UserResetPasswordDialog from './components/UserResetPasswordDialog.vue'
 import UserDeleteDialog from './components/UserDeleteDialog.vue'
+import AvatarCropperModal from '@/components/common/AvatarCropperModal.vue'
 
 type ProfileForm = {
   displayName?: string
@@ -105,6 +106,10 @@ const deleteConfirmSubmitting = ref(false)
 
 const avatarFileInput = ref<HTMLInputElement | null>(null)
 const avatarUploading = ref(false)
+const avatarCropModalOpen = ref(false)
+const avatarCropSubmitting = ref(false)
+type AvatarCropSource = { url: string; name: string }
+const avatarCropSource = ref<AvatarCropSource | null>(null)
 
 const sessions = computed(() => detail.value?.sessions ?? [])
 const oauthProviders = computed(() => featureStore.flags.oauthProviders ?? [])
@@ -173,11 +178,58 @@ function triggerAvatarSelect() {
   avatarFileInput.value?.click()
 }
 
+function cleanupAvatarCropSource() {
+  avatarCropSource.value = null
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result)
+      else reject(new Error('无法读取文件'))
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('无法读取文件'))
+    reader.readAsDataURL(file)
+  })
+}
+
+watch(
+  () => avatarCropModalOpen.value,
+  (open) => {
+    if (!open) {
+      avatarCropSubmitting.value = false
+      cleanupAvatarCropSource()
+    }
+  },
+)
+
 async function handleAvatarFileChange(event: Event) {
-  if (!auth.token || !detail.value) return
   const target = event.target as HTMLInputElement | null
   const file = target?.files?.[0]
-  if (!file) return
+  if (!file || !detail.value) return
+  try {
+    const dataUrl = await readFileAsDataUrl(file)
+    avatarCropSource.value = { url: dataUrl, name: file.name }
+    avatarCropModalOpen.value = true
+  } catch (error) {
+    console.error('[admin] failed to prepare avatar cropper', error)
+    toast.add({
+      title: '读取图片失败',
+      description: '无法加载图片进行裁剪，请换一张图片重试。',
+      color: 'error',
+    })
+  } finally {
+    if (target) {
+      target.value = ''
+    }
+  }
+}
+
+async function uploadAdminAvatar(file: File) {
+  if (!auth.token || !detail.value) {
+    throw new ApiError(401, '未登录')
+  }
   avatarUploading.value = true
   try {
     const formData = new FormData()
@@ -203,11 +255,21 @@ async function handleAvatarFileChange(event: Event) {
       description: error instanceof ApiError ? error.message : '请稍后重试',
       color: 'error',
     })
+    throw error
   } finally {
     avatarUploading.value = false
-    if (avatarFileInput.value) {
-      avatarFileInput.value.value = ''
-    }
+  }
+}
+
+async function handleAdminAvatarCropConfirm(file: File) {
+  avatarCropSubmitting.value = true
+  try {
+    await uploadAdminAvatar(file)
+    avatarCropModalOpen.value = false
+  } catch {
+    // 失败时保留模态框，方便重试
+  } finally {
+    avatarCropSubmitting.value = false
   }
 }
 
@@ -812,6 +874,10 @@ onMounted(async () => {
     await featureStore.initialize()
   }
 })
+
+onBeforeUnmount(() => {
+  cleanupAvatarCropSource()
+})
 </script>
 
 <template>
@@ -849,6 +915,14 @@ onMounted(async () => {
       class="hidden"
       accept="image/*"
       @change="handleAvatarFileChange"
+    />
+    <AvatarCropperModal
+      v-model:open="avatarCropModalOpen"
+      :image-url="avatarCropSource?.url ?? null"
+      :file-name="avatarCropSource?.name"
+      :submitting="avatarCropSubmitting"
+      confirm-label="保存头像"
+      @confirm="handleAdminAvatarCropConfirm"
     />
     <UserDetailSectionProfile
       :detail="detail"

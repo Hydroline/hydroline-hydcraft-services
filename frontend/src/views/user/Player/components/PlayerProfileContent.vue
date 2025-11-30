@@ -569,10 +569,10 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 items-center">
+      <div class="flex items-center">
         <UButton
           v-if="!props.isViewingSelf"
-          class="justify-center items-center"
+          class="justify-center items-center w-full"
           color="primary"
           variant="soft"
         >
@@ -580,40 +580,20 @@ onMounted(() => {
           私信
         </UButton>
 
-        <RouterLink v-else to="/profile/basic">
+        <RouterLink v-else to="/profile/basic" class="block w-full">
           <UButton
             class="justify-center items-center w-full"
             color="primary"
-            variant="soft"
+            variant="outline"
           >
             <UIcon name="i-lucide-pencil-line" />
             修改用户信息
           </UButton>
         </RouterLink>
-
-        <UButton
-          class="justify-center items-center"
-          color="primary"
-          variant="outline"
-        >
-          <UIcon name="i-lucide-message-circle-plus" />
-          留言板
-        </UButton>
       </div>
     </div>
 
-    <div class="grid md:grid-cols-2 gap-4">
-      <div class="md:col-span-2">
-        <div
-          class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 backdrop-blur dark:bg-slate-800/70 overflow-hidden h-60"
-        >
-          <iframe
-            src="https://map.nitrogen.hydcraft.cn/"
-            class="block h-full w-full"
-          ></iframe>
-        </div>
-      </div>
-
+    <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-4">
         <div>
           <div
@@ -739,37 +719,6 @@ onMounted(() => {
 
         <div>
           <div
-            class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
-          >
-            惯用昵称
-            <UTooltip
-              text="在交流群、社区内广泛使用的昵称，昵称会作为玩家在正式场合的称呼使用"
-            >
-              <button
-                type="button"
-                class="text-slate-400 transition hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:text-slate-300"
-              >
-                <UIcon name="i-lucide-info" class="h-4 w-4" />
-                <span class="sr-only">玩家身份标识编码</span>
-              </button>
-            </UTooltip>
-          </div>
-          <div class="flex flex-col gap-3">
-            <div v-if="props.minecraft">
-              <div
-                v-for="profile in props.minecraft.minecraftProfiles"
-                :key="profile.id"
-                class="text-sm font-medium w-full rounded-xl p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800"
-              >
-                {{ profile.nickname || '未设置' }}
-              </div>
-            </div>
-            <USkeleton v-else class="h-32 w-full" />
-          </div>
-        </div>
-
-        <div>
-          <div
             class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
           >
             游戏账户控制
@@ -816,7 +765,7 @@ onMounted(() => {
       <div class="flex flex-col gap-4">
         <div>
           <div
-            class="flex items-center justify-between flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
+            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
           >
             <span>账户统计信息</span>
             <USelectMenu
@@ -846,57 +795,6 @@ onMounted(() => {
               </div>
             </div>
             <USkeleton v-else class="h-28 w-full" />
-          </div>
-        </div>
-
-        <div>
-          <div
-            class="flex items-center justify-between px-1 text-lg text-slate-600 dark:text-slate-300 mb-1"
-          >
-            账户操作日志
-          </div>
-          <div>
-            <div v-if="props.actions?.items.length" class="space-y-3 text-sm">
-              <div
-                v-for="item in props.actions.items"
-                :key="item.id"
-                class="rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 bg-white/90 backdrop-blur dark:bg-slate-800/70"
-              >
-                <p class="font-semibold text-slate-900 dark:text-white">
-                  {{ item.action }}
-                </p>
-                <p class="text-xs text-slate-500 dark:text-slate-500">
-                  {{ props.formatDateTime(item.createdAt) }}
-                </p>
-                <p
-                  v-if="item.reason"
-                  class="text-xs text-slate-600 dark:text-slate-300"
-                >
-                  {{ item.reason }}
-                </p>
-              </div>
-              <UButton
-                v-if="
-                  props.actions?.pagination.pageCount &&
-                  props.actions.pagination.page <
-                    props.actions.pagination.pageCount
-                "
-                block
-                variant="ghost"
-                color="neutral"
-                @click="
-                  emit('refresh-actions', props.actions.pagination.page + 1)
-                "
-              >
-                查看更多
-              </UButton>
-            </div>
-            <div
-              v-else
-              class="text-center text-xs rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 bg-white/90 backdrop-blur dark:bg-slate-800/70"
-            >
-              暂无操作记录
-            </div>
           </div>
         </div>
       </div>

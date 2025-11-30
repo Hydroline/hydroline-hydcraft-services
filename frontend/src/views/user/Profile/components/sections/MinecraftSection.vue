@@ -67,7 +67,7 @@ function bindingAvatarUrl(binding: {
 <template>
   <div class="space-y-3">
     <div class="flex items-center justify-between">
-      <h3 class="px-1 text-lg text-slate-600 dark:text-slate-300">账户绑定</h3>
+      <h3 class="px-1 text-lg text-slate-600 dark:text-slate-300">游戏账户</h3>
       <div>
         <UButton
           size="sm"

@@ -198,7 +198,7 @@ async function confirmUnbind() {
         <h3
           class="flex items-center gap-2 px-1 text-lg text-slate-600 dark:text-slate-300"
         >
-          平台绑定
+          社交账号
         </h3>
       </div>
     </div>

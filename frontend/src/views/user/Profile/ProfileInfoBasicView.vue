@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import BasicSection from './components/sections/BasicSection.vue'
 import {
   getTimezoneOptionsZh,
   languageOptions as commonLanguageOptions,
 } from '@/constants/profile'
+import AvatarCropperModal from '@/components/common/AvatarCropperModal.vue'
 import {
   useAuthStore,
   type GenderType,
@@ -473,6 +474,10 @@ const avatarUploading = ref(false)
 const avatarUploadProgress = ref(0)
 const avatarFileInput = ref<HTMLInputElement | null>(null)
 let avatarProgressTimer: number | null = null
+const avatarCropModalOpen = ref(false)
+const avatarCropSubmitting = ref(false)
+type AvatarCropSource = { url: string; name: string }
+const avatarCropSource = ref<AvatarCropSource | null>(null)
 
 function triggerAvatarSelect() {
   if (!isAuthenticated.value) {
@@ -482,20 +487,57 @@ function triggerAvatarSelect() {
   avatarFileInput.value?.click()
 }
 
-async function handleAvatarFileChange(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  const file = target?.files?.[0]
-  if (!file) return
+function cleanupAvatarCropSource() {
+  avatarCropSource.value = null
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result)
+      else reject(new Error('无法读取文件'))
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('无法读取文件'))
+    reader.readAsDataURL(file)
+  })
+}
+
+watch(
+  () => avatarCropModalOpen.value,
+  (open) => {
+    if (!open) {
+      avatarCropSubmitting.value = false
+      cleanupAvatarCropSource()
+    }
+  },
+)
+
+async function prepareAvatarCropper(file: File) {
+  try {
+    const dataUrl = await readFileAsDataUrl(file)
+    avatarCropSource.value = { url: dataUrl, name: file.name }
+    avatarCropModalOpen.value = true
+  } catch (error) {
+    handleError(error, '无法加载图片用于裁剪')
+  }
+}
+
+function stopAvatarProgressTimer() {
+  if (avatarProgressTimer !== null) {
+    window.clearInterval(avatarProgressTimer)
+    avatarProgressTimer = null
+  }
+}
+
+async function performAvatarUpload(file: File) {
   if (!auth.token) {
     ui.openLoginDialog()
-    return
+    throw new ApiError(401, '未登录')
   }
   avatarUploading.value = true
   avatarUploadProgress.value = 0
-
-  if (avatarProgressTimer !== null) {
-    window.clearInterval(avatarProgressTimer)
-  }
+  stopAvatarProgressTimer()
   avatarProgressTimer = window.setInterval(() => {
     if (avatarUploadProgress.value < 90) {
       avatarUploadProgress.value += 5
@@ -513,18 +555,40 @@ async function handleAvatarFileChange(event: Event) {
     })
   } catch (error) {
     handleError(error, '上传头像失败')
+    throw error
   } finally {
-    if (avatarProgressTimer !== null) {
-      window.clearInterval(avatarProgressTimer)
-      avatarProgressTimer = null
-    }
+    stopAvatarProgressTimer()
     avatarUploading.value = false
     ui.stopLoading()
-    if (target) {
-      target.value = ''
-    }
   }
 }
+
+function handleAvatarFileChange(event: Event) {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0]
+  if (!file) return
+  void prepareAvatarCropper(file)
+  if (target) {
+    target.value = ''
+  }
+}
+
+async function handleAvatarCropConfirm(file: File) {
+  avatarCropSubmitting.value = true
+  try {
+    await performAvatarUpload(file)
+    avatarCropModalOpen.value = false
+  } catch {
+    // 留在裁剪框中，允许用户重试
+  } finally {
+    avatarCropSubmitting.value = false
+  }
+}
+
+onBeforeUnmount(() => {
+  stopAvatarProgressTimer()
+  cleanupAvatarCropSource()
+})
 
 watch(
   () => auth.isAuthenticated,
@@ -620,6 +684,15 @@ watch(
       "
     />
   </form>
+
+  <AvatarCropperModal
+    v-model:open="avatarCropModalOpen"
+    :image-url="avatarCropSource?.url ?? null"
+    :file-name="avatarCropSource?.name"
+    :submitting="avatarCropSubmitting"
+    confirm-label="保存头像"
+    @confirm="handleAvatarCropConfirm"
+  />
 </template>
 
 <style scoped></style>
