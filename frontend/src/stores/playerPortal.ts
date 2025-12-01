@@ -8,6 +8,7 @@ import type {
   PlayerPortalProfileResponse,
   PlayerRegionResponse,
   PlayerStatsResponse,
+  PlayerGameStatsResponse,
   PlayerSummary,
   PlayerIsLoggedResponse,
   PlayerLifecycleEvent,
@@ -101,6 +102,23 @@ export const usePlayerPortalStore = defineStore('player-portal', {
         },
       )
       return this.stats
+    },
+    async fetchGameStatsForBinding(
+      bindingId: string,
+      options: { serverId?: string; userId?: string } = {},
+    ) {
+      const params = new URLSearchParams({ bindingId })
+      const effectiveUserId = options.userId ?? this.targetUserId
+      if (effectiveUserId) {
+        params.set('id', effectiveUserId)
+      }
+      if (options.serverId) {
+        params.set('serverId', options.serverId)
+      }
+      return apiFetch<PlayerGameStatsResponse>(
+        `/player/game-stats?${params.toString()}`,
+        { token: this.authToken() ?? undefined },
+      )
     },
     async requestAuthmePasswordReset(payload: {
       serverId: string

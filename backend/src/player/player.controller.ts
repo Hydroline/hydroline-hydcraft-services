@@ -81,6 +81,19 @@ class PlayerStatsRefreshDto {
   period?: string;
 }
 
+class PlayerGameStatsQueryDto {
+  @IsOptional()
+  @IsUUID()
+  serverId?: string;
+
+  @IsUUID()
+  bindingId!: string;
+
+  @IsOptional()
+  @IsString()
+  id?: string;
+}
+
 @ApiTags('玩家档案接口')
 @Controller('player')
 export class PlayerController {
@@ -199,6 +212,26 @@ export class PlayerController {
       period: body.period,
       forceRefresh: true,
     });
+  }
+
+  @Get('game-stats')
+  @UseGuards(OptionalAuthGuard)
+  @ApiOperation({ summary: '按游戏账户查询游戏统计信息' })
+  async playerGameStats(
+    @Req() req: Request,
+    @Query() query: PlayerGameStatsQueryDto,
+  ) {
+    const targetId = this.resolveTargetUserId(req, query.id);
+    if (!query.bindingId) {
+      throw new BadRequestException('请选择要查询的游戏账户');
+    }
+    return this.playerService.getPlayerGameStatsForBinding(
+      targetId,
+      query.bindingId,
+      {
+        serverId: query.serverId,
+      },
+    );
   }
 
   @Get('is-logged')

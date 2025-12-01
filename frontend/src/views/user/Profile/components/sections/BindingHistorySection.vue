@@ -84,7 +84,7 @@ function bindingLabel(entry: UserBindingHistoryEntry['binding']) {
             {{ formatDateTime(entry.createdAt) }}
           </div>
         </div>
-        <p class="mt-2 text-slate-600 dark:text-slate-300">
+        <p class="text-xs text-slate-600 dark:text-slate-300">
           {{ entry.reason || '无备注' }}
         </p>
         <div class="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">

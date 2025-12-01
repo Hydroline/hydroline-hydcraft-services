@@ -1,17 +1,29 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
-import type { PlayerGameServerStat, PlayerStatsResponse } from '@/types/portal'
+import type {
+  PlayerGameServerStat,
+  PlayerStatsResponse,
+  PlayerSummary,
+  PlayerGameStatsResponse,
+} from '@/types/portal'
+import { usePlayerPortalStore } from '@/stores/playerPortal'
 
 const props = defineProps<{
   stats: PlayerStatsResponse | null
+  bindings: PlayerSummary['authmeBindings']
   isViewingSelf: boolean
   refreshing: boolean
 }>()
 
 const emit = defineEmits<{ (event: 'refresh'): void }>()
 
-const selectedServerId = ref<string | null>(null)
+type PlayerAuthmeBinding = PlayerSummary['authmeBindings'][number]
+
+const selectedServerId = ref<string | undefined>(undefined)
+const selectedPlayerId = ref<string | undefined>(undefined)
+
+const playerPortalStore = usePlayerPortalStore()
 
 const gameStats = computed(() => props.stats?.gameStats ?? null)
 const servers = computed<PlayerGameServerStat[]>(
@@ -51,27 +63,42 @@ const selectedServer = computed<PlayerGameServerStat | null>(() => {
 const selectedMetrics = computed(() => selectedServer.value?.metrics ?? null)
 const hasMetrics = computed(() => Boolean(selectedMetrics.value))
 
-const dropdownItems = computed(() =>
+const serverOptions = computed(() =>
   servers.value.map((server) => ({
-    serverId: server.serverId,
-    serverName: server.serverName,
+    id: server.serverId,
+    displayName: server.serverName,
   })),
 )
 
-const identityLabel = computed(() => {
-  if (!gameStats.value?.identity) return '未找到玩家身份信息'
-  const parts: string[] = []
-  if (gameStats.value.identity.name) {
-    parts.push(gameStats.value.identity.name)
-  }
-  if (gameStats.value.identity.uuid) {
-    parts.push(gameStats.value.identity.uuid)
-  }
-  if (!parts.length) {
-    return '未找到玩家身份信息'
-  }
-  return parts.join(' · ')
-})
+const playerOptions = computed(() =>
+  (props.bindings ?? []).map((binding: PlayerAuthmeBinding) => {
+    const realname = binding.realname?.trim() || binding.username
+    return {
+      id: binding.id,
+      label: realname,
+      avatarUrl: `https://mc-heads.hydcraft.cn/avatar/${encodeURIComponent(
+        realname,
+      )}`,
+      raw: binding,
+    }
+  }),
+)
+
+watch(
+  () => playerOptions.value,
+  (list) => {
+    if (!list.length) {
+      selectedPlayerId.value = undefined
+      return
+    }
+    if (!selectedPlayerId.value) {
+      selectedPlayerId.value = list[0].id
+    }
+  },
+  { immediate: true },
+)
+
+const isLoadingGameStats = ref(false)
 
 const latestUpdateLabel = computed(() => {
   const source = selectedServer.value?.fetchedAt ?? props.stats?.generatedAt
@@ -135,8 +162,8 @@ const formattedMtrTimestamp = computed(() => {
 
 const formattedMtrDescription = computed(() => {
   const log = selectedServer.value?.lastMtrLog
-  if (!log) return '—'
-  return log.description ?? '—'
+  if (!log) return null
+  return log.description ?? null
 })
 
 const selectedServerMessage = computed(() => {
@@ -150,17 +177,61 @@ const selectedServerMessage = computed(() => {
   return null
 })
 
-const mtrErrorMessage = computed(() => {
-  if (!selectedServer.value) return null
-  return selectedServer.value.mtrErrorMessage ?? null
-})
-
 const hasServers = computed(() => servers.value.length > 0)
 const showStatsGrid = computed(() => Boolean(props.stats && hasServers.value))
 const showNoServersMessage = computed(() =>
   Boolean(props.stats && !hasServers.value),
 )
 const isStatsLoading = computed(() => !props.stats)
+
+async function refreshGameStatsForSelection() {
+  if (!selectedPlayerId.value || !selectedServerId.value) return
+  if (!playerOptions.value.length) return
+  const binding = playerOptions.value.find(
+    (item) => item.id === selectedPlayerId.value,
+  )
+  if (!binding) return
+  try {
+    isLoadingGameStats.value = true
+    const response = await playerPortalStore.fetchGameStatsForBinding(
+      binding.id,
+      {
+        serverId: selectedServerId.value,
+      },
+    )
+    const updated = response?.servers?.[0]
+    if (!updated || !gameStats.value) return
+    const current = gameStats.value.servers ?? []
+    const nextServers = current.map((server) =>
+      server.serverId === updated.serverId ? updated : server,
+    )
+    const nextPayload: PlayerGameStatsResponse = {
+      ...gameStats.value,
+      identity: response.identity ?? gameStats.value.identity,
+      identityMissing:
+        typeof response.identityMissing === 'boolean'
+          ? response.identityMissing
+          : gameStats.value.identityMissing,
+      updatedAt: response.updatedAt ?? gameStats.value.updatedAt,
+      servers: nextServers,
+    }
+    if (props.stats) {
+      playerPortalStore.stats = {
+        ...props.stats,
+        gameStats: nextPayload,
+      }
+    }
+  } finally {
+    isLoadingGameStats.value = false
+  }
+}
+
+watch(
+  () => [selectedPlayerId.value, selectedServerId.value] as const,
+  () => {
+    void refreshGameStatsForSelection()
+  },
+)
 </script>
 
 <template>
@@ -202,24 +273,67 @@ const isStatsLoading = computed(() => !props.stats)
           </template>
           <div class="flex items-center gap-2">
             <USelectMenu
+              v-model="selectedPlayerId"
+              :items="playerOptions"
+              value-key="id"
+              label-key="label"
+              placeholder="选择玩家"
+              class="w-full max-w-40"
+              :disabled="playerOptions.length === 0"
+              size="xs"
+            >
+              <template #item="{ item }">
+                <div class="flex items-center gap-2">
+                  <img
+                    :src="item.avatarUrl"
+                    :alt="item.label"
+                    class="h-5 w-5 rounded-sm border border-slate-200 dark:border-slate-700"
+                  />
+                  <span class="truncate text-xs">{{ item.label }}</span>
+                </div>
+              </template>
+              <template #default>
+                <div v-if="selectedPlayerId" class="flex items-center gap-2">
+                  <img
+                    :src="
+                      playerOptions.find((p) => p.id === selectedPlayerId)
+                        ?.avatarUrl
+                    "
+                    :alt="
+                      playerOptions.find((p) => p.id === selectedPlayerId)
+                        ?.label || ''
+                    "
+                    class="h-5 w-5 rounded-sm border border-slate-200 dark:border-slate-700"
+                  />
+                  <span class="truncate text-xs">
+                    {{
+                      playerOptions.find((p) => p.id === selectedPlayerId)
+                        ?.label || '选择玩家'
+                    }}
+                  </span>
+                </div>
+                <span v-else class="text-xs text-slate-400">选择玩家</span>
+              </template>
+            </USelectMenu>
+
+            <USelectMenu
               v-model="selectedServerId"
-              :items="dropdownItems"
-              value-key="serverId"
-              label-key="serverName"
+              :items="serverOptions"
+              value-key="id"
+              label-key="displayName"
               placeholder="选择服务器"
               class="w-full max-w-32"
-              :disabled="dropdownItems.length === 0"
+              :disabled="serverOptions.length === 0"
               size="xs"
             />
+
             <UTooltip
+              class="shrink-0"
               v-if="selectedServerMessage"
               :text="selectedServerMessage"
               :popper="{ placement: 'top' }"
             >
-              <UIcon
-                name="i-lucide-alert-circle"
-                class="text-amber-500 text-lg"
-              />
+              <UIcon name="i-lucide-alert-circle" class="text-amber-500" />
             </UTooltip>
           </div>
         </div>
@@ -250,11 +364,11 @@ const isStatsLoading = computed(() => !props.stats)
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">走了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatDistance(selectedMetrics?.walkOneCm) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatDistance(selectedMetrics?.walkOneCm) }}
               </template>
             </p>
           </div>
@@ -264,11 +378,11 @@ const isStatsLoading = computed(() => !props.stats)
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">飞了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatDistance(selectedMetrics?.flyOneCm) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatDistance(selectedMetrics?.flyOneCm) }}
               </template>
             </p>
           </div>
@@ -278,11 +392,11 @@ const isStatsLoading = computed(() => !props.stats)
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">游了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatDistance(selectedMetrics?.swimOneCm) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatDistance(selectedMetrics?.swimOneCm) }}
               </template>
             </p>
           </div>
@@ -294,11 +408,11 @@ const isStatsLoading = computed(() => !props.stats)
               在游戏里待了多久
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatTicksToDays(selectedMetrics?.totalWorldTime) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-32" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-32" />
+                {{ formatTicksToDays(selectedMetrics?.totalWorldTime) }}
               </template>
             </p>
           </div>
@@ -310,11 +424,11 @@ const isStatsLoading = computed(() => !props.stats)
               被人杀了多少次
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatTimes(selectedMetrics?.playerKills) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatTimes(selectedMetrics?.playerKills) }}
               </template>
             </p>
           </div>
@@ -324,11 +438,11 @@ const isStatsLoading = computed(() => !props.stats)
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">死亡多少次</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatTimes(selectedMetrics?.deaths) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatTimes(selectedMetrics?.deaths) }}
               </template>
             </p>
           </div>
@@ -338,11 +452,11 @@ const isStatsLoading = computed(() => !props.stats)
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">跳了多少次</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatTimes(selectedMetrics?.jump) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatTimes(selectedMetrics?.jump) }}
               </template>
             </p>
           </div>
@@ -352,11 +466,11 @@ const isStatsLoading = computed(() => !props.stats)
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">游玩时间</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatTicksToHours(selectedMetrics?.playTime) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatTicksToHours(selectedMetrics?.playTime) }}
               </template>
             </p>
           </div>
@@ -368,11 +482,11 @@ const isStatsLoading = computed(() => !props.stats)
               用了几次斧头
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatTimes(selectedMetrics?.useWand) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatTimes(selectedMetrics?.useWand) }}
               </template>
             </p>
           </div>
@@ -384,11 +498,11 @@ const isStatsLoading = computed(() => !props.stats)
               退出游戏几次
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="hasMetrics">
-                {{ formatTimes(selectedMetrics?.leaveGame) }}
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
               </template>
               <template v-else>
-                <USkeleton class="h-6 w-28" />
+                {{ formatTimes(selectedMetrics?.leaveGame) }}
               </template>
             </p>
           </div>
@@ -400,6 +514,7 @@ const isStatsLoading = computed(() => !props.stats)
               最近一次 MTR 操作
 
               <span
+                v-if="formattedMtrDescription"
                 class="font-semibold text-xs text-slate-500 dark:text-slate-500"
               >
                 {{ formattedMtrDescription }}
@@ -407,12 +522,6 @@ const isStatsLoading = computed(() => !props.stats)
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
               {{ formattedMtrTimestamp }}
-            </p>
-            <p
-              v-if="mtrErrorMessage"
-              class="text-xs text-rose-500 dark:text-rose-400 mt-1"
-            >
-              {{ mtrErrorMessage }}
             </p>
           </div>
         </div>

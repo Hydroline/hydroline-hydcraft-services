@@ -454,21 +454,16 @@ async function handleStatsRefresh() {
                   </span>
                 </div>
 
-                <div class="flex items-center">
+                <div class="flex items-center ml-1">
                   <UButton
-                    variant="link"
+                    variant="soft"
                     color="error"
-                    icon="i-lucide-heart"
-                    class="flex justify-center items-center rounded-full h-5.5 w-5.5"
+                    class="flex justify-center items-center px-1 py-0.5"
                     size="xs"
-                  />
-
-                  <UButton
-                    variant="link"
-                    icon="i-lucide-qr-code"
-                    class="flex justify-center items-center rounded-full h-5.5 w-5.5"
-                    size="xs"
-                  />
+                  >
+                    <UIcon name="i-lucide-heart" class="h-3 w-3" />
+                    <span> 0 </span>
+                  </UButton>
                 </div>
               </template>
               <template v-else>
@@ -558,8 +553,16 @@ async function handleStatsRefresh() {
             class="flex items-center flex-wrap break-all gap-2 text-base font-semibold text-slate-800 dark:text-slate-300"
           >
             <template v-if="props.summary">
-              <span>
+              <span class="inline-flex items-center gap-2">
                 {{ props.summary.displayName }}
+
+                <UButton
+                  variant="link"
+                  icon="i-lucide-qr-code"
+                  color="neutral"
+                  class="flex justify-center items-center rounded-full h-3 w-3"
+                  size="xs"
+                />
               </span>
 
               <div
@@ -785,6 +788,7 @@ async function handleStatsRefresh() {
           <div>
             <PlayerGameStatsPanel
               :stats="props.stats"
+              :bindings="props.summary?.authmeBindings ?? []"
               :is-viewing-self="props.isViewingSelf"
               :refreshing="isRefreshingStats"
               @refresh="handleStatsRefresh"

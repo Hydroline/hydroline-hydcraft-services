@@ -655,6 +655,51 @@ export class PlayerService {
     return payload;
   }
 
+  async getPlayerGameStatsForBinding(
+    userId: string,
+    bindingId: string,
+    options: { serverId?: string | null } = {},
+  ) {
+    const binding = await this.prisma.userAuthmeBinding.findFirst({
+      where: { id: bindingId, userId },
+      select: {
+        id: true,
+        authmeUuid: true,
+        authmeUsername: true,
+        authmeRealname: true,
+      },
+    });
+    if (!binding) {
+      throw new BadRequestException('未找到对应的 AuthMe 账户');
+    }
+
+    const servers = await this.prisma.minecraftServer.findMany({
+      where: {
+        isActive: true,
+        ...(options.serverId ? { id: options.serverId } : {}),
+      },
+      select: {
+        id: true,
+        displayName: true,
+        beaconEnabled: true,
+        beaconEndpoint: true,
+        beaconKey: true,
+      },
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    if (options.serverId && servers.length === 0) {
+      throw new NotFoundException('未找到指定的服务器');
+    }
+
+    const identity = {
+      uuid: this.normalizeLookupKey(binding.authmeUuid),
+      name: this.resolveLookupName(binding),
+    };
+
+    return this.buildPlayerGameStats(identity, servers);
+  }
+
   private async computePlayerStatsPayload(params: {
     sessions: Array<{ createdAt: Date; updatedAt: Date | null }>;
     attachments: number;
