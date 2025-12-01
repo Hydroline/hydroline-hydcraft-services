@@ -210,6 +210,11 @@ export interface PlayerStatsResponse {
   gameStats?: PlayerGameStatsResponse | null
 }
 
+export interface PlayerLikeSummary {
+  total: number
+  viewerLiked: boolean
+}
+
 export interface PlayerGameStatsResponse {
   identity: { uuid: string | null; name: string | null }
   identityMissing: boolean
@@ -279,6 +284,7 @@ export interface PlayerPortalProfileResponse {
   region: PlayerRegionResponse
   minecraft: PlayerMinecraftResponse
   stats: PlayerStatsResponse
+  likes: PlayerLikeSummary | null
   statusSnapshot: PlayerStatusSnapshot | null
 }
 

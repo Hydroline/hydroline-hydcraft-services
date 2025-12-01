@@ -18,6 +18,7 @@ import {
 import PlayerBindingDetailDialog from './PlayerBindingDetailDialog.vue'
 import PlayerGameStatsPanel from './PlayerGameStatsPanel.vue'
 import { usePlayerPortalStore } from '@/stores/playerPortal'
+import { translateAuthErrorMessage } from '@/utils/auth-errors'
 
 type PlayerAuthmeBinding = PlayerSummary['authmeBindings'][number]
 
@@ -38,6 +39,18 @@ const playerPortalStore = usePlayerPortalStore()
 const isPlayerLogged = computed(() => Boolean(playerPortalStore.logged))
 const toast = useToast()
 const isRefreshingStats = ref(false)
+const likeLoading = ref(false)
+const likeSummary = computed(() => playerPortalStore.likes)
+const likeCountDisplay = computed(() => likeSummary.value?.total ?? 0)
+const hasLiked = computed(() => likeSummary.value?.viewerLiked ?? false)
+const likeButtonDisabled = computed(() => {
+  return (
+    !props.summary ||
+    likeLoading.value ||
+    !playerPortalStore.targetUserId ||
+    !playerPortalStore.viewerId
+  )
+})
 
 function resolveBindingIdentifier(
   binding:
@@ -355,6 +368,38 @@ function normalizeComparisonKey(value: string | null | undefined) {
   return trimmed.length > 0 ? trimmed.toLowerCase() : null
 }
 
+async function handleLikeToggle() {
+  if (likeLoading.value) return
+  if (!playerPortalStore.targetUserId) return
+  if (!playerPortalStore.viewerId) {
+    return
+  }
+  likeLoading.value = true
+  try {
+    if (hasLiked.value) {
+      await playerPortalStore.unlikePlayer({
+        id: playerPortalStore.targetUserId,
+      })
+    } else {
+      await playerPortalStore.likePlayer({
+        id: playerPortalStore.targetUserId,
+      })
+    }
+  } catch (error) {
+    const description =
+      error instanceof Error
+        ? translateAuthErrorMessage(error.message)
+        : '点赞失败'
+    toast.add({
+      title: '点赞失败',
+      description,
+      color: 'error',
+    })
+  } finally {
+    likeLoading.value = false
+  }
+}
+
 async function handleStatsRefresh() {
   if (isRefreshingStats.value) return
   isRefreshingStats.value = true
@@ -460,9 +505,12 @@ async function handleStatsRefresh() {
                     color="error"
                     class="flex justify-center items-center px-1 py-0.5"
                     size="xs"
+                    :loading="likeLoading"
+                    :disabled="likeButtonDisabled"
+                    @click="handleLikeToggle"
                   >
                     <UIcon name="i-lucide-heart" class="h-3 w-3" />
-                    <span> 0 </span>
+                    <span>{{ likeCountDisplay }}</span>
                   </UButton>
                 </div>
               </template>

@@ -72,6 +72,7 @@ const STATIC_TRANSLATIONS: Record<string, string> = {
     '验证码发送失败，请稍后重试',
   'Cannot send verification code, please bind email first':
     '无法发送验证码，请先绑定邮箱',
+  'Cannot like yourself': '无法为自己点赞',
   // AuthMe binding errors
   'AuthMe binding is not enabled in current environment':
     '当前环境未启用 AuthMe 绑定',

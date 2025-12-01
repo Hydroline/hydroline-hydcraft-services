@@ -49,6 +49,8 @@ model User {
   roles                   UserRole[]
   statusEvents            UserStatusEvent[]
   statusSnapshot          UserStatusSnapshot?
+  likesGiven              PlayerLike[]           @relation("PlayerLikesGiven")
+  likesReceived           PlayerLike[]           @relation("PlayerLikesReceived")
 
   @@map("users")
 }
@@ -210,6 +212,18 @@ model UserLifecycleEvent {
 
   @@index([userId, eventType], map: "idx_user_lifecycle_type")
   @@map("user_lifecycle_events")
+}
+
+model PlayerLike {
+  id        String   @id @default(uuid())
+  likerId   String
+  targetId  String
+  createdAt DateTime @default(now())
+  liker     User     @relation("PlayerLikesGiven", fields: [likerId], references: [id], onDelete: Cascade)
+  target    User     @relation("PlayerLikesReceived", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([likerId, targetId])
+  @@index([targetId])
 }
 
 model ContactChannel {

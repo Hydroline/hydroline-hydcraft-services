@@ -7,12 +7,17 @@ import { useAuthStore } from '@/stores/auth'
 import { useFeatureStore } from '@/stores/feature'
 import { useAdminUsersStore } from '@/stores/adminUsers'
 import { useAdminRbacStore } from '@/stores/adminRbac'
-import type { AdminBindingHistoryEntry, AdminUserDetail } from '@/types/admin'
+import type {
+  AdminBindingHistoryEntry,
+  AdminUserDetail,
+  AdminUserLikeEntry,
+} from '@/types/admin'
 import UserDetailSectionOverview from './components/UserDetailSectionOverview.vue'
 import UserDetailSectionProfile from './components/UserDetailSectionProfile.vue'
 import UserDetailSectionServerAccounts from './components/UserDetailSectionServerAccounts.vue'
 import UserDetailSectionOAuth from './components/UserDetailSectionOAuth.vue'
 import UserBindingHistoryDialog from './components/UserBindingHistoryDialog.vue'
+import UserLikeDetailDialog from './components/UserLikeDetailDialog.vue'
 import UserSessionsDialog from './components/UserSessionsDialog.vue'
 import ResetPasswordResultDialog from './components/ResetPasswordResultDialog.vue'
 import ErrorDialog from './components/ErrorDialog.vue'
@@ -25,6 +30,7 @@ import UserMinecraftNicknameDialog from './components/UserMinecraftNicknameDialo
 import UserResetPasswordDialog from './components/UserResetPasswordDialog.vue'
 import UserDeleteDialog from './components/UserDeleteDialog.vue'
 import AvatarCropperModal from '@/components/common/AvatarCropperModal.vue'
+import UserLikeSummaryCard from './components/UserLikeSummaryCard.vue'
 
 type ProfileForm = {
   displayName?: string
@@ -67,6 +73,9 @@ const deleteDialogOpen = ref(false)
 const contactsListDialogOpen = ref(false)
 const bindingHistoryDialogOpen = ref(false)
 const sessionsDialogOpen = ref(false)
+const likeDetailDialogOpen = ref(false)
+const likeDetails = ref<AdminUserLikeEntry[]>([])
+const likeDetailsLoading = ref(false)
 const pendingEmailToken = ref<number | null>(null)
 const oauthUnbindingId = ref<string | null>(null)
 
@@ -132,6 +141,7 @@ const labelOptions = computed(() =>
     color: label.color ?? undefined,
   })),
 )
+const likesSummary = computed(() => detail.value?.likesReceived ?? null)
 
 function openStatusDialog() {
   if (!detail.value) return
@@ -612,6 +622,31 @@ async function fetchBindingHistory(targetId?: string) {
   }
 }
 
+async function loadLikeDetails() {
+  if (!detail.value?.id) return
+  if (!auth.token) {
+    toast.add({ title: '缺少登录信息', color: 'warning' })
+    return
+  }
+  likeDetailsLoading.value = true
+  try {
+    const response = await apiFetch<AdminUserLikeEntry[]>(
+      `/auth/users/${encodeURIComponent(detail.value.id)}/likes`,
+      { token: auth.token },
+    )
+    likeDetails.value = response
+  } catch (error) {
+    toast.add({
+      title: '加载点赞记录失败',
+      description: error instanceof Error ? error.message : '请稍后再试',
+      color: 'error',
+    })
+    likeDetails.value = []
+  } finally {
+    likeDetailsLoading.value = false
+  }
+}
+
 async function saveProfile() {
   if (!auth.token || !detail.value) return
   profileSaving.value = true
@@ -783,6 +818,25 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => likeDetailDialogOpen.value,
+  (open) => {
+    if (open) {
+      void loadLikeDetails()
+    }
+  },
+)
+
+watch(
+  () => detail.value?.id,
+  () => {
+    likeDetails.value = []
+    if (likeDetailDialogOpen.value) {
+      likeDetailDialogOpen.value = false
+    }
+  },
+)
+
 async function confirmDelete() {
   deleteConfirmSubmitting.value = true
   try {
@@ -948,6 +1002,11 @@ onBeforeUnmount(() => {
       @markPrimaryMinecraft="markPrimaryMinecraft"
       @deleteMinecraftProfile="deleteMinecraftProfile"
     />
+    <UserLikeSummaryCard
+      :detail="detail"
+      :likes-summary="likesSummary"
+      @openLikeDetail="likeDetailDialogOpen = true"
+    />
   </div>
 
   <UserBindingHistoryDialog
@@ -955,6 +1014,14 @@ onBeforeUnmount(() => {
     :items="bindingHistory"
     :loading="historyLoading"
     @update:open="bindingHistoryDialogOpen = $event"
+  />
+
+  <UserLikeDetailDialog
+    :open="likeDetailDialogOpen"
+    :items="likeDetails"
+    :loading="likeDetailsLoading"
+    :user-name="detail?.profile?.displayName ?? detail?.name ?? null"
+    @update:open="likeDetailDialogOpen = $event"
   />
 
   <UserSessionsDialog

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Post,
   Query,
@@ -233,6 +234,41 @@ export class PlayerController {
         serverId: query.serverId,
       },
     );
+  }
+
+  @Get('likes')
+  @UseGuards(OptionalAuthGuard)
+  @ApiOperation({ summary: '获取玩家点赞信息' })
+  async playerLikes(@Req() req: Request, @Query('id') id?: string) {
+    const targetId = this.resolveTargetUserId(req, id);
+    return this.playerService.getPlayerLikeSummary(
+      req.user?.id ?? null,
+      targetId,
+    );
+  }
+
+  @Post('likes')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '为玩家点赞' })
+  async likePlayer(@Req() req: Request, @Query('id') id?: string) {
+    const targetId = id?.trim();
+    if (!targetId) {
+      throw new BadRequestException('Player ID is required');
+    }
+    return this.playerService.likePlayer(req.user!.id, targetId);
+  }
+
+  @Delete('likes')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '取消对玩家的点赞' })
+  async unlikePlayer(@Req() req: Request, @Query('id') id?: string) {
+    const targetId = id?.trim();
+    if (!targetId) {
+      throw new BadRequestException('Player ID is required');
+    }
+    return this.playerService.unlikePlayer(req.user!.id, targetId);
   }
 
   @Get('is-logged')

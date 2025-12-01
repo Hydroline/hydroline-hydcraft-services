@@ -806,6 +806,7 @@ export async function getUserDetail(ctx: UsersServiceContext, userId: string) {
     }));
 
   const oauthAccounts = await listUserOauthAccounts(ctx, userId);
+  const likesReceived = await getUserLikeSummary(ctx, userId);
 
   return {
     ...rest,
@@ -817,7 +818,71 @@ export async function getUserDetail(ctx: UsersServiceContext, userId: string) {
     lastLoginIpLocationRaw: lastLoginLocation?.raw ?? null,
     phoneContacts,
     oauthAccounts,
+    likesReceived,
   };
+}
+
+export async function getUserLikeSummary(
+  ctx: UsersServiceContext,
+  userId: string,
+) {
+  const [total, latest] = await Promise.all([
+    ctx.prisma.playerLike.count({ where: { targetId: userId } }),
+    ctx.prisma.playerLike.findFirst({
+      where: { targetId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    }),
+  ]);
+  return {
+    total,
+    latestAt: latest?.createdAt?.toISOString() ?? null,
+  };
+}
+
+export async function listUserLikeDetails(
+  ctx: UsersServiceContext,
+  userId: string,
+) {
+  await ensureUser(ctx, userId);
+  const likes = await ctx.prisma.playerLike.findMany({
+    where: { targetId: userId },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+    include: {
+      liker: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          image: true,
+          profile: { select: { displayName: true } },
+          authmeBindings: {
+            orderBy: { boundAt: 'desc' },
+            take: 1,
+            select: {
+              authmeUsername: true,
+              authmeRealname: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  return likes.map((entry) => ({
+    id: entry.id,
+    createdAt: entry.createdAt.toISOString(),
+    liker: {
+      id: entry.liker.id,
+      email: entry.liker.email ?? null,
+      displayName: entry.liker.profile?.displayName ?? entry.liker.name ?? null,
+      avatarUrl: entry.liker.image ?? null,
+      primaryAuthmeUsername:
+        entry.liker.authmeBindings?.[0]?.authmeUsername ?? null,
+      primaryAuthmeRealname:
+        entry.liker.authmeBindings?.[0]?.authmeRealname ?? null,
+    },
+  }));
 }
 
 export async function deleteUser(ctx: UsersServiceContext, userId: string) {

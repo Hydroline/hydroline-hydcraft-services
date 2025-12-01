@@ -3,12 +3,12 @@ import { apiFetch } from '@/utils/api'
 import { useAuthStore } from '@/stores/auth'
 import type {
   PlayerAssetsResponse,
+  PlayerGameStatsResponse,
+  PlayerLikeSummary,
   PlayerMinecraftResponse,
-  PlayerStatusSnapshot,
   PlayerPortalProfileResponse,
   PlayerRegionResponse,
   PlayerStatsResponse,
-  PlayerGameStatsResponse,
   PlayerSummary,
   PlayerIsLoggedResponse,
   PlayerLifecycleEvent,
@@ -26,6 +26,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
     region: null as PlayerRegionResponse | null,
     minecraft: null as PlayerMinecraftResponse | null,
     stats: null as PlayerStatsResponse | null,
+    likes: null as PlayerLikeSummary | null,
     statusSnapshot: null as PlayerStatusSnapshot | null,
     viewerId: null as string | null,
     targetUserId: null as string | null,
@@ -61,6 +62,7 @@ export const usePlayerPortalStore = defineStore('player-portal', {
         this.region = response.region
         this.minecraft = response.minecraft
         this.stats = response.stats
+        this.likes = response.likes ?? null
         this.statusSnapshot = response.statusSnapshot
         this.viewerId = response.viewerId
         this.targetUserId = response.targetId
@@ -68,6 +70,42 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       } finally {
         this.loading = false
       }
+    },
+    async fetchLikeSummary(options: { id?: string } = {}) {
+      const params = new URLSearchParams()
+      if (options.id) params.set('id', options.id)
+      const query = params.toString()
+      this.likes = await apiFetch<PlayerLikeSummary>(
+        `/player/likes${query ? `?${query}` : ''}`,
+        { token: this.authToken() ?? undefined },
+      )
+      return this.likes
+    },
+    async likePlayer(options: { id?: string } = {}) {
+      const params = new URLSearchParams()
+      if (options.id) params.set('id', options.id)
+      const query = params.toString()
+      this.likes = await apiFetch<PlayerLikeSummary>(
+        `/player/likes${query ? `?${query}` : ''}`,
+        {
+          method: 'POST',
+          token: this.authToken() ?? undefined,
+        },
+      )
+      return this.likes
+    },
+    async unlikePlayer(options: { id?: string } = {}) {
+      const params = new URLSearchParams()
+      if (options.id) params.set('id', options.id)
+      const query = params.toString()
+      this.likes = await apiFetch<PlayerLikeSummary>(
+        `/player/likes${query ? `?${query}` : ''}`,
+        {
+          method: 'DELETE',
+          token: this.authToken() ?? undefined,
+        },
+      )
+      return this.likes
     },
     async fetchLoggedStatus(options: { id?: string } = {}) {
       const params = new URLSearchParams()

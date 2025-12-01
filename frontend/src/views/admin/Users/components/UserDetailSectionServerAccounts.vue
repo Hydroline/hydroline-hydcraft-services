@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import dayjs from 'dayjs'
 import type { AdminUserDetail } from '@/types/admin'
 
 const { detail, minecraftProfiles } = defineProps<{
@@ -58,7 +59,6 @@ const emit = defineEmits<{
     </div>
 
     <div class="mt-2 flex flex-row gap-6 md:grid md:grid-cols-2">
-      <!-- MC ID -->
       <div>
         <div class="text-xs text-slate-500 dark:text-slate-500 mb-2">
           Minecraft ID
@@ -127,7 +127,6 @@ const emit = defineEmits<{
         </ul>
       </div>
 
-      <!-- Minecraft 昵称列表 -->
       <div>
         <div class="text-xs text-slate-500 dark:text-slate-500 mb-2">昵称</div>
         <ul class="space-y-2">

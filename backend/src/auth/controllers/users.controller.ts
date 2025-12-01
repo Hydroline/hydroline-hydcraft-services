@@ -108,6 +108,13 @@ export class UsersController {
     return this.usersService.listUserOauthAccounts(userId);
   }
 
+  @Get(':userId/likes')
+  @ApiOperation({ summary: '查看用户被点赞记录' })
+  @RequirePermissions(PERMISSIONS.AUTH_VIEW_USERS)
+  async listLikes(@Param('userId') userId: string) {
+    return this.usersService.listUserLikes(userId);
+  }
+
   @Delete(':userId/oauth/accounts/:accountId')
   @ApiOperation({ summary: '解绑指定的 OAuth 账户' })
   @RequirePermissions(PERMISSIONS.AUTH_MANAGE_USERS)

@@ -20,6 +20,8 @@ import {
   updateOwnPassword,
   resetUserPassword,
   ensureUser,
+  getUserLikeSummary,
+  listUserLikeDetails,
 } from './users-core.manager';
 import {
   listUserOauthAccounts,
@@ -128,6 +130,10 @@ export class UsersService {
 
   async listUserOauthAccounts(userId: string) {
     return listUserOauthAccounts(this.ctx, userId);
+  }
+
+  async listUserLikes(userId: string) {
+    return listUserLikeDetails(this.ctx, userId);
   }
 
   async unlinkUserOauthAccount(

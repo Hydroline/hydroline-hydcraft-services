@@ -30,3 +30,20 @@ export type PlayerLuckpermsSnapshot = {
   groups: PlayerLuckpermsGroupSnapshot[];
   synced: boolean;
 };
+
+export type PlayerLikeSummary = {
+  total: number;
+  viewerLiked: boolean;
+};
+
+export type PlayerLikeDetail = {
+  id: string;
+  createdAt: string;
+  liker: {
+    id: string;
+    email: string | null;
+    displayName: string | null;
+    primaryAuthmeUsername: string | null;
+    primaryAuthmeRealname: string | null;
+  };
+};

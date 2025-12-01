@@ -18,6 +18,8 @@ import type {
   PlayerLoginCluster,
   PortalOwnershipOverview,
   PlayerLuckpermsSnapshot,
+  PlayerLikeSummary,
+  PlayerLikeDetail,
 } from './player.types';
 import { PlayerAutomationService } from './player-automation.service';
 import { MinecraftServerService } from '../minecraft/minecraft-server.service';
@@ -111,15 +113,23 @@ export class PlayerService {
   ) {}
 
   async getPlayerPortalData(viewerId: string | null, targetUserId: string) {
-    const [summary, rawAssets, region, minecraft, stats, statusSnapshot] =
-      await Promise.all([
-        this.getPlayerSummary(targetUserId),
-        this.getPlayerAssets(targetUserId),
-        this.getPlayerRegion(targetUserId),
-        this.getPlayerMinecraftData(targetUserId),
-        this.getPlayerStats(targetUserId),
-        this.getPlayerStatusSnapshot(targetUserId),
-      ]);
+    const [
+      summary,
+      rawAssets,
+      region,
+      minecraft,
+      stats,
+      statusSnapshot,
+      likes,
+    ] = await Promise.all([
+      this.getPlayerSummary(targetUserId),
+      this.getPlayerAssets(targetUserId),
+      this.getPlayerRegion(targetUserId),
+      this.getPlayerMinecraftData(targetUserId),
+      this.getPlayerStats(targetUserId),
+      this.getPlayerStatusSnapshot(targetUserId),
+      this.getPlayerLikeSummary(viewerId, targetUserId),
+    ]);
     const assets = {
       companies: rawAssets.companies ?? [],
       railways: rawAssets.railways ?? [],
@@ -133,6 +143,7 @@ export class PlayerService {
       minecraft,
       stats,
       statusSnapshot,
+      likes,
     };
   }
 
@@ -698,6 +709,98 @@ export class PlayerService {
     };
 
     return this.buildPlayerGameStats(identity, servers);
+  }
+
+  async getPlayerLikeSummary(
+    viewerId: string | null,
+    targetUserId: string,
+  ): Promise<PlayerLikeSummary> {
+    const [total, viewerTrace] = await Promise.all([
+      this.prisma.playerLike.count({ where: { targetId: targetUserId } }),
+      viewerId
+        ? this.prisma.playerLike.findUnique({
+            where: {
+              likerId_targetId: {
+                likerId: viewerId,
+                targetId: targetUserId,
+              },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    return {
+      total,
+      viewerLiked: Boolean(viewerTrace),
+    };
+  }
+
+  async likePlayer(likerId: string, targetUserId: string) {
+    try {
+      await this.prisma.playerLike.create({
+        data: {
+          likerId,
+          targetId: targetUserId,
+        },
+      });
+    } catch (error) {
+      if (
+        !(
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        )
+      ) {
+        throw error;
+      }
+    }
+    return this.getPlayerLikeSummary(likerId, targetUserId);
+  }
+
+  async unlikePlayer(likerId: string, targetUserId: string) {
+    await this.prisma.playerLike.deleteMany({
+      where: { likerId, targetId: targetUserId },
+    });
+    return this.getPlayerLikeSummary(likerId, targetUserId);
+  }
+
+  async listPlayerLikes(targetUserId: string): Promise<PlayerLikeDetail[]> {
+    const likes = await this.prisma.playerLike.findMany({
+      where: { targetId: targetUserId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        liker: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            profile: { select: { displayName: true } },
+            authmeBindings: {
+              orderBy: { boundAt: 'desc' },
+              take: 1,
+              select: {
+                authmeUsername: true,
+                authmeRealname: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    return likes.map((entry) => ({
+      id: entry.id,
+      createdAt: entry.createdAt.toISOString(),
+      liker: {
+        id: entry.liker.id,
+        email: entry.liker.email ?? null,
+        displayName:
+          entry.liker.profile?.displayName ?? entry.liker.name ?? null,
+        primaryAuthmeUsername:
+          entry.liker.authmeBindings?.[0]?.authmeUsername ?? null,
+        primaryAuthmeRealname:
+          entry.liker.authmeBindings?.[0]?.authmeRealname ?? null,
+      },
+    }));
   }
 
   private async computePlayerStatsPayload(params: {

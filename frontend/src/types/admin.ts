@@ -149,6 +149,10 @@ export interface AdminUserDetail
     userAgent: string | null
   }>
   oauthAccounts?: AdminOauthAccount[]
+  likesReceived?: {
+    total: number
+    latestAt: string | null
+  } | null
 }
 
 export interface AdminContactEntry {
@@ -313,6 +317,19 @@ export interface AdminPlayerEntry {
       })
     | null
   history: AdminBindingHistoryEntry[]
+}
+
+export interface AdminUserLikeEntry {
+  id: string
+  createdAt: string
+  liker: {
+    id: string
+    email: string | null
+    displayName: string | null
+    avatarUrl: string | null
+    primaryAuthmeUsername: string | null
+    primaryAuthmeRealname: string | null
+  }
 }
 
 export interface AdminPlayerListResponse {
