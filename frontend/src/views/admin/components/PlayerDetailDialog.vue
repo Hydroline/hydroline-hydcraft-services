@@ -37,6 +37,7 @@ const playerGameStatsData = ref<PlayerGameStatsResponse | null>(null)
 const selectedServerId = ref<string | null>(null)
 const statsLoading = ref(false)
 const serverLoading = ref(false)
+const gameStatsDialogOpen = ref(false)
 
 watch(
   () => props.initialPlayer,
@@ -312,18 +313,6 @@ const selectedServerMetrics = computed(
 const identityMissing = computed(() =>
   Boolean(playerGameStatsData.value?.identityMissing),
 )
-const selectedServerMessage = computed(() => {
-  const server = selectedServer.value
-  if (!server) return null
-  if (server.errorMessage) {
-    return server.errorMessage
-  }
-  if (server.error) {
-    return '该服务器的游戏统计暂不可用'
-  }
-  return null
-})
-
 const numberFormatter = new Intl.NumberFormat('zh-CN', {
   maximumFractionDigits: 0,
 })
@@ -335,9 +324,6 @@ const kmFormatter = new Intl.NumberFormat('zh-CN', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
 })
-
-const formatMetricValue = (value: number, unit: string) =>
-  `${numberFormatter.format(value)} ${unit}`
 
 const formatDistance = (value: number | null | undefined) => {
   const kilometers = (value ?? 0) / 100000
@@ -377,6 +363,16 @@ function openBoundUser() {
   const summary = bindingUserSummary.value
   if (!summary) return
   emit('openUser', summary)
+}
+
+function openGameStatsDialog() {
+  if (!targetUserId.value || !bindingId.value) return
+  gameStatsDialogOpen.value = true
+  void refreshAllStats(targetUserId.value, bindingId.value)
+}
+
+function closeGameStatsDialog() {
+  gameStatsDialogOpen.value = false
 }
 
 async function loadPlayerStats(userId: string) {
@@ -476,10 +472,12 @@ watch(
       playerStatsData.value = null
       playerGameStatsData.value = null
       selectedServerId.value = null
+      gameStatsDialogOpen.value = false
       return
     }
     if (userId && bindId) {
-      void refreshAllStats(userId, bindId)
+      // 按需加载：主信息对话框打开时，不自动打 beacon，只预取站内统计
+      void loadPlayerStats(userId)
     }
   },
   { immediate: true },
@@ -541,6 +539,15 @@ watch(selectedServerId, (serverId, previous) => {
               @click="openBoundUser"
             >
               查看绑定用户
+            </UButton>
+            <UButton
+              v-if="targetUserId && bindingId"
+              color="primary"
+              size="xs"
+              variant="soft"
+              @click="openGameStatsDialog"
+            >
+              游戏统计
             </UButton>
             <UButton
               icon="i-lucide-x"
@@ -699,161 +706,282 @@ watch(selectedServerId, (serverId, previous) => {
                 </div>
               </div>
             </div>
-            <div
-              class="mt-6 rounded-2xl border border-slate-200/70 bg-white/70 p-5 shadow-sm dark:border-slate-800/70 dark:bg-slate-900/40"
-            >
-              <div class="flex flex-col gap-3">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p
-                      class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
-                    >
-                      统计信息
-                    </p>
-                    <h4
-                      class="text-lg font-semibold text-slate-900 dark:text-white"
-                    >
-                      游戏统计
-                    </h4>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <USelectMenu
-                      v-model="selectedServerId"
-                      :items="serverOptions"
-                      value-key="id"
-                      label-key="displayName"
-                      placeholder="选择服务器"
-                      :disabled="serverOptions.length === 0"
-                      class="w-44"
-                      size="xs"
-                    />
-                    <UButton
-                      size="xs"
-                      variant="ghost"
-                      color="neutral"
-                      icon="i-lucide-refresh-ccw"
-                      :loading="serverLoading"
-                      :disabled="!selectedServerId"
-                      @click="refreshCurrentServerStats"
-                    />
-                  </div>
-                </div>
-
-                <div v-if="statsLoading" class="grid grid-cols-2 gap-3">
-                  <USkeleton
-                    class="h-16 rounded-xl"
-                    v-for="index in 4"
-                    :key="index"
-                  />
-                </div>
-                <div v-else class="grid grid-cols-2 gap-3">
-                  <div
-                    v-for="metric in playerStatsData?.metrics ?? []"
-                    :key="metric.id"
-                    class="rounded-xl border border-slate-200/70 bg-slate-50/70 px-3 py-3 text-sm dark:border-slate-800/70 dark:bg-slate-900/40"
-                  >
-                    <p class="text-xs text-slate-500 dark:text-slate-400">
-                      {{ metric.label }}
-                    </p>
-                    <p
-                      class="text-xl font-semibold text-slate-900 dark:text-white"
-                    >
-                      {{ formatMetricValue(metric.value, metric.unit) }}
-                    </p>
-                  </div>
-                </div>
-
-                <UAlert
-                  v-if="identityMissing"
-                  icon="i-lucide-alert-triangle"
-                  color="warning"
-                  variant="soft"
-                  title="缺少 AuthMe 绑定"
-                  description="未找到有效的 AuthMe 账户，无法获取游戏统计信息。"
-                />
-
-                <div v-if="selectedServer" class="space-y-3">
-                  <div
-                    class="rounded-xl border border-slate-200/70 bg-white/80 p-4 shadow-inner dark:border-slate-800/70 dark:bg-slate-900/40"
-                  >
-                    <div class="flex items-center justify-between">
-                      <div
-                        class="text-sm font-semibold text-slate-900 dark:text-white"
-                      >
-                        {{ selectedServer.serverName }}
-                      </div>
-                      <div class="text-xs text-slate-500 dark:text-slate-400">
-                        更新于
-                        {{ formatServerUpdatedAt(selectedServer.fetchedAt) }}
-                      </div>
-                    </div>
-                    <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">
-                          走了多远
-                        </p>
-                        <p
-                          class="text-lg font-semibold text-slate-900 dark:text-white"
-                        >
-                          {{ formatDistance(selectedServerMetrics?.walkOneCm) }}
-                        </p>
-                      </div>
-                      <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">
-                          飞了多远
-                        </p>
-                        <p
-                          class="text-lg font-semibold text-slate-900 dark:text-white"
-                        >
-                          {{ formatDistance(selectedServerMetrics?.flyOneCm) }}
-                        </p>
-                      </div>
-                      <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">
-                          上线时长
-                        </p>
-                        <p
-                          class="text-lg font-semibold text-slate-900 dark:text-white"
-                        >
-                          {{
-                            formatTicksToHours(selectedServerMetrics?.playTime)
-                          }}
-                        </p>
-                      </div>
-                      <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">
-                          击杀 / 死亡
-                        </p>
-                        <p
-                          class="text-lg font-semibold text-slate-900 dark:text-white"
-                        >
-                          {{ formatTimes(selectedServerMetrics?.playerKills) }}
-                          /
-                          {{ formatTimes(selectedServerMetrics?.deaths) }}
-                        </p>
-                      </div>
-                    </div>
-                    <UAlert
-                      v-if="selectedServerMessage"
-                      class="mt-3"
-                      color="warning"
-                      variant="soft"
-                    >
-                      {{ selectedServerMessage }}
-                    </UAlert>
-                  </div>
-                </div>
-                <div v-else class="text-sm text-slate-500 dark:text-slate-400">
-                  暂无可展示的服务器统计数据
-                </div>
-              </div>
-            </div>
           </div>
           <div
             v-else
             class="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400"
           >
             暂无可展示的玩家信息
+          </div>
+        </div>
+      </div>
+    </template>
+  </UModal>
+
+  <UModal
+    :open="gameStatsDialogOpen"
+    @update:open="(value) => (gameStatsDialogOpen = value)"
+    :ui="{
+      content:
+        'w-full max-w-5xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
+  >
+    <template #content>
+      <div class="flex h-full max-h-[90vh] flex-col">
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-4 dark:border-gray-800"
+        >
+          <div>
+            <p
+              class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            >
+              游戏统计信息
+            </p>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              {{ realnameDisplay }}
+            </h3>
+          </div>
+          <div class="flex items-center gap-2">
+            <span
+              v-if="playerGameStatsData?.updatedAt"
+              class="text-xs text-slate-500 dark:text-slate-400"
+            >
+              更新于
+              {{ formatServerUpdatedAt(playerGameStatsData.updatedAt) }}
+            </span>
+            <UButton
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              icon="i-lucide-refresh-ccw"
+              :loading="serverLoading || statsLoading"
+              :disabled="!targetUserId || !bindingId"
+              @click="
+                targetUserId &&
+                bindingId &&
+                refreshAllStats(targetUserId, bindingId)
+              "
+            />
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              @click="closeGameStatsDialog"
+            />
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto px-6 py-4">
+          <div class="space-y-4">
+            <div
+              class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/40 p-4 flex flex-col gap-3"
+            >
+              <div
+                class="flex flex-col md:flex-row gap-2 md:items-center justify-between"
+              >
+                <div class="flex items-center gap-2">
+                  <USelectMenu
+                    v-model="selectedServerId"
+                    :items="serverOptions"
+                    value-key="id"
+                    label-key="displayName"
+                    placeholder="选择服务器"
+                    class="w-44"
+                    :disabled="serverOptions.length === 0"
+                    size="xs"
+                  />
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    icon="i-lucide-refresh-ccw"
+                    :loading="serverLoading"
+                    :disabled="!selectedServerId"
+                    @click="refreshCurrentServerStats"
+                  />
+                </div>
+                <div
+                  v-if="selectedServer"
+                  class="text-xs text-slate-500 dark:text-slate-400"
+                >
+                  当前服务器：{{ selectedServer.serverName }} · 更新于
+                  {{ formatServerUpdatedAt(selectedServer.fetchedAt) }}
+                </div>
+              </div>
+
+              <UAlert
+                v-if="identityMissing"
+                icon="i-lucide-alert-triangle"
+                color="warning"
+                variant="soft"
+                title="缺少 AuthMe 绑定"
+                description="未找到有效的 AuthMe 账户，优先从 Beacon 获取失败，已回退到缓存（如有）。"
+              />
+            </div>
+
+            <div v-if="statsLoading" class="grid grid-cols-2 gap-3">
+              <USkeleton
+                class="h-20 rounded-xl"
+                v-for="index in 10"
+                :key="index"
+              />
+            </div>
+            <div v-else class="space-y-4">
+              <div v-if="selectedServer" class="grid gap-3 md:grid-cols-4">
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    走了多远
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatDistance(selectedServerMetrics?.walkOneCm) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    飞了多远
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatDistance(selectedServerMetrics?.flyOneCm) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    游了多远
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatDistance(selectedServerMetrics?.swimOneCm) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    在游戏里待了多久
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{
+                      formatTicksToDays(selectedServerMetrics?.totalWorldTime)
+                    }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    被人杀了多少次
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatTimes(selectedServerMetrics?.playerKills) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    死亡多少次
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatTimes(selectedServerMetrics?.deaths) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    跳了多少次
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatTimes(selectedServerMetrics?.jump) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    游玩时间
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatTicksToHours(selectedServerMetrics?.playTime) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    用了几次斧头
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatTimes(selectedServerMetrics?.useWand) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    退出游戏几次
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ formatTimes(selectedServerMetrics?.leaveGame) }}
+                  </p>
+                </div>
+
+                <div
+                  class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/80 dark:bg-slate-900/40 md:col-span-2"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-500">
+                    最近一次 MTR 操作
+                  </p>
+                  <p
+                    class="text-xl font-semibold text-slate-900 dark:text-white"
+                  >
+                    {{ selectedServerMetrics?.lastMtrLogTimestamp ?? '—' }}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                v-else
+                class="text-sm text-slate-500 dark:text-slate-500 flex items-center gap-2"
+              >
+                <UIcon name="i-lucide-server-off" /> 暂无可用的服务器配置
+              </div>
+            </div>
           </div>
         </div>
       </div>

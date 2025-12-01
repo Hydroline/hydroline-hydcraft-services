@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { PlayerMessageBoardEntry } from '@/types/portal'
 
 const props = defineProps<{
@@ -12,18 +13,26 @@ const emit = defineEmits<{
 function getContentPreview(content: string) {
   return content.length > 50 ? content.slice(0, 50) + '...' : content
 }
+
+const sortedMessages = computed(() => {
+  return [...props.messages].sort((a, b) => {
+    const aTime = new Date(a.createdAt).getTime()
+    const bTime = new Date(b.createdAt).getTime()
+    return aTime - bTime
+  })
+})
 </script>
 
 <template>
-  <div v-if="props.messages.length > 0" class="relative">
+  <div
+    v-if="props.messages.length > 0"
+    class="relative w-full h-9 overflow-hidden"
+  >
     <div
-      class="flex gap-2 overflow-x-auto scrollbar-hide"
-      :class="{
-        'animate-scroll': props.messages.length > 3,
-      }"
+      class="absolute flex gap-2 overflow-x-auto scrollbar-hide mask-[linear-gradient(to_right,#fff_0%_60%,transparent_80%_90%)]"
     >
       <div
-        v-for="message in props.messages"
+        v-for="message in sortedMessages"
         :key="message.id"
         class="shrink-0 cursor-pointer rounded-lg border border-primary-500 bg-primary-200/30 px-3 py-2 hover:shadow-md transition-shadow"
         @click="emit('badgeClick', message)"
@@ -68,18 +77,5 @@ function getContentPreview(content: string) {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
-}
-
-@keyframes scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(calc(-50%));
-  }
-}
-
-.animate-scroll > div:first-child {
-  animation: scroll 20s linear infinite;
 }
 </style>
