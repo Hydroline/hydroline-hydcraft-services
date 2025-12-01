@@ -501,7 +501,7 @@ defineExpose({ forceEdit })
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
         >
-          RBAC 权限组
+          权限组
         </div>
         <div class="flex-1">
           <div
@@ -529,7 +529,7 @@ defineExpose({ forceEdit })
         <div
           class="w-full text-sm font-medium text-slate-600 dark:text-slate-300 md:w-40 md:flex-none"
         >
-          RBAC 标签
+          标签
         </div>
         <div class="flex-1">
           <div v-if="rbacLabels.length" class="flex flex-wrap gap-2">
