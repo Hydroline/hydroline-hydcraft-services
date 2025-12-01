@@ -1,3 +1,5 @@
+import { translateApiErrorMessage } from '@/constants/api-error-translations'
+
 export interface ApiRequestOptions {
   method?: string
   body?: Record<string, unknown> | FormData | undefined
@@ -23,12 +25,20 @@ export class ApiError<T = unknown> extends Error {
   status: number
   code?: number
   payload?: T
+  rawMessage?: string
 
-  constructor(status: number, message: string, code?: number, payload?: T) {
+  constructor(
+    status: number,
+    message: string,
+    code?: number,
+    payload?: T,
+    rawMessage?: string,
+  ) {
     super(message)
     this.status = status
     this.code = code
     this.payload = payload
+    this.rawMessage = rawMessage
   }
 }
 
@@ -111,11 +121,15 @@ function performRequest<T>(
         const payload = (await response.json()) as Partial<
           ApiResponseEnvelope<T>
         >
+        const payloadMessage = payload.message ?? 'Request failed'
+        const clientMessage =
+          translateApiErrorMessage(payloadMessage) ?? payloadMessage
         throw new ApiError(
           response.status,
-          payload.message ?? '请求失败',
+          clientMessage,
           payload.code,
           payload.data,
+          payloadMessage,
         )
       }
       throw new ApiError(response.status, response.statusText)

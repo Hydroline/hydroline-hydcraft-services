@@ -145,7 +145,7 @@ export class VerificationAdminController {
       ? templates.find((tpl) => tpl.key === body.template)
       : null;
     if (body.template && !targetTemplate) {
-      throw new BadRequestException('未知的邮件模板');
+      throw new BadRequestException('Unknown email template');
     }
     const subject = body.subject?.trim()
       ? body.subject.trim()

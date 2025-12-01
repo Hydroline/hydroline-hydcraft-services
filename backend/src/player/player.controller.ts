@@ -86,7 +86,8 @@ class PlayerGameStatsQueryDto {
   @IsUUID()
   serverId?: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   bindingId!: string;
 
   @IsOptional()
@@ -107,7 +108,7 @@ export class PlayerController {
     if (req.user?.id) {
       return req.user.id;
     }
-    throw new BadRequestException('缺少玩家 ID');
+    throw new BadRequestException('Player ID is required');
   }
 
   @Get('profile')
@@ -223,7 +224,7 @@ export class PlayerController {
   ) {
     const targetId = this.resolveTargetUserId(req, query.id);
     if (!query.bindingId) {
-      throw new BadRequestException('请选择要查询的游戏账户');
+      throw new BadRequestException('Please select a game account to query');
     }
     return this.playerService.getPlayerGameStatsForBinding(
       targetId,

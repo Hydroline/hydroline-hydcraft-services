@@ -237,7 +237,9 @@ watch(
 <template>
   <div class="space-y-4">
     <div class="space-y-4">
-      <div class="flex gap-3 items-start md:items-center justify-between mb-1">
+      <div
+        class="flex flex-col md:flex-row gap-1.5 items-start md:items-center justify-between mb-3 md:mb-1"
+      >
         <div class="flex gap-0.5 px-1">
           <span class="text-lg text-slate-600 dark:text-slate-300">
             游戏统计信息
@@ -261,7 +263,7 @@ watch(
           </UTooltip>
         </div>
         <div
-          class="flex flex-col-reverse items-end md:gap-2 md:flex-row md:items-center"
+          class="flex flex-col w-full md:w-fit md:gap-2 md:flex-row md:items-center px-1 md:px-0"
         >
           <template v-if="props.stats">
             <span class="text-xs text-slate-400 dark:text-slate-500">
@@ -271,7 +273,7 @@ watch(
           <template v-else>
             <USkeleton class="h-4 w-32" />
           </template>
-          <div class="flex items-center gap-2">
+          <div class="flex mt-1 md:mt-0 items-center gap-2">
             <USelectMenu
               v-model="selectedPlayerId"
               :items="playerOptions"
@@ -287,7 +289,7 @@ watch(
                   <img
                     :src="item.avatarUrl"
                     :alt="item.label"
-                    class="h-5 w-5 rounded-sm border border-slate-200 dark:border-slate-700"
+                    class="block h-4 w-4 rounded-sm border border-slate-200 dark:border-slate-700"
                   />
                   <span class="truncate text-xs">{{ item.label }}</span>
                 </div>
@@ -303,7 +305,7 @@ watch(
                       playerOptions.find((p) => p.id === selectedPlayerId)
                         ?.label || ''
                     "
-                    class="h-5 w-5 rounded-sm border border-slate-200 dark:border-slate-700"
+                    class="h-4 w-4 rounded-sm border border-slate-200 dark:border-slate-700"
                   />
                   <span class="truncate text-xs">
                     {{

@@ -33,6 +33,10 @@ const targetPlayerParam = computed(() => {
   return (param as string | undefined) ?? null
 })
 
+const resolvedTargetPlayerId = computed(
+  () => targetPlayerParam.value ?? auth.user?.id ?? undefined,
+)
+
 const canViewProfile = computed(
   () => Boolean(targetPlayerParam.value) || auth.isAuthenticated,
 )
@@ -63,7 +67,7 @@ async function loadProfile() {
     return
   }
   await playerStore.fetchProfile({
-    id: targetPlayerParam.value ?? undefined,
+    id: resolvedTargetPlayerId.value ?? undefined,
   })
   await loadLifecycleEvents()
 }
@@ -76,7 +80,7 @@ async function loadLifecycleEvents() {
   try {
     await playerStore.fetchLifecycleEvents({
       sources: lifecycleSources,
-      id: targetPlayerParam.value ?? undefined,
+      id: resolvedTargetPlayerId.value ?? undefined,
     })
   } catch (error) {
     console.warn('加载任务状态失败', error)
@@ -95,7 +99,7 @@ async function refreshLoggedStatus() {
     playerStore.logged = null
     return
   }
-  const targetId = targetPlayerParam.value ?? undefined
+  const targetId = resolvedTargetPlayerId.value ?? undefined
   try {
     await playerStore.fetchLoggedStatus({ id: targetId })
   } catch {
@@ -154,6 +158,21 @@ watch(
     }
     stopLoggedPolling()
     playerStore.logged = null
+  },
+)
+
+watch(
+  () => resolvedTargetPlayerId.value,
+  (value, previous) => {
+    if (!value || value === previous) {
+      return
+    }
+    if (!canViewProfile.value) {
+      return
+    }
+    void loadProfile()
+    void loadLifecycleEvents()
+    startLoggedPolling()
   },
 )
 

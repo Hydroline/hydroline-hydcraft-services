@@ -227,7 +227,7 @@ export class PlayerService {
       },
     });
     if (!user) {
-      throw new NotFoundException('用户不存在');
+      throw new NotFoundException('User not found');
     }
     const locationPromise = this.ipLocationService.lookup(user.lastLoginIp);
     const ownershipPromise = this.computeOwnershipOverview(userId);
@@ -670,7 +670,7 @@ export class PlayerService {
       },
     });
     if (!binding) {
-      throw new BadRequestException('未找到对应的 AuthMe 账户');
+      throw new BadRequestException('AuthMe account not found');
     }
 
     const servers = await this.prisma.minecraftServer.findMany({
@@ -689,7 +689,7 @@ export class PlayerService {
     });
 
     if (options.serverId && servers.length === 0) {
-      throw new NotFoundException('未找到指定的服务器');
+      throw new NotFoundException('Specified server not found');
     }
 
     const identity = {
@@ -1037,10 +1037,12 @@ export class PlayerService {
     },
   ) {
     if (!payload.serverId?.trim()) {
-      throw new BadRequestException('请选择服务器');
+      throw new BadRequestException('Please select a server');
     }
     if (!payload.password || payload.password.trim().length < 6) {
-      throw new BadRequestException('请输入至少 6 位的新密码');
+      throw new BadRequestException(
+        'Please enter a new password with at least 6 characters',
+      );
     }
     return this.automation.submitAuthmePasswordReset(userId, payload);
   }
@@ -1054,7 +1056,7 @@ export class PlayerService {
     },
   ) {
     if (!payload.serverId?.trim()) {
-      throw new BadRequestException('请选择服务器');
+      throw new BadRequestException('Please select a server');
     }
     return this.automation.submitAuthmeForceLogin(userId, payload);
   }
@@ -1070,10 +1072,12 @@ export class PlayerService {
   ) {
     const sanitized = this.toNullableString(payload.targetGroup);
     if (!sanitized) {
-      throw new BadRequestException('请选择目标权限组');
+      throw new BadRequestException(
+        'Please select the target permission group',
+      );
     }
     if (!payload.serverId?.trim()) {
-      throw new BadRequestException('请选择服务器');
+      throw new BadRequestException('Please select a server');
     }
     return this.automation.submitPermissionGroupAdjustment(userId, {
       ...payload,
@@ -1101,7 +1105,7 @@ export class PlayerService {
       orderBy: { boundAt: 'desc' },
     });
     if (!binding) {
-      throw new BadRequestException('未找到有效的 AuthMe 绑定');
+      throw new BadRequestException('No valid AuthMe binding found');
     }
     const snapshot = await this.buildLuckpermsSnapshotForBinding(
       {
@@ -1144,7 +1148,7 @@ export class PlayerService {
       select: { id: true, displayName: true },
     });
     if (!server) {
-      throw new NotFoundException('服务器不存在');
+      throw new NotFoundException('Server not found');
     }
     const log = await this.prisma.adminAuditLog.create({
       data: {

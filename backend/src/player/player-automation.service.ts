@@ -129,7 +129,7 @@ export class PlayerAutomationService {
     },
   ) {
     if (!this.luckpermsService.isEnabled()) {
-      throw new BadRequestException('LuckPerms 接口未启用');
+      throw new BadRequestException('LuckPerms API is not enabled');
     }
     const binding = await this.resolveBinding(userId, payload.bindingId);
     const server = await this.resolveServer(payload.serverId);
@@ -312,7 +312,7 @@ export class PlayerAutomationService {
       orderBy: { boundAt: 'desc' },
     });
     if (!binding) {
-      throw new BadRequestException('未找到有效的 AuthMe 绑定');
+      throw new BadRequestException('No valid AuthMe binding found');
     }
     return binding;
   }
@@ -323,7 +323,7 @@ export class PlayerAutomationService {
       select: { id: true, displayName: true },
     });
     if (!server) {
-      throw new NotFoundException('服务器不存在');
+      throw new NotFoundException('Server not found');
     }
     return { id: server.id, name: server.displayName };
   }
@@ -337,7 +337,7 @@ export class PlayerAutomationService {
     if (username) {
       return username;
     }
-    throw new BadRequestException('缺少有效的 AuthMe 用户名');
+    throw new BadRequestException('Valid AuthMe username is required');
   }
 
   private async verifyAuthmePassword(
@@ -355,7 +355,7 @@ export class PlayerAutomationService {
         return;
       } catch (error) {
         if (attempt >= maxAttempts) {
-          throw new Error('AuthMe 密码核查失败');
+          throw new Error('AuthMe password verification failed');
         }
         await this.updateLifecycleMetadata(eventId, {
           verificationAttempts: attempt,
@@ -385,12 +385,12 @@ export class PlayerAutomationService {
         }
       } catch (error) {
         if (attempt >= maxAttempts) {
-          throw new Error('LuckPerms 权限组核查失败');
+          throw new Error('LuckPerms permission group verification failed');
         }
       }
       await delay(2000);
     }
-    throw new Error('LuckPerms 权限组核查失败');
+    throw new Error('LuckPerms permission group verification failed');
   }
 
   private async lookupLuckpermsPlayer(

@@ -102,7 +102,7 @@ export function pingBedrock(
       try {
         // 验证响应格式：0x1c | timestamp | server GUID | magic | string length | server info
         if (msg.length < 35 || msg[0] !== 0x1c) {
-          throw new Error('无效的基岩版 Ping 响应格式。');
+          throw new Error('Invalid Bedrock Ping response format.');
         }
 
         // 跳过：packet ID (1) + timestamp (8) + server GUID (8) + magic (16) = 33 字节
@@ -117,7 +117,7 @@ export function pingBedrock(
         const parts = serverInfoString.split(';');
 
         if (parts.length < 6) {
-          throw new Error('服务器信息格式不完整。');
+          throw new Error('Server information format is incomplete.');
         }
 
         const response: BedrockPingResponse = {

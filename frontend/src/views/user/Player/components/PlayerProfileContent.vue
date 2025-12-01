@@ -376,7 +376,7 @@ async function handleStatsRefresh() {
 
 <template>
   <div class="mt-8 grid gap-8 lg:grid-cols-[320px_1fr]">
-    <div class="space-y-8 pt-6">
+    <div class="space-y-8 md:pt-6">
       <div class="space-y-3">
         <div class="flex flex-col gap-3">
           <div class="flex gap-2 select-none">
@@ -559,7 +559,6 @@ async function handleStatsRefresh() {
                 <UButton
                   variant="link"
                   icon="i-lucide-qr-code"
-                  color="neutral"
                   class="flex justify-center items-center rounded-full h-3 w-3"
                   size="xs"
                 />
@@ -736,13 +735,27 @@ async function handleStatsRefresh() {
         <RouterLink v-else to="/profile/minecraft" class="block w-full">
           <UButton class="justify-center items-center w-full" color="primary">
             <UIcon name="i-lucide-pencil-line" />
-            修改用户信息
+            编辑信息
           </UButton>
         </RouterLink>
       </div>
     </div>
 
     <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-4">
+        <div>
+          <div>
+            <PlayerGameStatsPanel
+              :stats="props.stats"
+              :bindings="props.summary?.authmeBindings ?? []"
+              :is-viewing-self="props.isViewingSelf"
+              :refreshing="isRefreshingStats"
+              @refresh="handleStatsRefresh"
+            />
+          </div>
+        </div>
+      </div>
+
       <div class="flex flex-col gap-4">
         <div>
           <div
@@ -779,20 +792,6 @@ async function handleStatsRefresh() {
                 </div>
               </template>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-4">
-        <div>
-          <div>
-            <PlayerGameStatsPanel
-              :stats="props.stats"
-              :bindings="props.summary?.authmeBindings ?? []"
-              :is-viewing-self="props.isViewingSelf"
-              :refreshing="isRefreshingStats"
-              @refresh="handleStatsRefresh"
-            />
           </div>
         </div>
       </div>

@@ -134,10 +134,13 @@ export class MinecraftServerService {
   private async getServerWithBeaconSecret(id: string) {
     const server = await this.getServerWithSecret(id);
     if (!server.beaconEnabled) {
-      throw new HttpException('Beacon 未启用或未配置', 400);
+      throw new HttpException('Beacon is not enabled or configured', 400);
     }
     if (!server.beaconEndpoint || !server.beaconKey) {
-      throw new HttpException('Beacon 配置不完整：请设置 endpoint 与 key', 400);
+      throw new HttpException(
+        'Beacon configuration incomplete: endpoint and key are required',
+        400,
+      );
     }
     return server;
   }

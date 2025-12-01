@@ -15,20 +15,20 @@ export function buildAuthmeForceLoginCommand(identifier: string) {
 function normalizeIdentifier(value: string) {
   const trimmed = value?.trim();
   if (!trimmed) {
-    throw new Error('缺少合法的玩家标识');
+    throw new Error('Missing valid player identifier');
   }
   if (/\s/.test(trimmed)) {
-    throw new Error('玩家标识不能包含空白字符');
+    throw new Error('Player identifier must not contain whitespace');
   }
   return trimmed;
 }
 
 function normalizePassword(value: string) {
   if (typeof value !== 'string' || !value.trim()) {
-    throw new Error('请输入新密码');
+    throw new Error('Please enter a new password');
   }
   if (/\s/.test(value)) {
-    throw new Error('密码不能包含空白字符');
+    throw new Error('Password must not contain whitespace');
   }
   return value;
 }

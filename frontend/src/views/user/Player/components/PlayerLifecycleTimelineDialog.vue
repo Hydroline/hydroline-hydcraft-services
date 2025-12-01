@@ -47,7 +47,7 @@ function formatTimestamp(value: string | null) {
     }"
   >
     <template #content>
-      <UCard>
+      <UCard class="overflow-auto">
         <template #header>
           <div class="flex items-center justify-between">
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
@@ -62,6 +62,7 @@ function formatTimestamp(value: string | null) {
             />
           </div>
         </template>
+
         <div class="space-y-6">
           <section>
             <header

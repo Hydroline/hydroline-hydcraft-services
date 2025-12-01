@@ -184,7 +184,9 @@ export class OAuthFlowService {
       where: { provider: providerKey, userId },
     });
     if (!account) {
-      throw new BadRequestException('当前未绑定该 Provider');
+      throw new BadRequestException(
+        'Current account is not bound to this provider',
+      );
     }
     await this.prisma.account.delete({ where: { id: account.id } });
     const runtime = await this.providers.resolveRuntimeProvider(providerKey);

@@ -46,10 +46,12 @@ export async function unlinkUserOauthAccount(
     where: { id: accountId },
   });
   if (!account) {
-    throw new NotFoundException('OAuth 绑定不存在');
+    throw new NotFoundException('OAuth binding does not exist');
   }
   if (account.userId !== userId) {
-    throw new BadRequestException('绑定记录不属于该用户');
+    throw new BadRequestException(
+      'Binding record does not belong to this user',
+    );
   }
 
   await ctx.prisma.account.delete({ where: { id: accountId } });
