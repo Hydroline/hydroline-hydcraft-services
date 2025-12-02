@@ -611,6 +611,50 @@ export class MinecraftServerService {
     return { server: this.stripSecret(server), result };
   }
 
+  async getBeaconPlayerBalance(
+    id: string,
+    player: { playerUuid?: string; playerName?: string },
+  ) {
+    const { server, client } = await this.prepareBeaconClient(id);
+    const payload: Record<string, unknown> = {};
+    if (player.playerUuid) payload.playerUuid = player.playerUuid;
+    if (player.playerName) payload.playerName = player.playerName;
+    const result = await client.emit<any>('get_player_balance', payload);
+    return { server: this.stripSecret(server), result };
+  }
+
+  async setBeaconPlayerBalance(
+    id: string,
+    payload: {
+      playerUuid?: string;
+      playerName?: string;
+      amount: number;
+    },
+  ) {
+    const { server, client } = await this.prepareBeaconClient(id);
+    const body: Record<string, unknown> = { amount: payload.amount };
+    if (payload.playerUuid) body.playerUuid = payload.playerUuid;
+    if (payload.playerName) body.playerName = payload.playerName;
+    const result = await client.emit<any>('set_player_balance', body);
+    return { server: this.stripSecret(server), result };
+  }
+
+  async addBeaconPlayerBalance(
+    id: string,
+    payload: {
+      playerUuid?: string;
+      playerName?: string;
+      amount: number;
+    },
+  ) {
+    const { server, client } = await this.prepareBeaconClient(id);
+    const body: Record<string, unknown> = { amount: payload.amount };
+    if (payload.playerUuid) body.playerUuid = payload.playerUuid;
+    if (payload.playerName) body.playerName = payload.playerName;
+    const result = await client.emit<any>('add_player_balance', body);
+    return { server: this.stripSecret(server), result };
+  }
+
   async getBeaconPlayerSessions(
     id: string,
     query: {

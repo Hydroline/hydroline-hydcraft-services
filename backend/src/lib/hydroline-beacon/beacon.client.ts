@@ -16,7 +16,10 @@ export type HydrolineBeaconEvent =
   | 'get_player_sessions'
   | 'get_status'
   | 'get_player_nbt'
-  | 'lookup_player_identity';
+  | 'lookup_player_identity'
+  | 'get_player_balance'
+  | 'set_player_balance'
+  | 'add_player_balance';
 
 export interface HydrolineBeaconClientOptions {
   endpoint: string;

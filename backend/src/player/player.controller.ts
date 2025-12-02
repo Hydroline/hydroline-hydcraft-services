@@ -476,4 +476,65 @@ export class PlayerController {
   async restartRequest(@Req() req: Request, @Body() body: RestartRequestDto) {
     return this.playerService.submitServerRestartRequest(req.user!.id, body);
   }
+
+  @Get('mtr/balance')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get player MTR balance' })
+  async playerMtrBalance(
+    @Req() req: Request,
+    @Query('serverId') serverId?: string,
+    @Query('bindingId') bindingId?: string,
+    @Query('playerName') playerName?: string,
+  ) {
+    return this.playerService.getPlayerMtrBalance(req.user ?? null, {
+      serverId: serverId ?? '',
+      bindingId: bindingId ?? null,
+      playerName: playerName ?? null,
+    });
+  }
+
+  @Post('mtr/set')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set player MTR balance' })
+  async playerMtrSet(
+    @Req() req: Request,
+    @Body()
+    body: {
+      serverId?: string;
+      bindingId?: string;
+      playerName?: string;
+      amount?: unknown;
+    },
+  ) {
+    return this.playerService.setPlayerMtrBalance(req.user ?? null, {
+      serverId: body.serverId ?? '',
+      bindingId: body.bindingId ?? null,
+      playerName: body.playerName ?? null,
+      amount: body.amount,
+    });
+  }
+
+  @Post('mtr/add')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Adjust player MTR balance' })
+  async playerMtrAdd(
+    @Req() req: Request,
+    @Body()
+    body: {
+      serverId?: string;
+      bindingId?: string;
+      playerName?: string;
+      amount?: unknown;
+    },
+  ) {
+    return this.playerService.addPlayerMtrBalance(req.user ?? null, {
+      serverId: body.serverId ?? '',
+      bindingId: body.bindingId ?? null,
+      playerName: body.playerName ?? null,
+      amount: body.amount,
+    });
+  }
 }

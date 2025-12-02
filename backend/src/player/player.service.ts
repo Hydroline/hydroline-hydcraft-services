@@ -92,6 +92,10 @@ type PlayerMtrLogSummary = {
 type PlayerGameServerStat = PlayerGameServerDescriptor & {
   metrics: PlayerGameServerMetrics | null;
   lastMtrLog: PlayerMtrLogSummary | null;
+  mtrBalance: number | null;
+  mtrBalanceFetchedAt: string | null;
+  mtrBalanceError: string | null;
+  mtrBalanceErrorMessage: string | null;
   fetchedAt: string | null;
   error: string | null;
   errorMessage: string | null;
@@ -1146,6 +1150,10 @@ export class PlayerService {
           ...server,
           metrics: null,
           lastMtrLog: null,
+          mtrBalance: null,
+          mtrBalanceFetchedAt: null,
+          mtrBalanceError: null,
+          mtrBalanceErrorMessage: null,
           fetchedAt: null,
           error: 'IDENTITY_NOT_FOUND',
           errorMessage: '未找到玩家的 AuthMe 绑定，无法查询 Beacon 数据',
@@ -1161,6 +1169,10 @@ export class PlayerService {
           ...server,
           metrics: null,
           lastMtrLog: null,
+          mtrBalance: null,
+          mtrBalanceFetchedAt: null,
+          mtrBalanceError: null,
+          mtrBalanceErrorMessage: null,
           fetchedAt: new Date().toISOString(),
           error: 'BEACON_REQUEST_FAILED',
           errorMessage:
@@ -1185,6 +1197,10 @@ export class PlayerService {
         ...server,
         metrics: null,
         lastMtrLog: null,
+        mtrBalance: null,
+        mtrBalanceFetchedAt: null,
+        mtrBalanceError: null,
+        mtrBalanceErrorMessage: null,
         fetchedAt: null,
         error: 'BEACON_DISABLED',
         errorMessage: '服务器未启用 Beacon，无法查询数据',
@@ -1197,6 +1213,10 @@ export class PlayerService {
         ...server,
         metrics: null,
         lastMtrLog: null,
+        mtrBalance: null,
+        mtrBalanceFetchedAt: null,
+        mtrBalanceError: null,
+        mtrBalanceErrorMessage: null,
         fetchedAt: null,
         error: 'BEACON_NOT_CONFIGURED',
         errorMessage: 'Beacon 配置不完整，无法查询数据',
@@ -1247,10 +1267,49 @@ export class PlayerService {
       mtrErrorMessage = err instanceof Error ? err.message : String(err);
     }
 
+    let mtrBalance: number | null = null;
+    let mtrBalanceFetchedAt: string | null = null;
+    let mtrBalanceError: string | null = null;
+    let mtrBalanceErrorMessage: string | null = null;
+    try {
+      const balanceResponse =
+        await this.minecraftServerService.getBeaconPlayerBalance(
+          server.serverId,
+          {
+            playerUuid: identity.uuid ?? undefined,
+            playerName: identity.name ?? undefined,
+          },
+        );
+      mtrBalanceFetchedAt = new Date().toISOString();
+      if (!balanceResponse.result || balanceResponse.result.success === false) {
+        mtrBalanceError = 'BEACON_MTR_BALANCE_FAILED';
+        mtrBalanceErrorMessage =
+          balanceResponse.result?.error ??
+          'Beacon did not return player balance (get_player_balance)';
+      } else {
+        const parsed = Number(balanceResponse.result.balance);
+        if (Number.isFinite(parsed)) {
+          mtrBalance = parsed;
+        } else {
+          mtrBalanceError = 'BEACON_MTR_BALANCE_INVALID';
+          mtrBalanceErrorMessage = `Beacon returned invalid balance value: ${balanceResponse.result.balance}`;
+        }
+      }
+    } catch (err) {
+      mtrBalanceFetchedAt = new Date().toISOString();
+      mtrBalanceError = 'BEACON_MTR_BALANCE_FAILED';
+      mtrBalanceErrorMessage =
+        err instanceof Error ? err.message : String(err ?? 'Unknown error');
+    }
+
     return {
       ...server,
       metrics,
       lastMtrLog,
+      mtrBalance,
+      mtrBalanceFetchedAt,
+      mtrBalanceError,
+      mtrBalanceErrorMessage,
       fetchedAt: new Date().toISOString(),
       error,
       errorMessage,
@@ -1388,6 +1447,132 @@ export class PlayerService {
       ...payload,
       targetGroup: sanitized,
     });
+  }
+
+  async getPlayerMtrBalance(
+    actor: PlayerSessionUser | null,
+    payload: {
+      serverId: string;
+      bindingId?: string | null;
+      playerName?: string | null;
+    },
+  ) {
+    if (!payload.serverId?.trim()) {
+      throw new BadRequestException('Server ID is required');
+    }
+    const identity = await this.resolveMtrPlayerIdentity({
+      actor,
+      bindingId: payload.bindingId ?? null,
+      playerName: payload.playerName ?? null,
+    });
+    const response = await this.minecraftServerService.getBeaconPlayerBalance(
+      payload.serverId,
+      {
+        playerName: identity.playerName,
+        playerUuid: identity.playerUuid ?? undefined,
+      },
+    );
+    const result = response.result;
+    if (!result?.success) {
+      throw new BadRequestException(
+        result?.error ?? 'Beacon did not return player balance',
+      );
+    }
+    const balance = Number(result.balance);
+    if (!Number.isFinite(balance)) {
+      throw new BadRequestException('Beacon returned invalid balance value');
+    }
+    return {
+      success: true,
+      player: result.player ?? identity.playerName,
+      balance,
+    };
+  }
+
+  async setPlayerMtrBalance(
+    actor: PlayerSessionUser | null,
+    payload: {
+      serverId: string;
+      bindingId?: string | null;
+      playerName?: string | null;
+      amount: unknown;
+    },
+  ) {
+    if (!payload.serverId?.trim()) {
+      throw new BadRequestException('Server ID is required');
+    }
+    const amount = this.parseBalanceAmount(payload.amount);
+    const identity = await this.resolveMtrPlayerIdentity({
+      actor,
+      bindingId: payload.bindingId ?? null,
+      playerName: payload.playerName ?? null,
+    });
+    const response = await this.minecraftServerService.setBeaconPlayerBalance(
+      payload.serverId,
+      {
+        playerUuid: identity.playerUuid ?? undefined,
+        playerName: identity.playerName,
+        amount: Math.trunc(amount),
+      },
+    );
+    const result = response.result;
+    if (!result?.success) {
+      throw new BadRequestException(
+        result?.error ?? 'Beacon did not return player balance',
+      );
+    }
+    const balance = Number(result.balance);
+    if (!Number.isFinite(balance)) {
+      throw new BadRequestException('Beacon returned invalid balance value');
+    }
+    return {
+      success: true,
+      player: result.player ?? identity.playerName,
+      balance,
+    };
+  }
+
+  async addPlayerMtrBalance(
+    actor: PlayerSessionUser | null,
+    payload: {
+      serverId: string;
+      bindingId?: string | null;
+      playerName?: string | null;
+      amount: unknown;
+    },
+  ) {
+    if (!payload.serverId?.trim()) {
+      throw new BadRequestException('Server ID is required');
+    }
+    const amount = this.parseBalanceAmount(payload.amount);
+    const identity = await this.resolveMtrPlayerIdentity({
+      actor,
+      bindingId: payload.bindingId ?? null,
+      playerName: payload.playerName ?? null,
+    });
+    const response = await this.minecraftServerService.addBeaconPlayerBalance(
+      payload.serverId,
+      {
+        playerUuid: identity.playerUuid ?? undefined,
+        playerName: identity.playerName,
+        amount: Math.trunc(amount),
+      },
+    );
+    const result = response.result;
+    if (!result?.success) {
+      throw new BadRequestException(
+        result?.error ?? 'Beacon did not return player balance',
+      );
+    }
+    const balance = Number(result.balance);
+    if (!Number.isFinite(balance)) {
+      throw new BadRequestException('Beacon returned invalid balance value');
+    }
+    return {
+      success: true,
+      player: result.player ?? identity.playerName,
+      balance,
+    };
   }
 
   async getLifecycleEvents(
@@ -1699,6 +1884,67 @@ export class PlayerService {
       return realname;
     }
     return this.normalizeLookupKey(binding.authmeUsername);
+  }
+
+  private async resolveMtrPlayerIdentity(options: {
+    actor: PlayerSessionUser | null;
+    bindingId?: string | null;
+    playerName?: string | null;
+  }) {
+    if (options.bindingId) {
+      if (!options.actor) {
+        throw new ForbiddenException(
+          'Binding does not belong to the current user',
+        );
+      }
+      const binding = await this.prisma.userAuthmeBinding.findFirst({
+        where: { id: options.bindingId },
+        select: {
+          userId: true,
+          authmeUuid: true,
+          authmeUsername: true,
+          authmeRealname: true,
+        },
+      });
+      if (!binding) {
+        throw new BadRequestException('Binding not found');
+      }
+      if (binding.userId !== options.actor.id) {
+        throw new ForbiddenException(
+          'Binding does not belong to the current user',
+        );
+      }
+      const resolvedName = this.resolveLookupName(binding);
+      if (!resolvedName) {
+        throw new BadRequestException('Binding does not expose a player name');
+      }
+      return {
+        playerName: resolvedName,
+        playerUuid: this.normalizeLookupKey(binding.authmeUuid),
+      };
+    }
+    const playerName = this.normalizeLookupKey(options.playerName ?? null);
+    if (playerName) {
+      if (!hasAdminRole(options.actor)) {
+        throw new ForbiddenException(
+          'Admin permission required to specify playerName',
+        );
+      }
+      return { playerName, playerUuid: null };
+    }
+    throw new BadRequestException('Binding or playerName is required');
+  }
+
+  private parseBalanceAmount(value: unknown) {
+    if (value === null || value === undefined) {
+      throw new BadRequestException('Amount is required');
+    }
+    const normalized =
+      typeof value === 'number' ? value : Number(String(value).trim());
+    if (!Number.isFinite(normalized)) {
+      throw new BadRequestException('Amount must be a finite number');
+    }
+    return normalized;
   }
 
   private normalizeLookupKey(value: string | null | undefined) {

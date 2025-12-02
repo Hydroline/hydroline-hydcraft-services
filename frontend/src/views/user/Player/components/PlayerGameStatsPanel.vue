@@ -166,6 +166,18 @@ const formattedMtrDescription = computed(() => {
   return log.description ?? null
 })
 
+const formattedMtrBalance = computed(() => {
+  const balance = selectedServer.value?.mtrBalance
+  if (balance == null) {
+    return '—'
+  }
+  return numberFormatter.format(balance)
+})
+
+const mtrBalanceErrorMessage = computed(() => {
+  return selectedServer.value?.mtrBalanceErrorMessage ?? null
+})
+
 const selectedServerMessage = computed(() => {
   if (!selectedServer.value) return null
   if (selectedServer.value.errorMessage) {
@@ -362,7 +374,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">走了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
@@ -376,7 +388,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">飞了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
@@ -390,7 +402,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">游了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
@@ -404,7 +416,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">
               在游戏里待了多久
@@ -420,7 +432,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">
               被人杀了多少次
@@ -436,7 +448,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">死亡多少次</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
@@ -450,7 +462,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">跳了多少次</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
@@ -464,7 +476,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">游玩时间</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
@@ -478,7 +490,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">
               用了几次斧头
@@ -494,7 +506,7 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">
               退出游戏几次
@@ -510,7 +522,27 @@ watch(
           </div>
 
           <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800 md:col-span-2"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+          >
+            <p class="text-xs text-slate-500 dark:text-slate-500">MTR 余额</p>
+            <p class="text-xl font-semibold text-slate-900 dark:text-white">
+              <template v-if="isStatsLoading">
+                <USkeleton class="h-6 w-28" />
+              </template>
+              <template v-else>
+                {{ formattedMtrBalance }}
+              </template>
+            </p>
+            <p
+              v-if="!isStatsLoading && mtrBalanceErrorMessage"
+              class="text-[11px] text-amber-500"
+            >
+              {{ mtrBalanceErrorMessage }}
+            </p>
+          </div>
+
+          <div
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800 md:col-span-1"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">
               最近一次 MTR 操作
@@ -542,9 +574,9 @@ watch(
             <USkeleton class="h-64" />
           </div>
           <div
-            v-for="index in 10"
+            v-for="index in 12"
             :key="`game-stats-placeholder-${index}`"
-            class="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <USkeleton class="h-4 w-24" />
             <USkeleton class="h-8 w-full mt-2" />

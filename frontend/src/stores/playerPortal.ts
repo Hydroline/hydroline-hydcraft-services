@@ -16,6 +16,7 @@ import type {
   PlayerIsLoggedResponse,
   PlayerLifecycleEvent,
   PermissionAdjustmentOptions,
+  PlayerMtrBalanceResponse,
 } from '@/types/portal'
 
 type RankContextResponse = import('@/types/portal').RankContextResponse
@@ -190,6 +191,38 @@ export const usePlayerPortalStore = defineStore('player-portal', {
       this.submitting = true
       try {
         await apiFetch('/player/authme/force-login', {
+          method: 'POST',
+          body: payload,
+          token: this.authToken() ?? undefined,
+        })
+      } finally {
+        this.submitting = false
+      }
+    },
+    async requestSetPlayerMtrBalance(payload: {
+      serverId: string
+      bindingId?: string
+      amount: number
+    }) {
+      this.submitting = true
+      try {
+        return await apiFetch<PlayerMtrBalanceResponse>('/player/mtr/set', {
+          method: 'POST',
+          body: payload,
+          token: this.authToken() ?? undefined,
+        })
+      } finally {
+        this.submitting = false
+      }
+    },
+    async requestAddPlayerMtrBalance(payload: {
+      serverId: string
+      bindingId?: string
+      amount: number
+    }) {
+      this.submitting = true
+      try {
+        return await apiFetch<PlayerMtrBalanceResponse>('/player/mtr/add', {
           method: 'POST',
           body: payload,
           token: this.authToken() ?? undefined,

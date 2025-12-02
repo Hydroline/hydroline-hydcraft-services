@@ -240,6 +240,17 @@ const permissionDialog = reactive({
   loading: false,
 })
 const permissionSubmitting = ref(false)
+const balanceDialog = reactive({
+  open: false,
+  serverId: '',
+  amount: '',
+  operation: 'set' as 'set' | 'add',
+})
+const balanceSubmitting = ref(false)
+const balanceOperationOptions = [
+  { value: 'set', label: '直接设置余额' },
+  { value: 'add', label: '按增减余额（可负）' },
+] as const
 const lifecycleDialogOpen = ref(false)
 
 function ensureServerDefaults() {
@@ -247,6 +258,7 @@ function ensureServerDefaults() {
   if (!passwordDialog.serverId) passwordDialog.serverId = defaultId
   if (!forceLoginDialog.serverId) forceLoginDialog.serverId = defaultId
   if (!permissionDialog.serverId) permissionDialog.serverId = defaultId
+  if (!balanceDialog.serverId) balanceDialog.serverId = defaultId
 }
 
 watch(serverOptions, ensureServerDefaults, { immediate: true })
@@ -314,6 +326,17 @@ watch(
       permissionDialog.serverId =
         permissionDialog.serverId || resolveDefaultServerId()
       void loadPermissionOptions()
+    }
+  },
+)
+
+watch(
+  () => balanceDialog.open,
+  (open) => {
+    if (open) {
+      balanceDialog.serverId =
+        balanceDialog.serverId || resolveDefaultServerId()
+      balanceDialog.amount = ''
     }
   },
 )
@@ -486,6 +509,50 @@ async function submitForceLogin() {
   }
 }
 
+async function submitBalanceChange() {
+  if (!ensureBindingAvailable('调整 MTR 余额')) return
+  if (!balanceDialog.serverId) {
+    toast.add({ title: '请选择服务器', color: 'warning' })
+    return
+  }
+  const raw = balanceDialog.amount?.trim() ?? ''
+  if (!raw.length) {
+    toast.add({ title: '请输入金额', color: 'warning' })
+    return
+  }
+  const value = Number(raw)
+  if (!Number.isFinite(value)) {
+    toast.add({ title: '请输入有效数字', color: 'warning' })
+    return
+  }
+  balanceSubmitting.value = true
+  try {
+    const payload = {
+      serverId: balanceDialog.serverId,
+      bindingId: bindingId.value ?? undefined,
+      amount: value,
+    }
+    if (balanceDialog.operation === 'add') {
+      await playerPortalStore.requestAddPlayerMtrBalance(payload)
+      toast.add({ title: '余额调整命令已发送', color: 'primary' })
+    } else {
+      await playerPortalStore.requestSetPlayerMtrBalance(payload)
+      toast.add({ title: '余额设置命令已发送', color: 'primary' })
+    }
+    balanceDialog.open = false
+    balanceDialog.amount = ''
+    await playerPortalStore.refreshStats()
+  } catch (error) {
+    toast.add({
+      title: '操作失败',
+      description: error instanceof Error ? error.message : String(error),
+      color: 'error',
+    })
+  } finally {
+    balanceSubmitting.value = false
+  }
+}
+
 async function loadPermissionOptions() {
   if (!bindingId.value) {
     permissionDialog.options = []
@@ -583,6 +650,14 @@ async function submitPermissionChange() {
               @click="forceLoginDialog.open = true"
             >
               强制登录
+            </UButton>
+            <UButton
+              size="xs"
+              variant="soft"
+              :disabled="!props.binding || !serverOptions.length"
+              @click="balanceDialog.open = true"
+            >
+              调整MTR余额
             </UButton>
             <UButton
               size="xs"
@@ -906,6 +981,80 @@ async function submitPermissionChange() {
               :disabled="permissionDialog.options.length === 0"
               :loading="permissionSubmitting"
             >
+              发送命令
+            </UButton>
+          </div>
+        </form>
+      </UCard>
+    </template>
+  </UModal>
+
+  <UModal
+    :open="balanceDialog.open"
+    @update:open="balanceDialog.open = $event"
+    :ui="{ content: 'w-full max-w-md w-[calc(100vw-2rem)]' }"
+  >
+    <template #content>
+      <UCard>
+        <template #header>
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+            调整 MTR 余额
+          </h3>
+        </template>
+        <form class="space-y-4" @submit.prevent="submitBalanceChange">
+          <label
+            class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+          >
+            <span class="font-medium text-slate-700 dark:text-slate-200">
+              选择服务器
+            </span>
+            <USelectMenu
+              v-model="balanceDialog.serverId"
+              :items="serverOptions"
+              value-key="id"
+              label-key="displayName"
+              placeholder="请选择服务器"
+              :disabled="serverOptions.length === 0"
+            />
+          </label>
+          <label
+            class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+          >
+            <span class="font-medium text-slate-700 dark:text-slate-200">
+              操作类型
+            </span>
+            <USelectMenu
+              v-model="balanceDialog.operation"
+              :items="balanceOperationOptions"
+              value-key="value"
+              label-key="label"
+            />
+          </label>
+          <label
+            class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+          >
+            <span class="font-medium text-slate-700 dark:text-slate-200">
+              金额
+            </span>
+            <UInput
+              v-model="balanceDialog.amount"
+              type="number"
+              placeholder="输入要设置或调整的数量"
+            />
+            <span class="text-[11px] text-slate-500 dark:text-slate-400">
+              设置操作会直接将余额写入；增减操作会在当前基础上
+              +amount（支持负数）
+            </span>
+          </label>
+          <div class="flex justify-end gap-2 pt-2">
+            <UButton
+              type="button"
+              variant="ghost"
+              @click="balanceDialog.open = false"
+            >
+              取消
+            </UButton>
+            <UButton type="submit" color="primary" :loading="balanceSubmitting">
               发送命令
             </UButton>
           </div>

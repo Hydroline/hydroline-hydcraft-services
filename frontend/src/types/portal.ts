@@ -256,6 +256,10 @@ export interface PlayerGameServerStat {
   beaconConfigured: boolean
   metrics: PlayerGameServerMetrics | null
   lastMtrLog: PlayerGameMtrLog | null
+  mtrBalance: number | null
+  mtrBalanceFetchedAt: string | null
+  mtrBalanceError: string | null
+  mtrBalanceErrorMessage: string | null
   fetchedAt: string | null
   error: string | null
   errorMessage: string | null
@@ -286,6 +290,12 @@ export interface PlayerGameMtrLog {
   className: string | null
   dimensionContext: string | null
   description: string | null
+}
+
+export interface PlayerMtrBalanceResponse {
+  success: true
+  player: string
+  balance: number
 }
 
 export interface PlayerStatusSnapshot {

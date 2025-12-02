@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { apiFetch } from '@/utils/api'
 import { useAdminPlayersStore } from '@/stores/adminPlayers'
 import { useRouter } from 'vue-router'
 import { useUiStore } from '@/stores/ui'
 import { useAdminUsersStore } from '@/stores/adminUsers'
+import { useAuthStore } from '@/stores/auth'
 import PlayerDetailDialog from '@/views/admin/components/PlayerDetailDialog.vue'
 import UserDetailDialog from '@/views/admin/components/UserDetailDialog.vue'
 import type { AdminPlayerEntry } from '@/types/admin'
+import type { PlayerMtrBalanceResponse } from '@/types/portal'
 
 const uiStore = useUiStore()
 const playersStore = useAdminPlayersStore()
 const usersStore = useAdminUsersStore()
+const authStore = useAuthStore()
+const toast = useToast()
 
 const keyword = ref(playersStore.keyword)
 const rows = computed(() => playersStore.items)
@@ -23,6 +28,31 @@ const safePageCount = computed(() =>
   Math.max(pagination.value?.pageCount ?? 1, 1),
 )
 const pageInput = ref<number | null>(null)
+const serverOptions = ref<Array<{ id: string; displayName: string }>>([])
+const mtrDialogOpen = ref(false)
+const mtrForm = reactive({
+  playerName: '',
+  serverId: '',
+  operation: 'set' as 'set' | 'add',
+  amount: '',
+})
+const mtrSubmitting = ref(false)
+const mtrOperationOptions = [
+  { value: 'set', label: '直接设置余额' },
+  { value: 'add', label: '按增减余额（可负）' },
+] as const
+const balanceLoading = ref(false)
+const balanceError = ref<string | null>(null)
+const balanceValue = ref<number | null>(null)
+const numberFormatter = new Intl.NumberFormat('zh-CN', {
+  maximumFractionDigits: 0,
+})
+const formattedBalance = computed(() => {
+  if (balanceValue.value == null) {
+    return '—'
+  }
+  return numberFormatter.format(balanceValue.value)
+})
 
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -42,6 +72,44 @@ async function refresh(
     })
   } finally {
     uiStore.stopLoading()
+  }
+}
+
+async function loadServerOptions() {
+  try {
+    const response = await apiFetch<{
+      servers: Array<{ id: string; displayName: string }>
+    }>('/portal/header/minecraft-status')
+    serverOptions.value = response.servers ?? []
+  } catch (error) {
+    console.warn('Failed to load server options', error)
+  }
+}
+
+async function loadMtrBalance() {
+  if (!mtrDialogOpen.value) return
+  if (!mtrForm.playerName || !mtrForm.serverId) {
+    balanceValue.value = null
+    balanceError.value = null
+    return
+  }
+  balanceLoading.value = true
+  balanceError.value = null
+  try {
+    const params = new URLSearchParams({
+      serverId: mtrForm.serverId,
+      playerName: mtrForm.playerName,
+    })
+    const data = await apiFetch<PlayerMtrBalanceResponse>(
+      `/player/mtr/balance?${params.toString()}`,
+      { token: authStore.token ?? undefined },
+    )
+    balanceValue.value = data.balance
+  } catch (error) {
+    balanceValue.value = null
+    balanceError.value = error instanceof Error ? error.message : '无法获取余额'
+  } finally {
+    balanceLoading.value = false
   }
 }
 
@@ -86,6 +154,7 @@ onMounted(async () => {
   if (rows.value.length === 0) {
     await refresh(1)
   }
+  void loadServerOptions()
 })
 
 watch(
@@ -94,6 +163,33 @@ watch(
     pageInput.value = page ?? 1
   },
   { immediate: true },
+)
+
+watch(serverOptions, (list) => {
+  if (!mtrForm.serverId) {
+    mtrForm.serverId = list[0]?.id ?? ''
+  }
+})
+
+watch(
+  () => mtrDialogOpen.value,
+  (open) => {
+    if (open) {
+      void loadMtrBalance()
+    } else {
+      balanceValue.value = null
+      balanceError.value = null
+    }
+  },
+)
+
+watch(
+  () => mtrForm.serverId,
+  (serverId) => {
+    if (mtrDialogOpen.value && serverId) {
+      void loadMtrBalance()
+    }
+  },
 )
 
 async function goToPage(page: number) {
@@ -327,6 +423,78 @@ function openBeaconForPlayer(
     },
   })
 }
+
+function openMtrBalanceDialog(player: AdminPlayerEntry) {
+  const identifier = resolvePlayerAvatarIdentifier(player)
+  if (!identifier) {
+    toast.add({
+      title: '无法识别玩家',
+      description: '该玩家尚未绑定可用的 AuthMe 账户',
+      color: 'warning',
+    })
+    return
+  }
+  mtrForm.playerName = identifier
+  mtrForm.amount = ''
+  mtrForm.operation = 'set'
+  if (!mtrForm.serverId) {
+    mtrForm.serverId = serverOptions.value[0]?.id ?? ''
+  }
+  mtrDialogOpen.value = true
+  void loadMtrBalance()
+}
+
+async function submitMtrBalanceChange() {
+  if (!mtrForm.serverId) {
+    toast.add({ title: '请选择服务器', color: 'warning' })
+    return
+  }
+  if (!mtrForm.playerName) {
+    toast.add({ title: '玩家名称缺失', color: 'warning' })
+    return
+  }
+  const raw = (mtrForm.amount ?? '').toString().trim()
+  if (!raw.length) {
+    toast.add({ title: '请输入金额', color: 'warning' })
+    return
+  }
+  const value = Number(raw)
+  if (!Number.isFinite(value)) {
+    toast.add({ title: '请输入有效数字', color: 'warning' })
+    return
+  }
+  mtrSubmitting.value = true
+  try {
+    const endpoint =
+      mtrForm.operation === 'add' ? '/player/mtr/add' : '/player/mtr/set'
+    await apiFetch<PlayerMtrBalanceResponse>(endpoint, {
+      method: 'POST',
+      token: authStore.token ?? undefined,
+      body: {
+        serverId: mtrForm.serverId,
+        playerName: mtrForm.playerName,
+        amount: value,
+      },
+    })
+    toast.add({
+      title:
+        mtrForm.operation === 'add'
+          ? '余额调整命令已发送'
+          : '余额设置命令已发送',
+      color: 'primary',
+    })
+    mtrForm.amount = ''
+    await loadMtrBalance()
+  } catch (error) {
+    toast.add({
+      title: '操作失败',
+      description: error instanceof Error ? error.message : '无法调整 MTR 余额',
+      color: 'error',
+    })
+  } finally {
+    mtrSubmitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -470,6 +638,7 @@ function openBeaconForPlayer(
                   {{ new Date(player.history[0].createdAt).toLocaleString() }}
                 </div>
               </div>
+
               <span v-else>—</span>
             </td>
             <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
@@ -574,6 +743,14 @@ function openBeaconForPlayer(
                   @click="openBeaconForPlayer(player, 'mtr')"
                 >
                   Beacon
+                </UButton>
+                <UButton
+                  size="xs"
+                  color="primary"
+                  variant="soft"
+                  @click="openMtrBalanceDialog(player)"
+                >
+                  MTR 余额
                 </UButton>
               </div>
             </td>
@@ -754,6 +931,102 @@ function openBeaconForPlayer(
           >
         </div>
       </div>
+    </template>
+  </UModal>
+
+  <UModal
+    :open="mtrDialogOpen"
+    @update:open="mtrDialogOpen = $event"
+    :ui="{ content: 'w-full max-w-md w-[calc(100vw-2rem)]' }"
+  >
+    <template #content>
+      <UCard>
+        <template #header>
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+            MTR 余额调整
+          </h3>
+        </template>
+        <form class="space-y-4" @submit.prevent="submitMtrBalanceChange">
+          <div class="text-sm text-slate-600 dark:text-slate-300">
+            {{ mtrForm.playerName }}
+          </div>
+          <div class="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+            <span class="font-medium text-slate-700 dark:text-slate-200">
+              当前余额
+            </span>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white">
+              <template v-if="balanceLoading">
+                <UIcon
+                  name="i-lucide-loader-2"
+                  class="inline-block h-4 w-4 animate-spin"
+                />
+              </template>
+              <template v-else>{{ formattedBalance }}</template>
+            </div>
+            <p
+              v-if="balanceError"
+              class="text-[11px] text-amber-500 dark:text-amber-300"
+            >
+              {{ balanceError }}
+            </p>
+          </div>
+          <label
+            class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+          >
+            <span class="font-medium text-slate-700 dark:text-slate-200">
+              选择服务器
+            </span>
+            <USelectMenu
+              v-model="mtrForm.serverId"
+              :items="serverOptions"
+              value-key="id"
+              label-key="displayName"
+              placeholder="请选择服务器"
+              :disabled="serverOptions.length === 0"
+            />
+          </label>
+          <label
+            class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+          >
+            <span class="font-medium text-slate-700 dark:text-slate-200">
+              操作类型
+            </span>
+            <USelectMenu
+              v-model="mtrForm.operation"
+              :items="mtrOperationOptions"
+              value-key="value"
+              label-key="label"
+            />
+          </label>
+          <label
+            class="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300"
+          >
+            <span class="font-medium text-slate-700 dark:text-slate-200">
+              金额
+            </span>
+            <UInput
+              v-model="mtrForm.amount"
+              type="number"
+              placeholder="输入要设置或调整的数量"
+            />
+            <span class="text-[11px] text-slate-500 dark:text-slate-400">
+              设置操作会直接将余额写入；增减操作在当前基础上 +amount（支持负数）
+            </span>
+          </label>
+          <div class="flex justify-end gap-2 pt-2">
+            <UButton
+              type="button"
+              variant="ghost"
+              @click="mtrDialogOpen = false"
+            >
+              取消
+            </UButton>
+            <UButton type="submit" color="primary" :loading="mtrSubmitting">
+              发送命令
+            </UButton>
+          </div>
+        </form>
+      </UCard>
     </template>
   </UModal>
 

@@ -389,7 +389,13 @@ function mcsmStatusColor(status?: number | null) {
               v-else
               class="flex h-full items-center justify-center text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
             >
-              {{ props.historyLoading ? '加载中...' : '暂无历史数据' }}
+              <template v-if="props.historyLoading">
+                <UIcon
+                  name="i-lucide-loader-2"
+                  class="inline-block h-4 w-4 animate-spin"
+                />
+              </template>
+              <template v-else>暂无历史数据</template>
             </div>
           </div>
         </div>
