@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import {
+import { Motion } from 'motion-v'
+import type {
   PlayerLoginRecommendation,
   PlayerLoginRecommendationsResponse,
 } from '@/types/portal'
@@ -76,35 +77,42 @@ onMounted(() => {
         这么想看就实践一下下面这几个人吧 ↓
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-10 gap-3 mt-4">
-        <RouterLink
+        <Motion
           v-for="item in recommendations"
           :key="item.id"
-          :to="
-            item.type === 'authme'
-              ? { name: 'player.name', params: { playerName: item.targetId } }
-              : { name: 'player', params: { playerId: item.targetId } }
-          "
-          class="flex flex-col items-center gap-2 rounded-xl p-2 text-sm transition hover:border-primary-500 hover:bg-white"
+          as="div"
+          :initial="{ opacity: 0, filter: 'blur(6px)', y: 8 }"
+          :animate="{ opacity: 1, filter: 'blur(0px)', y: 0 }"
+          :transition="{ duration: 0.35, ease: 'easeInOut' }"
         >
-          <div
-            class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"
+          <RouterLink
+            :to="
+              item.type === 'authme'
+                ? { name: 'player.name', params: { playerName: item.targetId } }
+                : { name: 'player', params: { playerId: item.targetId } }
+            "
+            class="flex flex-col items-center gap-2 rounded-xl p-2 text-sm transition hover:border-primary-500 hover:bg-white hover:dark:bg-slate-600/50"
           >
-            <img
-              v-if="avatarUrl(item)"
-              :src="avatarUrl(item)"
-              :alt="item.displayName"
-              class="h-full w-full object-cover"
-            />
-          </div>
-          <p
-            class="text-center text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2"
-          >
-            {{ item.displayName }}
-          </p>
-          <span class="text-[10px] uppercase tracking-wider text-slate-400">
-            {{ item.type === 'user' ? '用户' : '玩家' }}
-          </span>
-        </RouterLink>
+            <div
+              class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"
+            >
+              <img
+                v-if="avatarUrl(item)"
+                :src="avatarUrl(item) || ''"
+                :alt="item.displayName"
+                class="h-full w-full object-cover"
+              />
+            </div>
+            <p
+              class="text-center text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2"
+            >
+              {{ item.displayName }}
+            </p>
+            <span class="text-[10px] uppercase tracking-wider text-slate-400">
+              {{ item.type === 'user' ? '用户' : '玩家' }}
+            </span>
+          </RouterLink>
+        </Motion>
       </div>
 
       <div class="mt-6 flex justify-center">
