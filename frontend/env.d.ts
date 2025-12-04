@@ -9,3 +9,11 @@ declare module '@nuxt/ui/dist/runtime/components/Switch.vue' {
   >
   export default component
 }
+
+interface ImportMetaEnv {
+  readonly VITE_DYNMAP_TILE_BASE_URL?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}

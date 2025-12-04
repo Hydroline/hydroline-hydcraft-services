@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import dayjs from 'dayjs'
+import 'leaflet/dist/leaflet.css'
+import type { LeafletMouseEvent } from 'leaflet'
 import type {
   PlayerGameServerStat,
   PlayerStatsResponse,
@@ -8,6 +10,12 @@ import type {
   PlayerGameStatsResponse,
 } from '@/types/portal'
 import { usePlayerPortalStore } from '@/stores/playerPortal'
+import {
+  createHydcraftDynmapMap,
+  DynmapMapController,
+  hydcraftDynmapSource,
+  type DynmapBlockPoint,
+} from '@/utils/map'
 
 const props = defineProps<{
   stats: PlayerStatsResponse | null
@@ -24,6 +32,22 @@ const selectedServerId = ref<string | undefined>(undefined)
 const selectedPlayerId = ref<string | undefined>(undefined)
 
 const playerPortalStore = usePlayerPortalStore()
+const mapContainerRef = ref<HTMLElement | null>(null)
+const dynmapController = ref<DynmapMapController | null>(null)
+const mapIsInitializing = ref(false)
+const mapHasLoaded = ref(false)
+const mapErrorMessage = ref<string | null>(null)
+const defaultMapCenter: DynmapBlockPoint =
+  hydcraftDynmapSource.defaultCenter ?? { x: 0, z: 0 }
+const pointerBlockCoord = ref<DynmapBlockPoint | null>(null)
+const mapCursorCleanup = ref<(() => void) | null>(null)
+const teardownMapInstance = () => {
+  mapCursorCleanup.value?.()
+  mapCursorCleanup.value = null
+  pointerBlockCoord.value = null
+  dynmapController.value?.destroy()
+  dynmapController.value = null
+}
 
 const gameStats = computed(() => props.stats?.gameStats ?? null)
 const servers = computed<PlayerGameServerStat[]>(
@@ -197,7 +221,54 @@ const showStatsGrid = computed(() => Boolean(props.stats && hasServers.value))
 const showNoServersMessage = computed(() =>
   Boolean(props.stats && !hasServers.value),
 )
-const isStatsLoading = computed(() => !props.stats)
+const formatBlockCoordinate = (value: number) => Math.round(value)
+
+const initializeDynmap = async (root?: HTMLElement | null) => {
+  const container = root ?? mapContainerRef.value
+  if (!container) return
+  mapIsInitializing.value = true
+  mapHasLoaded.value = false
+  mapErrorMessage.value = null
+  try {
+    teardownMapInstance()
+    const controller = createHydcraftDynmapMap()
+    controller.mount({
+      container,
+      center: defaultMapCenter,
+      showZoomControl: false,
+    })
+    dynmapController.value = controller
+    attachMapCursorTracking(controller)
+    mapHasLoaded.value = true
+  } catch (error) {
+    console.error(error)
+    mapErrorMessage.value =
+      error instanceof Error ? error.message : '地图加载失败，请稍后重试'
+  } finally {
+    mapIsInitializing.value = false
+  }
+}
+
+const attachMapCursorTracking = (controller: DynmapMapController) => {
+  mapCursorCleanup.value?.()
+  pointerBlockCoord.value = null
+  const map = controller.getLeafletInstance()
+  if (!map) return
+
+  const handleMove = (event: LeafletMouseEvent) => {
+    pointerBlockCoord.value = controller.fromLatLng(event.latlng)
+  }
+  const handleLeave = () => {
+    pointerBlockCoord.value = null
+  }
+
+  map.on('mousemove', handleMove)
+  map.on('mouseout', handleLeave)
+  mapCursorCleanup.value = () => {
+    map.off('mousemove', handleMove)
+    map.off('mouseout', handleLeave)
+  }
+}
 
 async function refreshGameStatsForSelection() {
   if (!selectedPlayerId.value || !selectedServerId.value) return
@@ -247,6 +318,24 @@ watch(
     void refreshGameStatsForSelection()
   },
 )
+
+watch(
+  () => [showStatsGrid.value, mapContainerRef.value] as const,
+  async ([visible, container]) => {
+    if (visible && container) {
+      if (dynmapController.value) return
+      await initializeDynmap(container)
+    } else {
+      teardownMapInstance()
+      mapHasLoaded.value = false
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  teardownMapInstance()
+})
 </script>
 
 <template>
@@ -365,73 +454,76 @@ watch(
         description="未找到有效的 AuthMe 账户，无法向 Beacon 请求游戏统计信息。"
       />
 
-      <div v-if="showStatsGrid" class="space-y-3">
-        <div class="grid gap-2 md:grid-cols-4">
-          <div
-            class="col-span-1 md:col-span-4 row-span-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white backdrop-blur dark:bg-slate-800 overflow-hidden min-h-64"
-          >
-            <iframe
-              src="https://map.nitrogen.hydcraft.cn/"
-              class="block w-full h-full"
-            ></iframe>
+      <div v-if="showStatsGrid">
+        <div
+          class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white backdrop-blur dark:bg-slate-800 overflow-hidden min-h-64"
+        >
+          <div class="relative flex min-h-64 bg-black">
+            <div
+              v-if="mapIsInitializing && !mapHasLoaded"
+              class="absolute inset-0 flex items-center justify-center"
+            >
+              <USkeleton class="h-12 w-32" />
+            </div>
+            <div
+              v-else-if="mapErrorMessage"
+              class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-rose-500 dark:text-rose-400"
+            >
+              <span>{{ mapErrorMessage }}</span>
+              <UButton
+                size="xs"
+                variant="solid"
+                color="primary"
+                @click="initializeDynmap"
+              >
+                重试
+              </UButton>
+            </div>
+            <div ref="mapContainerRef" class="absolute inset-0 bg-black!"></div>
+            <template v-if="pointerBlockCoord">
+              <div
+                v-if="mapHasLoaded && !mapErrorMessage"
+                class="pointer-events-none absolute z-999 bottom-2 left-2 rounded-lg px-2 py-1 text-xs text-white"
+              >
+                {{ formatBlockCoordinate(pointerBlockCoord.x) }},
+                {{ formatBlockCoordinate(pointerBlockCoord.z) }}
+              </div>
+            </template>
           </div>
-
+        </div>
+        <div class="mt-3 grid gap-2 md:grid-cols-4">
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">走了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatDistance(selectedMetrics?.walkOneCm) }}
-              </template>
+              {{ formatDistance(selectedMetrics?.walkOneCm) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">飞了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatDistance(selectedMetrics?.flyOneCm) }}
-              </template>
+              {{ formatDistance(selectedMetrics?.flyOneCm) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">游了多远</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatDistance(selectedMetrics?.swimOneCm) }}
-              </template>
+              {{ formatDistance(selectedMetrics?.swimOneCm) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">已达成成就</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-32" />
-              </template>
-              <template v-else>
-                {{ formatAchievementsCount(selectedServer?.achievementsTotal) }}
-              </template>
+              {{ formatAchievementsCount(selectedServer?.achievementsTotal) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
@@ -439,15 +531,9 @@ watch(
               被人杀了多少次
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatTimes(selectedMetrics?.playerKills) }}
-              </template>
+              {{ formatTimes(selectedMetrics?.playerKills) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
@@ -455,43 +541,25 @@ watch(
               总共死了几次
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatTimes(selectedMetrics?.deaths) }}
-              </template>
+              {{ formatTimes(selectedMetrics?.deaths) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">跳了多少次</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatTimes(selectedMetrics?.jump) }}
-              </template>
+              {{ formatTimes(selectedMetrics?.jump) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">游玩时间</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatTicksToHours(selectedMetrics?.playTime) }}
-              </template>
+              {{ formatTicksToHours(selectedMetrics?.playTime) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
@@ -499,15 +567,9 @@ watch(
               用了几次斧头
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatTimes(selectedMetrics?.useWand) }}
-              </template>
+              {{ formatTimes(selectedMetrics?.useWand) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
@@ -515,37 +577,30 @@ watch(
               退出游戏几次
             </p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formatTimes(selectedMetrics?.leaveGame) }}
-              </template>
+              {{ formatTimes(selectedMetrics?.leaveGame) }}
             </p>
           </div>
-
           <div
             class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-500">MTR 余额</p>
             <p class="text-xl font-semibold text-slate-900 dark:text-white">
-              <template v-if="isStatsLoading">
-                <USkeleton class="h-6 w-28" />
-              </template>
-              <template v-else>
-                {{ formattedMtrBalance }}
-              </template>
+              {{ formattedMtrBalance }}
+            </p>
+            <p
+              v-if="mtrBalanceErrorMessage"
+              class="mt-1 text-xs text-amber-500 dark:text-amber-400"
+            >
+              {{ mtrBalanceErrorMessage }}
             </p>
           </div>
-
           <div
-            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800 md:col-span-1"
+            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
           >
             <p
               class="flex gap-1 items-center text-xs text-slate-500 dark:text-slate-500"
             >
               <span> 最近 MTR 操作 </span>
-
               <UTooltip
                 :text="formattedMtrTimestamp"
                 v-if="formattedMtrTimestamp"
@@ -567,21 +622,11 @@ watch(
       >
         <UIcon name="i-lucide-server-off" /> 暂无可用的服务器配置
       </div>
-      <div v-else class="space-y-3">
-        <div class="grid gap-2 md:grid-cols-4">
-          <div
-            class="col-span-1 md:col-span-4 row-span-1 min-h-64 rounded-xl border border-slate-200 dark:border-slate-800 bg-white backdrop-blur dark:bg-slate-800 overflow-hidden"
-          >
-            <USkeleton class="h-64" />
-          </div>
-          <div
-            v-for="index in 12"
-            :key="`game-stats-placeholder-${index}`"
-            class="flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white backdrop-blur dark:bg-slate-800"
-          >
-            <USkeleton class="h-4 w-24" />
-            <USkeleton class="h-8 w-full mt-2" />
-          </div>
+      <div v-else>
+        <div
+          class="min-h-64 rounded-xl border border-slate-200 dark:border-slate-800 bg-white backdrop-blur dark:bg-slate-800 overflow-hidden"
+        >
+          <USkeleton class="h-64" />
         </div>
       </div>
     </div>

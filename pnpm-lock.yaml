@@ -218,6 +218,9 @@ importers:
       jsbarcode:
         specifier: ^3.12.1
         version: 3.12.1
+      leaflet:
+        specifier: ^1.9.4
+        version: 1.9.4
       markdown-it:
         specifier: ^13.0.1
         version: 13.0.2
@@ -4427,6 +4430,9 @@ packages:
   kysely@0.28.8:
     resolution: {integrity: sha512-QUOgl5ZrS9IRuhq5FvOKFSsD/3+IA6MLE81/bOOTRA/YQpKDza2sFdN5g6JCB9BOpqMJDGefLCQ9F12hRS13TA==}
     engines: {node: '>=20.0.0'}
+
+  leaflet@1.9.4:
+    resolution: {integrity: sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==}
 
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
@@ -11300,6 +11306,8 @@ snapshots:
   kolorist@1.8.0: {}
 
   kysely@0.28.8: {}
+
+  leaflet@1.9.4: {}
 
   leven@3.1.0: {}
 
