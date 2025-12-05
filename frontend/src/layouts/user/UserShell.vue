@@ -68,6 +68,7 @@ const mainNav = computed<NavItem[]>(() => {
       icon: 'i-lucide-trophy',
     },
     { name: '服务端状态', to: '/server', icon: 'i-lucide-server' },
+    { name: '关于', to: '/about', icon: 'i-lucide-info' },
   ]
 
   if (authStore.permissionKeys.includes('portal.view.admin-dashboard')) {

@@ -54,6 +54,16 @@ export const userRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'about',
+        name: 'about',
+        component: () => import('@/views/user/About/AboutView.vue'),
+        meta: {
+          layout: 'user',
+          title: '关于 Hydroline',
+          icon: 'i-lucide-info',
+        },
+      },
+      {
         path: 'profile',
         name: 'profile',
         component: () => import('@/views/user/Profile/ProfileInfoShell.vue'),
