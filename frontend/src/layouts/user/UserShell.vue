@@ -62,6 +62,11 @@ const mainNav = computed<NavItem[]>(() => {
       to: '/player',
       icon: 'i-lucide-user-round',
     },
+    {
+      name: '排行榜',
+      to: '/rank',
+      icon: 'i-lucide-trophy',
+    },
     { name: '服务端状态', to: '/server', icon: 'i-lucide-server' },
   ]
 

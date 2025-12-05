@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -15,11 +16,13 @@ import { LuckpermsModule } from './luckperms/luckperms.module';
 import { MinecraftModule } from './minecraft/minecraft.module';
 import { OAuthModule } from './oauth/oauth.module';
 import { RedisModule } from './lib/redis/redis.module';
+import { RankModule } from './rank/rank.module';
 import { ServerModule } from './server/server.module';
 
 @Module({
   imports: [
     RedisModule,
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     AttachmentsModule,
@@ -27,6 +30,7 @@ import { ServerModule } from './server/server.module';
     PortalConfigModule,
     PortalModule,
     PortalGatewayModule,
+    RankModule,
     ServerModule,
     PlayerModule,
     AuthmeModule,

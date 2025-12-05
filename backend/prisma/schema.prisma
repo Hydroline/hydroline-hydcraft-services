@@ -56,6 +56,8 @@ model User {
   statusSnapshot          UserStatusSnapshot?
   likesGiven              PlayerLike[]           @relation("PlayerLikesGiven")
   likesReceived           PlayerLike[]           @relation("PlayerLikesReceived")
+  rankPlayerSnapshots     RankPlayerSnapshot[]   @relation("RankSnapshotsForUser")
+  rankSyncJobs            RankSyncJob[]          @relation("RankSyncJobsInitiated")
 
   @@map("users")
 }
@@ -258,6 +260,61 @@ model UserLifecycleEvent {
 
   @@index([userId, eventType], map: "idx_user_lifecycle_type")
   @@map("user_lifecycle_events")
+}
+
+model RankPlayerSnapshot {
+  id             String   @id @default(uuid())
+  serverId       String
+  playerUuid     String?
+  playerName     String?
+  bindingId      String?
+  userId         String?
+  displayName    String?
+  lastLoginAt    DateTime?
+  registeredAt   DateTime?
+  walkDistanceKm Float?
+  flyDistanceKm  Float?
+  swimDistanceKm Float?
+  achievements   Int?
+  deaths         Int?
+  playerKilledByCount Int?
+  jumpCount      Int?
+  playTimeHours  Float?
+  useWandCount   Int?
+  logoutCount    Int?
+  mtrBalance     Int?
+  metrics        Json?
+  stats          Json?
+  updatedAt      DateTime @updatedAt
+  server         MinecraftServer @relation("RankSnapshotsPerServer", fields: [serverId], references: [id], onDelete: Cascade)
+  authmeBinding  UserAuthmeBinding? @relation("RankSnapshotsForBinding", fields: [bindingId], references: [id])
+  user           User?                @relation("RankSnapshotsForUser", fields: [userId], references: [id])
+
+  @@index([serverId], map: "idx_rank_snapshot_server")
+  @@unique([serverId, playerUuid], map: "uq_rank_snapshot_server_player")
+  @@map("rank_player_snapshot")
+}
+
+model RankSyncJob {
+  id            String         @id @default(uuid())
+  serverId      String?
+  initiatedById String?
+  status        RankSyncStatus @default(PENDING)
+  startedAt     DateTime
+  completedAt   DateTime?
+  message       String?
+  createdAt     DateTime @default(now())
+  server        MinecraftServer? @relation("RankSyncJobsPerServer", fields: [serverId], references: [id])
+  user          User?            @relation("RankSyncJobsInitiated", fields: [initiatedById], references: [id])
+
+  @@map("rank_sync_jobs")
+}
+
+enum RankSyncStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
 }
 
 model PlayerLike {
@@ -488,6 +545,7 @@ model UserAuthmeBinding {
   user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   minecraftProfiles   UserMinecraftProfile[]
   primaryProfileFor   UserProfile[]          @relation("PrimaryAuthmeBinding")
+  rankPlayerSnapshots RankPlayerSnapshot[]   @relation("RankSnapshotsForBinding")
 
   @@index([authmeUsernameLower], map: "idx_authme_binding_username_lower")
   @@map("user_authme_binding")
@@ -546,6 +604,8 @@ model MinecraftServer {
   pingRecords            MinecraftServerPingRecord[]
   createdBy              User?                       @relation("MinecraftServerCreatedBy", fields: [createdById], references: [id])
   updatedBy              User?                       @relation("MinecraftServerUpdatedBy", fields: [updatedById], references: [id])
+  rankPlayerSnapshots    RankPlayerSnapshot[]        @relation("RankSnapshotsPerServer")
+  rankSyncJobs           RankSyncJob[]               @relation("RankSyncJobsPerServer")
 
   @@index([displayOrder], map: "idx_minecraft_server_order")
   @@map("minecraft_servers")

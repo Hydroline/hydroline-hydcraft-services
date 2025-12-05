@@ -17,6 +17,8 @@ export type HydrolineBeaconEvent =
   | 'get_status'
   | 'get_player_nbt'
   | 'lookup_player_identity'
+  | 'list_player_identities'
+  | 'get_players_data'
   | 'get_player_balance'
   | 'set_player_balance'
   | 'add_player_balance';
