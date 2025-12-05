@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
           <h1
             class="relative text-2xl font-semibold text-slate-900 dark:text-white"
           >
-            玩家排名
+            服务器排行榜
           </h1>
 
           <UButton
@@ -628,6 +628,12 @@ onBeforeUnmount(() => {
           </UButton>
         </div>
       </div>
+    </div>
+
+    <div
+      class="mt-12 w-full text-center text-xs text-slate-500 dark:text-slate-400"
+    >
+      统计数据非实时更新，可能存在延迟，每天由系统自动拉取数据更新
     </div>
   </section>
 </template>

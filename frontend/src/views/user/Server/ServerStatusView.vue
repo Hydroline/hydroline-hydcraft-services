@@ -329,7 +329,7 @@ onUnmounted(() => {
   <section class="server-status-view z-0 mx-auto w-full max-w-4xl p-8">
     <div class="relative flex flex-wrap items-center justify-center gap-3 mb-8">
       <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-        服务器状态
+        服务端状态
       </h1>
 
       <UButton

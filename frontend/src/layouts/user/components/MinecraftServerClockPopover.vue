@@ -302,7 +302,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
 <template>
   <UPopover mode="hover" :popper="{ placement: 'bottom-start' }">
     <div
-      class="absolute top-[calc(100%+0.5rem)] left-1/2 -translate-x-1/2 md:translate-0 md:static flex items-center gap-2 font-mono rounded-full border border-slate-400/50 md:border-slate-200/70 px-3 py-1.5 text-xs text-slate-500 dark:border-slate-500/60 md:dark:border-slate-700 bg-slate-100 dark:bg-slate-800 md:bg-transparent md:dark:bg-transparent md:hover:bg-slate-200/40 md:dark:hover:bg-slate-700/40 transition duration-300 cursor-pointer"
+      class="absolute top-[calc(100%+0.5rem)] left-1/2 -translate-x-1/2 md:translate-0 md:static flex items-center gap-2 font-mono rounded-full border border-slate-300/50 md:border-slate-200 px-3 py-1.5 text-xs text-slate-500 dark:border-slate-700 md:dark:border-slate-700 bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent md:hover:bg-slate-200/40 md:dark:hover:bg-slate-700/40 transition duration-300 cursor-pointer"
     >
       <div
         ref="serversHeaderContainer"
