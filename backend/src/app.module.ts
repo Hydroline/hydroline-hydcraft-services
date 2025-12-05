@@ -15,6 +15,7 @@ import { LuckpermsModule } from './luckperms/luckperms.module';
 import { MinecraftModule } from './minecraft/minecraft.module';
 import { OAuthModule } from './oauth/oauth.module';
 import { RedisModule } from './lib/redis/redis.module';
+import { ServerModule } from './server/server.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { RedisModule } from './lib/redis/redis.module';
     PortalConfigModule,
     PortalModule,
     PortalGatewayModule,
+    ServerModule,
     PlayerModule,
     AuthmeModule,
     Ip2RegionModule,

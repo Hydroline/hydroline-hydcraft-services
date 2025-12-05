@@ -44,6 +44,16 @@ export const userRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'server',
+        name: 'server',
+        component: () => import('@/views/user/Server/ServerStatusView.vue'),
+        meta: {
+          layout: 'user',
+          title: '服务器状态',
+          icon: 'i-lucide-server',
+        },
+      },
+      {
         path: 'profile',
         name: 'profile',
         component: () => import('@/views/user/Profile/ProfileInfoShell.vue'),
