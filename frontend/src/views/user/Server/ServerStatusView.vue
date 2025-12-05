@@ -65,7 +65,7 @@ const isDark = ref(false)
 const refreshTimer = ref<number | null>(null)
 const countdownTimer = ref<number | null>(null)
 const nextRefreshAt = ref<dayjs.Dayjs | null>(null)
-const countdownText = ref('05:00')
+const countdownText = ref('—')
 
 const editionLabels = {
   JAVA: 'Java 版',
@@ -262,6 +262,9 @@ const syncTheme = () => {
 const loadServers = async () => {
   loading.value = true
   error.value = null
+  // Pause countdown while refreshing to avoid showing stale time
+  nextRefreshAt.value = null
+  updateCountdown()
   try {
     const payload = await apiFetch<ServerStatusResponse>('/server/status')
     servers.value = payload.servers
