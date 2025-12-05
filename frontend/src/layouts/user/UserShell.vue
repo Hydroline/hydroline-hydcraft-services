@@ -511,8 +511,8 @@ const routerPush = (path: string) => {
 .slide-fade-enter-active,
 .slide-fade-leave-active {
   transition:
-    transform 250ms ease,
-    opacity 250ms ease;
+    transform 0.25s ease,
+    opacity 0.25s ease;
 }
 
 .slide-fade-enter-from,

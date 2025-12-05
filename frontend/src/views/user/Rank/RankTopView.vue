@@ -373,7 +373,7 @@ onMounted(() => {
       </div>
 
       <div
-        class="rounded-xl border border-slate-200/70 bg-white px-4 py-2 dark:border-slate-800/70 dark:bg-slate-900 mx-4 mt-4"
+        class="rounded-xl border border-slate-200/70 bg-white px-4 py-2 dark:border-slate-800/70 dark:bg-slate-900 md:mx-4 mt-4"
       >
         <div v-if="leadersLoading" class="space-y-3">
           <USkeleton

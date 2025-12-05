@@ -66,6 +66,7 @@ const refreshTimer = ref<number | null>(null)
 const countdownTimer = ref<number | null>(null)
 const nextRefreshAt = ref<dayjs.Dayjs | null>(null)
 const countdownText = ref('—')
+const skeletonPlaceholders = Array.from({ length: 3 }, (_, index) => index)
 
 const editionLabels = {
   JAVA: 'Java 版',
@@ -349,6 +350,75 @@ onUnmounted(() => {
     >
       {{ error }}
     </div>
+
+    <Transition name="fade-expand" mode="out-in">
+      <div v-if="loading && !servers.length" class="flex flex-col gap-8">
+        <Motion
+          v-for="placeholder in skeletonPlaceholders"
+          :key="`server-skeleton-${placeholder}`"
+          as="div"
+          :initial="{ opacity: 0, filter: 'blur(10px)', y: 12 }"
+          :animate="{ opacity: 1, filter: 'blur(0px)', y: 0 }"
+          :transition="{ duration: 0.35, ease: 'easeOut' }"
+        >
+          <div class="space-y-2">
+            <USkeleton class="h-6 w-48" />
+            <USkeleton class="h-4 w-24" />
+            <USkeleton class="h-4 w-64" />
+          </div>
+
+          <div
+            class="mt-2 bg-white dark:bg-slate-700 p-3 border border-slate-200 dark:border-slate-600 rounded-lg"
+          >
+            <div class="grid gap-3 text-sm text-slate-700 dark:text-slate-200">
+              <div class="grid grid-cols-2 gap-2">
+                <div
+                  class="rounded-lg border border-slate-200 bg-white/60 p-3 text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 space-y-2"
+                >
+                  <USkeleton class="h-3 w-16" />
+                  <USkeleton class="h-7 w-24" />
+                  <USkeleton class="h-3 w-20" />
+                </div>
+                <div
+                  class="rounded-lg border border-slate-200 bg-white/60 p-3 text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 space-y-2"
+                >
+                  <USkeleton class="h-3 w-20" />
+                  <USkeleton class="h-7 w-24" />
+                  <USkeleton class="h-3 w-24" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-2">
+                <div
+                  class="rounded-lg border border-slate-200 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-950/60 space-y-2"
+                >
+                  <USkeleton class="h-3 w-16" />
+                  <USkeleton class="h-5 w-24" />
+                </div>
+                <div
+                  class="rounded-lg border border-slate-200 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-950/60 space-y-2"
+                >
+                  <USkeleton class="h-3 w-16" />
+                  <USkeleton class="h-5 w-20" />
+                </div>
+                <div
+                  class="rounded-lg border border-slate-200 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-950/60 space-y-2"
+                >
+                  <USkeleton class="h-3 w-20" />
+                  <USkeleton class="h-5 w-20" />
+                </div>
+              </div>
+            </div>
+
+            <div
+              class="relative mt-5 h-40 rounded-lg border border-slate-200 dark:border-slate-800 py-3 px-1"
+            >
+              <USkeleton class="h-full w-full rounded-lg" />
+            </div>
+          </div>
+        </Motion>
+      </div>
+    </Transition>
 
     <Transition name="fade-expand" mode="out-in">
       <div

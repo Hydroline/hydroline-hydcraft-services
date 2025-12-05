@@ -46,7 +46,9 @@ const contactLinks = [
           </h2>
         </div>
       </div>
-      <div class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide">
+      <div
+        class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide text-justify"
+      >
         <p>
           Hydroline 的雏形最初出现于 2023 年 7 月，以“数字氢气”（Digital
           HydCraft）的形式嵌入在服务器 Wiki
@@ -81,7 +83,9 @@ const contactLinks = [
           </h2>
         </div>
       </div>
-      <div class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide">
+      <div
+        class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide text-justify"
+      >
         <p>
           Hydroline HydCraft
           目前仍在持续迭代，感谢氢气工艺服务器内参与测试的各位玩家。
@@ -109,7 +113,9 @@ const contactLinks = [
           </h2>
         </div>
       </div>
-      <div class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide">
+      <div
+        class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide text-justify"
+      >
         <p>
           我们选择 TypeScript 作为开发语言，在项目结构上，选择了 Vue 3 + Nest +
           TS 的组合。Nest 是 Node
@@ -148,7 +154,9 @@ const contactLinks = [
           </h2>
         </div>
       </div>
-      <div class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide">
+      <div
+        class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide text-justify"
+      >
         <div class="flex flex-col gap-2">
           <div>
             <img
@@ -189,7 +197,9 @@ const contactLinks = [
           </h2>
         </div>
       </div>
-      <div class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide">
+      <div
+        class="space-y-3 text-slate-700 dark:text-slate-300 tracking-wide text-justify"
+      >
         <p>
           项目代码遵照私有协议进行发布，协议详情请参照仓库代码内的 LICENSE
           声明。未经许可禁止商用和二次发布。
