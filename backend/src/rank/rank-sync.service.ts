@@ -24,6 +24,7 @@ const BEACON_TIMEOUT_MS = 10000;
 const ADVANCEMENT_PAGE_SIZE = 1000;
 const ADVANCEMENT_MAX_PAGES = 10;
 const ADVANCEMENT_FETCH_CONCURRENCY = 6;
+const MAX_SYNC_AGE_MS = 24 * 60 * 60 * 1000;
 
 type BeaconIdentity = {
   player_uuid?: string | null;
@@ -97,7 +98,7 @@ export class RankSyncService implements OnModuleInit {
     void this.ensureInitialSync();
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async handleDailySync() {
     try {
       await this.beginSync(null, null, false);
@@ -123,9 +124,28 @@ export class RankSyncService implements OnModuleInit {
   }
 
   private async ensureInitialSync() {
-    const count = await this.prisma.rankPlayerSnapshot.count();
-    if (count === 0) {
-      await this.beginSync(null, null, false);
+    try {
+      const serverIds = await this.loadBeaconServerIds();
+      if (!serverIds.length) {
+        return;
+      }
+      const now = Date.now();
+      for (const serverId of serverIds) {
+        const latestUpdate =
+          await this.snapshotService.getLatestUpdate(serverId);
+        if (!latestUpdate) {
+          await this.beginSync(null, null, false);
+          return;
+        }
+        if (now - latestUpdate.getTime() > MAX_SYNC_AGE_MS) {
+          await this.beginSync(null, null, false);
+          return;
+        }
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to ensure initial rank sync: ${this.extractMessage(error)}`,
+      );
     }
   }
 
