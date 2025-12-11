@@ -19,6 +19,7 @@ import { PERMISSIONS } from '../auth/services/roles.service';
 import { CompanyService } from './company.service';
 import {
   AdminCompanyListQueryDto,
+  AdminCreateCompanyDto,
   AdminUpdateCompanyDto,
   CompanyActionDto,
 } from './dto/company.dto';
@@ -62,6 +63,14 @@ export class CompanyAdminController {
   ) {
     const userId = this.getUserId(req);
     return this.companyService.updateCompanyAsAdmin(id, userId, body);
+  }
+
+  @Post()
+  @RequirePermissions(PERMISSIONS.COMPANY_MANAGE_ADMIN)
+  @ApiOperation({ summary: '管理员直接创建公司/个体工商户' })
+  async create(@Body() body: AdminCreateCompanyDto, @Req() req: Request) {
+    const userId = this.getUserId(req);
+    return this.companyService.createCompanyAsAdmin(userId, body);
   }
 
   @Post(':id/actions')

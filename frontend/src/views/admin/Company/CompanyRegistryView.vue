@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAdminCompanyStore } from '@/stores/adminCompanies'
 import { useCompanyStore } from '@/stores/companies'
 import type {
+  AdminCreateCompanyPayload,
+  CompanyMemberUserRef,
   CompanyModel,
   CompanyStatus,
   CompanyVisibility,
@@ -22,7 +24,60 @@ const filters = reactive({
   typeId: undefined as string | undefined,
   industryId: undefined as string | undefined,
   search: '',
+  isIndividualBusiness: undefined as boolean | undefined,
 })
+
+const adminCreateModalOpen = ref(false)
+const adminCreateForm = reactive<AdminCreateCompanyPayload>({
+  name: '',
+  summary: '',
+  description: '',
+  typeId: undefined,
+  industryId: undefined,
+  isIndividualBusiness: false,
+  legalRepresentativeId: undefined,
+})
+const adminSearch = ref('')
+const adminCandidates = ref<CompanyMemberUserRef[]>([])
+const adminCandidateId = ref<string | null>(null)
+const adminCreating = ref(false)
+let adminSearchTimer: number | undefined
+
+const adminLegalOptions = computed(() =>
+  adminCandidates.value.map((user) => ({
+    value: user.id,
+    label: user.displayName || user.name || user.email || '未知用户',
+  })),
+)
+
+watch(
+  () => adminSearch.value,
+  (value) => {
+    if (!value.trim()) {
+      adminCandidates.value = []
+      adminCandidateId.value = null
+      adminCreateForm.legalRepresentativeId = undefined
+      return
+    }
+    if (adminSearchTimer) {
+      window.clearTimeout(adminSearchTimer)
+    }
+    adminSearchTimer = window.setTimeout(async () => {
+      try {
+        adminCandidates.value = await companyStore.searchUsers(value, 8)
+      } catch {
+        adminCandidates.value = []
+      }
+    }, 360)
+  },
+)
+
+watch(
+  () => adminCandidateId.value,
+  (value) => {
+    adminCreateForm.legalRepresentativeId = value ?? undefined
+  },
+)
 
 const selectedCompanyId = ref<string | null>(null)
 const adminForm = reactive({
@@ -51,6 +106,12 @@ const visibilityOptions: { label: string; value: CompanyVisibility }[] = [
   { label: '公开', value: 'PUBLIC' },
   { label: '仅成员', value: 'PRIVATE' },
   { label: '内部', value: 'INTERNAL' },
+]
+
+const isIndividualOptions: { label: string; value: boolean | undefined }[] = [
+  { label: '全部主体', value: undefined },
+  { label: '企业', value: false },
+  { label: '个体工商', value: true },
 ]
 
 const industries = computed(() => companyStore.meta?.industries ?? [])
@@ -83,6 +144,7 @@ const fetchCompanies = async (page = 1) => {
     status: filters.status,
     typeId: filters.typeId,
     industryId: filters.industryId,
+    isIndividualBusiness: filters.isIndividualBusiness,
     search: filters.search,
     page,
   })
@@ -169,6 +231,12 @@ onMounted(() => {
   void bootstrap()
 })
 
+onBeforeUnmount(() => {
+  if (adminSearchTimer) {
+    window.clearTimeout(adminSearchTimer)
+  }
+})
+
 watch(
   () => selectedCompany.value,
   (company) => {
@@ -236,6 +304,28 @@ const handleAction = async (actionKey: string) => {
     actionLoading.value = null
   }
 }
+
+const handleAdminCreate = async () => {
+  if (!adminCreateForm.name || !adminCreateForm.legalRepresentativeId) {
+    toast.add({ title: '姓名与法人必填', color: 'warning' })
+    return
+  }
+  adminCreating.value = true
+  try {
+    const company = await adminStore.createCompany(adminCreateForm)
+    toast.add({ title: '创建成功，已加入列表', color: 'primary' })
+    adminCreateModalOpen.value = false
+    await fetchCompanies(1)
+    await loadCompanyDetail(company.id)
+  } catch (error) {
+    toast.add({
+      title: (error as Error).message || '创建失败',
+      color: 'error',
+    })
+  } finally {
+    adminCreating.value = false
+  }
+}
 </script>
 
 <template>
@@ -271,6 +361,12 @@ const handleAction = async (actionKey: string) => {
             clearable
             placeholder="行业"
           />
+          <USelectMenu
+            v-model="filters.isIndividualBusiness"
+            :options="isIndividualOptions"
+            clearable
+            placeholder="主体类型"
+          />
           <UInput
             v-model="filters.search"
             placeholder="搜索公司"
@@ -278,6 +374,13 @@ const handleAction = async (actionKey: string) => {
             @keyup.enter="applyFilters"
           />
           <UButton color="primary" @click="applyFilters"> 查询 </UButton>
+          <UButton
+            color="primary"
+            variant="soft"
+            @click="adminCreateModalOpen = true"
+          >
+            新增主体
+          </UButton>
         </div>
       </div>
     </div>
@@ -540,5 +643,112 @@ const handleAction = async (actionKey: string) => {
         </div>
       </div>
     </div>
+
+    <UModal
+      :open="adminCreateModalOpen"
+      @update:open="(value) => (adminCreateModalOpen = value)"
+      :ui="{
+        content:
+          'w-full max-w-3xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+      }"
+    >
+      <template #content>
+        <div class="flex h-full flex-col">
+          <div
+            class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800"
+          >
+            <div>
+              <p
+                class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+              >
+                直接入库
+              </p>
+              <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+                管理员新增公司/个体
+              </h3>
+            </div>
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              @click="adminCreateModalOpen = false"
+            />
+          </div>
+          <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div class="space-y-2">
+                <label class="text-xs font-semibold text-slate-500">名称</label>
+                <UInput v-model="adminCreateForm.name" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-semibold text-slate-500">类型</label>
+                <USelectMenu
+                  v-model="adminCreateForm.typeId"
+                  :options="
+                    types.map((type) => ({ label: type.name, value: type.id }))
+                  "
+                  searchable
+                  placeholder="公司类型"
+                />
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-xs font-semibold text-slate-500">行业</label>
+              <USelectMenu
+                v-model="adminCreateForm.industryId"
+                :options="
+                  industries.map((industry) => ({
+                    label: industry.name,
+                    value: industry.id,
+                  }))
+                "
+                searchable
+                placeholder="行业"
+              />
+            </div>
+            <div class="space-y-2">
+              <label class="text-xs font-semibold text-slate-500">描述</label>
+              <UTextarea v-model="adminCreateForm.description" rows="4" />
+            </div>
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-slate-500">是否为个体工商户</p>
+              <USwitch v-model="adminCreateForm.isIndividualBusiness" />
+            </div>
+            <div class="space-y-2">
+              <label class="text-xs font-semibold text-slate-500">
+                搜索法人
+              </label>
+              <UInput v-model="adminSearch" placeholder="用户名、邮箱、昵称" />
+              <USelectMenu
+                v-model="adminCandidateId"
+                :options="adminLegalOptions"
+                placeholder="选择法人"
+                :clearable="false"
+                :disabled="adminLegalOptions.length === 0"
+              />
+            </div>
+          </div>
+          <div
+            class="border-t border-slate-200 px-6 py-4 dark:border-slate-800 flex justify-end gap-2"
+          >
+            <UButton
+              variant="ghost"
+              color="neutral"
+              @click="adminCreateModalOpen = false"
+            >
+              取消
+            </UButton>
+            <UButton
+              color="primary"
+              :loading="adminCreating"
+              @click="handleAdminCreate"
+            >
+              直接创建
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </section>
 </template>

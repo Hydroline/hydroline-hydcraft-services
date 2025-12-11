@@ -35,6 +35,13 @@ export interface CompanyType {
   category?: string | null
 }
 
+export interface CompanyPosition {
+  code: string
+  name: string
+  description?: string | null
+  role: CompanyMemberRole
+}
+
 export interface CompanyMemberUserRef {
   id: string
   name?: string | null
@@ -48,6 +55,7 @@ export interface CompanyMember {
   title?: string | null
   isPrimary: boolean
   user?: CompanyMemberUserRef | null
+  position?: CompanyPosition | null
 }
 
 export interface CompanyWorkflowInfo {
@@ -149,6 +157,7 @@ export interface CompanyModel {
   status: CompanyStatus
   visibility: CompanyVisibility
   category?: string | null
+  isIndividualBusiness?: boolean
   recommendationScore?: number | null
   highlighted?: boolean | null
   lastActiveAt?: string | null
@@ -158,6 +167,7 @@ export interface CompanyModel {
   members: CompanyMember[]
   owners: CompanyMember[]
   legalPerson?: CompanyMember | null
+  legalRepresentative?: CompanyMemberUserRef | null
   policies: CompanyPolicy[]
   auditTrail: CompanyAuditRecord[]
   applications: CompanyApplication[]
@@ -179,6 +189,7 @@ export interface CompanyRecommendation {
   type?: CompanyType | null
   industry?: CompanyIndustry | null
   legalPerson?: CompanyMember | null
+  legalRepresentative?: CompanyMemberUserRef | null
   owners: CompanyMember[]
   recommendationScore?: number | null
   lastActiveAt?: string | null
@@ -189,6 +200,32 @@ export interface CompanyMeta {
   industries: CompanyIndustry[]
   types: CompanyType[]
   memberWriteRoles: CompanyMemberRole[]
+  positions: CompanyPosition[]
+}
+
+export interface CompanyDashboardStats {
+  companyCount: number
+  individualBusinessCount: number
+  memberCount: number
+}
+
+export interface CompanyDailyRegistration {
+  date: string
+  total: number
+  individual: number
+}
+
+export interface AdminCreateCompanyPayload {
+  name: string
+  summary?: string
+  description?: string
+  typeId?: string
+  industryId?: string
+  isIndividualBusiness?: boolean
+  legalRepresentativeId?: string
+  category?: string
+  status?: CompanyStatus
+  visibility?: CompanyVisibility
 }
 
 export interface CreateCompanyApplicationPayload {
@@ -201,14 +238,7 @@ export interface CreateCompanyApplicationPayload {
   industryCode?: string
   category?: string
   isIndividualBusiness?: boolean
-  legalRepresentativeName?: string
-  legalRepresentativeCode?: string
-  contactEmail?: string
-  contactPhone?: string
-  contactAddress?: string
-  homepageUrl?: string
-  registrationNumber?: string
-  unifiedSocialCreditCode?: string
+  legalRepresentativeId?: string
 }
 
 export interface UpdateCompanyPayload {
@@ -221,4 +251,16 @@ export interface UpdateCompanyPayload {
   industryId?: string
   industryCode?: string
   extra?: Record<string, unknown>
+}
+
+export interface CompanyMemberInvitePayload {
+  userId: string
+  role?: CompanyMemberRole
+  title?: string
+  positionCode?: string
+}
+
+export interface CompanyMemberJoinPayload {
+  title?: string
+  positionCode?: string
 }

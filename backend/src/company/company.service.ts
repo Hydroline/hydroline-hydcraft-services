@@ -4,25 +4,33 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import {
   Company,
   CompanyApplicationStatus,
+  CompanyCategory,
   CompanyIndustry,
   CompanyMemberRole,
+  CompanyPosition,
   CompanyStatus,
   CompanyType,
   CompanyVisibility,
   Prisma,
+  WorkflowInstanceStatus,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import {
   AdminCompanyListQueryDto,
+  AdminCreateCompanyDto,
   AdminUpdateCompanyDto,
   CompanyActionDto,
+  CompanyMemberInviteDto,
+  CompanyMemberJoinDto,
   CompanyRecommendationsQueryDto,
+  CompanyUserSearchDto,
   CreateCompanyApplicationDto,
   UpdateCompanyProfileDto,
 } from './dto/company.dto';
@@ -58,6 +66,7 @@ const companyInclude = Prisma.validator<Prisma.CompanyInclude>()({
           },
         },
       },
+      position: true,
     },
   },
   policies: {
@@ -83,10 +92,155 @@ type CompanyWithRelations = Prisma.CompanyGetPayload<{
 type CompanyMetaResult = {
   industries: CompanyIndustry[];
   types: CompanyType[];
+  positions: CompanyPosition[];
 };
 
+type CompanyRegistrationStatRow = {
+  date: string;
+  total: number;
+  individual: number;
+};
+
+type CompanyDashboardStats = {
+  companyCount: number;
+  individualBusinessCount: number;
+  memberCount: number;
+};
+
+const DEFAULT_INDUSTRIES = [
+  {
+    code: 'it-service',
+    name: '信息技术与服务',
+    description: '软件、互联网、数字化运营服务。',
+  },
+  {
+    code: 'manufacturing',
+    name: '制造业',
+    description: '传统与高端制造、自动化、装备。',
+  },
+  {
+    code: 'finance',
+    name: '金融与投资',
+    description: '银行、支付、虚拟经济与资产管理。',
+  },
+  {
+    code: 'culture',
+    name: '文化创意',
+    description: '媒体、设计、文娱和内容生产。',
+  },
+  {
+    code: 'education',
+    name: '教育与培训',
+    description: '教育科技、职业培训与认证。',
+  },
+  {
+    code: 'logistics',
+    name: '交通与物流',
+    description: '运输、仓储、供应链与港航。',
+  },
+  {
+    code: 'energy',
+    name: '能源与环境',
+    description: '新能源、环保、能源服务。',
+  },
+  {
+    code: 'healthcare',
+    name: '医疗与健康',
+    description: '医疗、康复、营养与保健。',
+  },
+  {
+    code: 'real-estate',
+    name: '房地产与建设',
+    description: '地产开发、建筑施工与物业。',
+  },
+  {
+    code: 'retail',
+    name: '批发与零售',
+    description: '消费零售、供应链与分销。',
+  },
+];
+
+const DEFAULT_COMPANY_TYPES = [
+  {
+    code: 'limited_liability',
+    name: '有限责任公司',
+    description: '中国最常见的公司形式，股东以出资额为限对公司承担责任。',
+    category: CompanyCategory.ENTERPRISE,
+  },
+  {
+    code: 'joint_stock',
+    name: '股份有限公司',
+    description: '适用于资本较大、计划引入多方投资的实体。',
+    category: CompanyCategory.ENTERPRISE,
+  },
+  {
+    code: 'foreign_invested',
+    name: '外商投资企业',
+    description: '对接外资与全球合作的特殊类型。',
+    category: CompanyCategory.ENTERPRISE,
+  },
+  {
+    code: 'individual_business',
+    name: '个体工商户',
+    description: '天然适合玩家单人经营的小微模式，允许少量成员。',
+    category: CompanyCategory.INDIVIDUAL,
+  },
+  {
+    code: 'organization',
+    name: '事业机构 / 组织',
+    description: '用于社团、联盟或公共事业类运营。',
+    category: CompanyCategory.ORGANIZATION,
+  },
+];
+
+const DEFAULT_POSITIONS = [
+  {
+    code: 'legal_person',
+    name: '法定代表人',
+    description: '对外承担法律责任的法人，具备流程审批权。',
+    role: CompanyMemberRole.LEGAL_PERSON,
+  },
+  {
+    code: 'owner',
+    name: '股东 / 持有人',
+    description: '拥有公司份额，决定重大运营方向。',
+    role: CompanyMemberRole.OWNER,
+  },
+  {
+    code: 'board_director',
+    name: '董事',
+    description: '董事会成员，负责制度与监督。',
+    role: CompanyMemberRole.EXECUTIVE,
+  },
+  {
+    code: 'general_manager',
+    name: '总经理 / 经理',
+    description: '负责日常运营与团队管理。',
+    role: CompanyMemberRole.MANAGER,
+  },
+  {
+    code: 'auditor',
+    name: '监事 / 审计',
+    description: '监督公司财务与合规。',
+    role: CompanyMemberRole.AUDITOR,
+  },
+  {
+    code: 'staff',
+    name: '职员 / 成员',
+    description: '普通职级，承担执行任务。',
+    role: CompanyMemberRole.MEMBER,
+  },
+];
+
+const INVITEABLE_MEMBER_ROLES: CompanyMemberRole[] = [
+  CompanyMemberRole.MEMBER,
+  CompanyMemberRole.MANAGER,
+  CompanyMemberRole.EXECUTIVE,
+  CompanyMemberRole.AUDITOR,
+];
+
 @Injectable()
-export class CompanyService {
+export class CompanyService implements OnModuleInit {
   private readonly logger = new Logger(CompanyService.name);
 
   constructor(
@@ -94,10 +248,18 @@ export class CompanyService {
     private readonly workflowService: WorkflowService,
   ) {}
 
+  async onModuleInit() {
+    try {
+      await this.ensureBaselineMetadata();
+    } catch (error) {
+      this.logger.warn(`加载工商基础配置失败: ${error}`);
+    }
+  }
+
   async getMeta(): Promise<
     CompanyMetaResult & { memberWriteRoles: CompanyMemberRole[] }
   > {
-    const [industries, types] = await this.prisma.$transaction([
+    const [industries, types, positions] = await this.prisma.$transaction([
       this.prisma.companyIndustry.findMany({
         where: { isActive: true },
         orderBy: { name: 'asc' },
@@ -105,12 +267,57 @@ export class CompanyService {
       this.prisma.companyType.findMany({
         orderBy: { name: 'asc' },
       }),
+      this.prisma.companyPosition.findMany({
+        orderBy: { name: 'asc' },
+      }),
     ]);
     return {
       industries,
       types,
+      positions,
       memberWriteRoles: COMPANY_MEMBER_WRITE_ROLES,
     };
+  }
+
+  async getDailyRegistrations(days?: number) {
+    const span = Math.min(Math.max(days ?? 30, 7), 90);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (span - 1));
+    const rows = await this.prisma.$queryRaw<
+      {
+        date: string;
+        total: number | Prisma.Decimal;
+        individual: number | Prisma.Decimal;
+      }[]
+    >(Prisma.sql`
+      SELECT
+        to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS "date",
+        COUNT(*) AS "total",
+        SUM(CASE WHEN "isIndividualBusiness" THEN 1 ELSE 0 END) AS "individual"
+      FROM "companies"
+      WHERE "createdAt" >= ${start}
+      GROUP BY date
+      ORDER BY date ASC
+    `);
+    const normalized = rows.map((row) => ({
+      date: row.date,
+      total: Number(row.total ?? 0),
+      individual: Number(row.individual ?? 0),
+    }));
+    const map = new Map(normalized.map((row) => [row.date, row]));
+    const stats: CompanyRegistrationStatRow[] = [];
+    for (let i = 0; i < span; i += 1) {
+      const current = new Date(start);
+      current.setDate(current.getDate() + i);
+      const mark = current.toISOString().slice(0, 10);
+      if (map.has(mark)) {
+        stats.push(map.get(mark)!);
+      } else {
+        stats.push({ date: mark, individual: 0, total: 0 });
+      }
+    }
+    return stats;
   }
 
   async listRecommendations(query: CompanyRecommendationsQueryDto) {
@@ -181,6 +388,39 @@ export class CompanyService {
     });
   }
 
+  async searchUsers(query: CompanyUserSearchDto) {
+    const keyword = query.query.trim();
+    if (!keyword) {
+      return [];
+    }
+    const limit = Math.min(query.limit ?? 20, 100);
+    return this.prisma.user.findMany({
+      where: {
+        OR: [
+          { name: { contains: keyword, mode: 'insensitive' } },
+          { email: { contains: keyword, mode: 'insensitive' } },
+          {
+            profile: {
+              displayName: { contains: keyword, mode: 'insensitive' },
+            },
+          },
+        ],
+      },
+      take: limit,
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        profile: {
+          select: {
+            displayName: true,
+          },
+        },
+      },
+    });
+  }
+
   async upsertIndustry(dto: UpsertCompanyIndustryDto) {
     const payload = {
       name: dto.name,
@@ -241,8 +481,13 @@ export class CompanyService {
       include: companyInclude,
       orderBy: { createdAt: 'desc' },
     });
-
-    return companies.map((company) => this.serializeCompany(company, userId));
+    const stats = this.calculateDashboardStats(companies);
+    return {
+      stats,
+      companies: companies.map((company) =>
+        this.serializeCompany(company, userId),
+      ),
+    };
   }
 
   async getCompanyDetail(id: string, viewerId?: string | null) {
@@ -262,11 +507,24 @@ export class CompanyService {
       dto.industryId,
       dto.industryCode,
     );
+    const legalRepresentativeId = dto.legalRepresentativeId ?? userId;
+    const legalRepresentative = await this.prisma.user.findUnique({
+      where: { id: legalRepresentativeId },
+      select: {
+        id: true,
+        name: true,
+        profile: {
+          select: {
+            displayName: true,
+          },
+        },
+      },
+    });
+    if (!legalRepresentative) {
+      throw new BadRequestException('未找到法人用户');
+    }
     const slug = await this.generateUniqueSlug(dto.name);
-    const workflowCode =
-      dto.workflowCode ??
-      type?.defaultWorkflow ??
-      DEFAULT_COMPANY_WORKFLOW_CODE;
+    const workflowCode = type?.defaultWorkflow ?? DEFAULT_COMPANY_WORKFLOW_CODE;
 
     const company = await this.prisma.company.create({
       data: {
@@ -278,14 +536,11 @@ export class CompanyService {
         industryId: industry?.id ?? null,
         category: dto.category ?? type?.category ?? undefined,
         isIndividualBusiness: dto.isIndividualBusiness ?? false,
-        legalNameSnapshot: dto.legalRepresentativeName,
-        legalIdSnapshot: dto.legalRepresentativeCode,
-        contactEmail: dto.contactEmail,
-        contactPhone: dto.contactPhone,
-        contactAddress: dto.contactAddress,
-        homepageUrl: dto.homepageUrl,
-        registrationNumber: dto.registrationNumber,
-        unifiedSocialCreditCode: dto.unifiedSocialCreditCode,
+        legalRepresentativeId,
+        legalNameSnapshot:
+          legalRepresentative.profile?.displayName ??
+          legalRepresentative.name ??
+          undefined,
         workflowDefinitionCode: workflowCode,
         status: CompanyStatus.PENDING_REVIEW,
         visibility: CompanyVisibility.PRIVATE,
@@ -320,6 +575,9 @@ export class CompanyService {
       },
     });
 
+    const ownerPosition = await this.resolvePosition('owner');
+    const legalPosition = await this.resolvePosition('legal_person');
+
     await this.prisma.company.update({
       where: { id: company.id },
       data: {
@@ -333,12 +591,14 @@ export class CompanyService {
                 role: CompanyMemberRole.OWNER,
                 title: '公司持有者',
                 isPrimary: true,
+                positionCode: ownerPosition?.code,
               },
               {
-                userId,
+                userId: legalRepresentativeId,
                 role: CompanyMemberRole.LEGAL_PERSON,
                 title: '法定代表人',
                 isPrimary: true,
+                positionCode: legalPosition?.code,
               },
             ],
             skipDuplicates: true,
@@ -392,6 +652,90 @@ export class CompanyService {
     return this.serializeCompany(updated, userId);
   }
 
+  async inviteMember(
+    companyId: string,
+    actorId: string,
+    dto: CompanyMemberInviteDto,
+  ) {
+    await this.assertMember(companyId, actorId);
+    const role = dto.role ?? CompanyMemberRole.MEMBER;
+    if (!INVITEABLE_MEMBER_ROLES.includes(role)) {
+      throw new BadRequestException('不允许的成员角色');
+    }
+    await this.findCompanyOrThrow(companyId);
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+    });
+    if (!targetUser) {
+      throw new BadRequestException('无效的成员用户');
+    }
+    const existingMember = await this.prisma.companyMember.findFirst({
+      where: {
+        companyId,
+        userId: dto.userId,
+      },
+    });
+    if (existingMember) {
+      throw new BadRequestException('该用户已经是成员');
+    }
+    const position = await this.resolvePosition(dto.positionCode ?? 'staff');
+    await this.prisma.companyMember.create({
+      data: {
+        companyId,
+        userId: dto.userId,
+        role,
+        title: dto.title,
+        positionCode: position?.code,
+      },
+    });
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        lastActiveAt: new Date(),
+      },
+    });
+    const refreshed = await this.findCompanyOrThrow(companyId);
+    return this.serializeCompany(refreshed, actorId);
+  }
+
+  async joinCompany(
+    companyId: string,
+    userId: string,
+    dto: CompanyMemberJoinDto,
+  ) {
+    const company = await this.findCompanyOrThrow(companyId);
+    if (company.status !== CompanyStatus.ACTIVE) {
+      throw new BadRequestException('只能加入已生效的主体');
+    }
+    const existingMember = await this.prisma.companyMember.findFirst({
+      where: {
+        companyId,
+        userId,
+      },
+    });
+    if (existingMember) {
+      throw new BadRequestException('你已经是该主体的成员');
+    }
+    const position = await this.resolvePosition(dto.positionCode ?? 'staff');
+    await this.prisma.companyMember.create({
+      data: {
+        companyId,
+        userId,
+        role: CompanyMemberRole.MEMBER,
+        title: dto.title,
+        positionCode: position?.code,
+      },
+    });
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        lastActiveAt: new Date(),
+      },
+    });
+    const refreshed = await this.findCompanyOrThrow(companyId);
+    return this.serializeCompany(refreshed, userId);
+  }
+
   async updateCompanyAsAdmin(
     companyId: string,
     userId: string,
@@ -426,6 +770,116 @@ export class CompanyService {
     return this.serializeCompany(updated, userId);
   }
 
+  async createCompanyAsAdmin(actorId: string, dto: AdminCreateCompanyDto) {
+    await this.workflowService.ensureDefinition(
+      DEFAULT_COMPANY_WORKFLOW_DEFINITION,
+    );
+    const type = await this.resolveCompanyType(dto.typeId, dto.typeCode, true);
+    const industry = await this.resolveIndustry(
+      dto.industryId,
+      dto.industryCode,
+      true,
+    );
+    const ownerId = dto.ownerId ?? actorId;
+    const legalRepresentativeId = dto.legalRepresentativeId ?? ownerId;
+    const ownerExists = await this.prisma.user.findUnique({
+      where: { id: ownerId },
+    });
+    if (!ownerExists) {
+      throw new BadRequestException('无效的持有人');
+    }
+    const legalRepresentative = await this.prisma.user.findUnique({
+      where: { id: legalRepresentativeId },
+      select: {
+        id: true,
+        name: true,
+        profile: { select: { displayName: true } },
+      },
+    });
+    if (!legalRepresentative) {
+      throw new BadRequestException('无效的法人用户');
+    }
+    const slug = await this.generateUniqueSlug(dto.name);
+    const workflowCode = DEFAULT_COMPANY_WORKFLOW_CODE;
+    const company = await this.prisma.company.create({
+      data: {
+        name: dto.name,
+        slug,
+        summary: dto.summary,
+        description: dto.description,
+        typeId: type?.id ?? null,
+        industryId: industry?.id ?? null,
+        category: dto.category ?? type?.category ?? CompanyCategory.ENTERPRISE,
+        isIndividualBusiness: dto.isIndividualBusiness ?? false,
+        legalRepresentativeId,
+        legalNameSnapshot:
+          legalRepresentative.profile?.displayName ??
+          legalRepresentative.name ??
+          undefined,
+        workflowDefinitionCode: workflowCode,
+        status: dto.status ?? CompanyStatus.ACTIVE,
+        visibility: dto.visibility ?? CompanyVisibility.PUBLIC,
+        createdById: ownerId,
+        updatedById: actorId,
+        lastActiveAt: new Date(),
+        approvedAt: new Date(),
+        activatedAt: new Date(),
+        recommendationScore: 0,
+      },
+    });
+    const workflowInstance = await this.workflowService.createInstance({
+      definitionCode: workflowCode,
+      targetType: 'company',
+      targetId: company.id,
+      createdById: actorId,
+      context: {
+        name: dto.name,
+        typeCode: type?.code,
+        industryCode: industry?.code,
+      },
+    });
+    await this.prisma.workflowInstance.update({
+      where: { id: workflowInstance.id },
+      data: {
+        currentState: 'approved',
+        status: WorkflowInstanceStatus.COMPLETED,
+        completedAt: new Date(),
+      },
+    });
+    await this.prisma.company.update({
+      where: { id: company.id },
+      data: {
+        workflowInstanceId: workflowInstance.id,
+        workflowState: 'approved',
+      },
+    });
+    const ownerPosition = await this.resolvePosition('owner');
+    const legalPosition = await this.resolvePosition('legal_person');
+    await this.prisma.companyMember.createMany({
+      data: [
+        {
+          companyId: company.id,
+          userId: ownerId,
+          role: CompanyMemberRole.OWNER,
+          title: '公司持有者',
+          isPrimary: true,
+          positionCode: ownerPosition?.code,
+        },
+        {
+          companyId: company.id,
+          userId: legalRepresentativeId,
+          role: CompanyMemberRole.LEGAL_PERSON,
+          title: '法定代表人',
+          isPrimary: true,
+          positionCode: legalPosition?.code,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    const refreshed = await this.findCompanyOrThrow(company.id);
+    return this.serializeCompany(refreshed);
+  }
+
   async adminList(query: AdminCompanyListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -438,6 +892,9 @@ export class CompanyService {
     }
     if (query.industryId) {
       where.industryId = query.industryId;
+    }
+    if (query.isIndividualBusiness !== undefined) {
+      where.isIndividualBusiness = query.isIndividualBusiness;
     }
     if (query.search) {
       const keyword = query.search.trim();
@@ -770,6 +1227,14 @@ export class CompanyService {
               displayName: member.user.profile?.displayName ?? null,
             }
           : null,
+        position: member.position
+          ? {
+              code: member.position.code,
+              name: member.position.name,
+              description: member.position.description ?? null,
+              role: member.position.role,
+            }
+          : null,
       })),
       legalPerson: this.pickMember(
         company.members,
@@ -820,6 +1285,98 @@ export class CompanyService {
       this.logger.warn(`解析流程配置失败: ${error}`);
       return [];
     }
+  }
+
+  private calculateDashboardStats(companies: CompanyWithRelations[]) {
+    const companyCount = companies.length;
+    const individualBusinessCount = companies.filter(
+      (company) => company.isIndividualBusiness,
+    ).length;
+    const memberCount = companies.reduce(
+      (sum, company) => sum + company.members.length,
+      0,
+    );
+    return {
+      companyCount,
+      individualBusinessCount,
+      memberCount,
+    };
+  }
+
+  private async ensureBaselineMetadata() {
+    await Promise.all([
+      this.ensureIndustries(),
+      this.ensureTypes(),
+      this.ensurePositions(),
+    ]);
+  }
+
+  private async ensureIndustries() {
+    await Promise.all(
+      DEFAULT_INDUSTRIES.map((industry) =>
+        this.prisma.companyIndustry.upsert({
+          where: { code: industry.code },
+          update: {
+            name: industry.name,
+            description: industry.description,
+            isActive: true,
+          },
+          create: {
+            ...industry,
+            isActive: true,
+          },
+        }),
+      ),
+    );
+  }
+
+  private async ensureTypes() {
+    await Promise.all(
+      DEFAULT_COMPANY_TYPES.map((type) =>
+        this.prisma.companyType.upsert({
+          where: { code: type.code },
+          update: {
+            name: type.name,
+            description: type.description,
+            category: type.category,
+          },
+          create: {
+            ...type,
+          },
+        }),
+      ),
+    );
+  }
+
+  private async ensurePositions() {
+    await Promise.all(
+      DEFAULT_POSITIONS.map((position) =>
+        this.prisma.companyPosition.upsert({
+          where: { code: position.code },
+          update: {
+            name: position.name,
+            description: position.description,
+            role: position.role,
+          },
+          create: {
+            ...position,
+          },
+        }),
+      ),
+    );
+  }
+
+  private async resolvePosition(code?: string | null) {
+    if (!code) {
+      return null;
+    }
+    const position = await this.prisma.companyPosition.findUnique({
+      where: { code },
+    });
+    if (!position) {
+      throw new BadRequestException('无效的职位代码');
+    }
+    return position;
   }
 
   private toJsonValue(value: unknown) {

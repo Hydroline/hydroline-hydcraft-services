@@ -66,6 +66,7 @@ model User {
   workflowActions         WorkflowAction[]       @relation("WorkflowActionActor")
   companiesCreated        Company[]              @relation("CompanyCreatedBy")
   companiesUpdated        Company[]              @relation("CompanyUpdatedBy")
+  legalRepresentativeCompanies Company[]        @relation("CompanyLegalRepresentative")
   workflowInstancesCreated WorkflowInstance[]    @relation("WorkflowInstanceCreator")
 
   @@map("users")
@@ -810,6 +811,18 @@ model CompanyType {
   @@map("company_types")
 }
 
+model CompanyPosition {
+  code        String             @id
+  name        String
+  description String?
+  role        CompanyMemberRole
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  members     CompanyMember[]    @relation("CompanyMemberPosition")
+
+  @@map("company_positions")
+}
+
 model Company {
   id                      String                 @id @default(uuid())
   name                    String
@@ -829,6 +842,7 @@ model Company {
   isIndividualBusiness    Boolean                @default(false)
   typeId                  String?
   industryId              String?
+  legalRepresentativeId   String?
   createdById             String?
   updatedById             String?
   workflowInstanceId      String?                @unique
@@ -853,6 +867,7 @@ model Company {
   industry                CompanyIndustry?       @relation(fields: [industryId], references: [id])
   createdBy               User?                  @relation("CompanyCreatedBy", fields: [createdById], references: [id])
   updatedBy               User?                  @relation("CompanyUpdatedBy", fields: [updatedById], references: [id])
+  legalRepresentative     User?                  @relation("CompanyLegalRepresentative", fields: [legalRepresentativeId], references: [id])
   workflowInstance        WorkflowInstance?      @relation("CompanyWorkflowInstance", fields: [workflowInstanceId], references: [id])
   members                 CompanyMember[]
   policies                CompanyPolicy[]
@@ -870,6 +885,7 @@ model CompanyMember {
   companyId   String
   userId      String
   role        CompanyMemberRole
+  positionCode String?
   title       String?
   permissions String[]           @default([])
   isPrimary   Boolean            @default(false)
@@ -878,6 +894,7 @@ model CompanyMember {
   updatedAt   DateTime           @updatedAt
   company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user        User               @relation("CompanyMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  position    CompanyPosition?   @relation("CompanyMemberPosition", fields: [positionCode], references: [code])
 
   @@unique([companyId, userId, role], map: "uq_company_member_role")
   @@index([userId], map: "idx_company_member_user")

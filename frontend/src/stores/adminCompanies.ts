@@ -1,12 +1,17 @@
 import { defineStore } from 'pinia'
 import { apiFetch } from '@/utils/api'
 import { useAuthStore } from '@/stores/auth'
-import type { CompanyModel, CompanyStatus } from '@/types/company'
+import type {
+  AdminCreateCompanyPayload,
+  CompanyModel,
+  CompanyStatus,
+} from '@/types/company'
 
 export interface AdminCompanyFilter {
   status?: CompanyStatus
   typeId?: string
   industryId?: string
+  isIndividualBusiness?: boolean
   search?: string
   page?: number
   pageSize?: number
@@ -37,6 +42,12 @@ export const useAdminCompanyStore = defineStore('admin-companies', {
         if (filters.status) query.set('status', filters.status)
         if (filters.typeId) query.set('typeId', filters.typeId)
         if (filters.industryId) query.set('industryId', filters.industryId)
+        if (filters.isIndividualBusiness !== undefined) {
+          query.set(
+            'isIndividualBusiness',
+            String(filters.isIndividualBusiness),
+          )
+        }
         if (filters.search) query.set('search', filters.search)
         query.set('page', String(filters.page ?? this.page))
         query.set('pageSize', String(filters.pageSize ?? this.pageSize))
@@ -99,6 +110,18 @@ export const useAdminCompanyStore = defineStore('admin-companies', {
         this.items[index] = result
       }
       return result
+    },
+    async createCompany(payload: AdminCreateCompanyPayload) {
+      const authStore = useAuthStore()
+      const company = await apiFetch<CompanyModel>('/admin/companies', {
+        method: 'POST',
+        body: payload,
+        token: authStore.token,
+      })
+      this.items.unshift(company)
+      this.total += 1
+      this.selected = company
+      return company
     },
   },
 })

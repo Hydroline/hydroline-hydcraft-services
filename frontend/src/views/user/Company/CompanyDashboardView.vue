@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCompanyStore } from '@/stores/companies'
 import CompanyStatusBadge from '@/components/company/CompanyStatusBadge.vue'
@@ -7,6 +7,8 @@ import CompanyApplicationForm from '@/components/company/CompanyApplicationForm.
 import CompanyProfileForm from '@/components/company/CompanyProfileForm.vue'
 import CompanyTimeline from '@/components/company/CompanyTimeline.vue'
 import type {
+  CompanyMemberUserRef,
+  CompanyModel,
   CreateCompanyApplicationPayload,
   UpdateCompanyPayload,
 } from '@/types/company'
@@ -24,29 +26,6 @@ const refreshDashboard = async () => {
     selectedCompanyId.value = companyStore.dashboard[0]?.id ?? null
   }
 }
-
-onMounted(async () => {
-  await companyStore.fetchMeta()
-  await refreshDashboard()
-})
-
-watch(
-  () => authStore.isAuthenticated,
-  (isAuth) => {
-    if (isAuth) {
-      void refreshDashboard()
-    }
-  },
-)
-
-watch(
-  () => companyStore.dashboard.length,
-  (length) => {
-    if (length > 0 && !selectedCompanyId.value) {
-      selectedCompanyId.value = companyStore.dashboard[0]?.id ?? null
-    }
-  },
-)
 
 const selectedCompany = computed(() => {
   if (!selectedCompanyId.value) {
@@ -71,9 +50,146 @@ const handleApply = async (payload: CreateCompanyApplicationPayload) => {
     const company = await companyStore.apply(payload)
     selectedCompanyId.value = company.id
     toast.add({ title: '申请已提交，等待审核', color: 'primary' })
+    applicationModalOpen.value = false
   } catch (error) {
     const message = (error as Error).message || '提交失败'
     toast.add({ title: message, color: 'error' })
+  }
+}
+
+const applicationModalOpen = ref(false)
+const inviteModalOpen = ref(false)
+const joinModalOpen = ref(false)
+const inviteKeyword = ref('')
+const inviteCandidates = ref<CompanyMemberUserRef[]>([])
+const inviteCandidateId = ref<string | null>(null)
+const inviteTitle = ref('')
+const invitePositionCode = ref<string | null>(null)
+const inviteLoading = ref(false)
+const joinTargetCompany = ref<CompanyModel | null>(null)
+const joinPositionCode = ref<string | null>(null)
+const joinTitle = ref('')
+const joinLoading = ref(false)
+const stats = computed(() => companyStore.dashboardStats)
+const metaPositions = computed(() => companyStore.meta?.positions ?? [])
+const recommendedJoinTargets = computed(
+  () => companyStore.recommendations.active,
+)
+const selectedInvitePosition = computed(
+  () =>
+    metaPositions.value.find(
+      (position) => position.code === invitePositionCode.value,
+    ) ?? null,
+)
+const selectedJoinPosition = computed(
+  () =>
+    metaPositions.value.find(
+      (position) => position.code === joinPositionCode.value,
+    ) ?? null,
+)
+const inviteOptions = computed(() =>
+  inviteCandidates.value.map((user) => ({
+    value: user.id,
+    label: user.displayName || user.name || user.email || '未知玩家',
+  })),
+)
+const positionOptions = computed(() =>
+  metaPositions.value.map((position) => ({
+    value: position.code,
+    label: `${position.name} · ${position.description || '权责岗位'}`,
+  })),
+)
+let inviteSearchTimer: number | undefined
+
+watch(
+  () => companyStore.dashboard.length,
+  (length) => {
+    if (length > 0 && !selectedCompanyId.value) {
+      selectedCompanyId.value = companyStore.dashboard[0]?.id ?? null
+    }
+  },
+)
+
+watch(
+  () => inviteKeyword.value,
+  (value) => {
+    if (!value.trim()) {
+      inviteCandidates.value = []
+      inviteCandidateId.value = null
+      return
+    }
+    if (inviteSearchTimer) {
+      window.clearTimeout(inviteSearchTimer)
+    }
+    inviteSearchTimer = window.setTimeout(async () => {
+      try {
+        inviteCandidates.value = await companyStore.searchUsers(value, 8)
+      } catch (error) {
+        toast.add({
+          title: (error as Error).message || '搜索失败',
+          color: 'error',
+        })
+      }
+    }, 360)
+  },
+)
+
+const openInviteModal = () => {
+  inviteCandidateId.value = null
+  inviteKeyword.value = ''
+  inviteCandidates.value = []
+  invitePositionCode.value = metaPositions.value[0]?.code ?? null
+  inviteTitle.value = ''
+  inviteModalOpen.value = true
+}
+
+const openJoinModal = (company: CompanyModel) => {
+  joinTargetCompany.value = company
+  joinPositionCode.value = metaPositions.value[0]?.code ?? null
+  joinTitle.value = ''
+  joinModalOpen.value = true
+}
+
+const handleInvite = async () => {
+  if (!selectedCompany.value || !inviteCandidateId.value) return
+  inviteLoading.value = true
+  try {
+    await companyStore.inviteMember(selectedCompany.value.id, {
+      userId: inviteCandidateId.value,
+      role: selectedInvitePosition.value?.role,
+      positionCode: selectedInvitePosition.value?.code,
+      title: inviteTitle.value || selectedInvitePosition.value?.name,
+    })
+    toast.add({ title: '已发出邀请', color: 'primary' })
+    inviteModalOpen.value = false
+  } catch (error) {
+    toast.add({
+      title: (error as Error).message || '邀请失败',
+      color: 'error',
+    })
+  } finally {
+    inviteLoading.value = false
+  }
+}
+
+const handleJoin = async () => {
+  if (!joinTargetCompany.value) return
+  joinLoading.value = true
+  try {
+    await companyStore.joinCompany(joinTargetCompany.value.id, {
+      title: joinTitle.value,
+      positionCode: selectedJoinPosition.value?.code,
+    })
+    toast.add({ title: '申请加入已提交', color: 'primary' })
+    joinModalOpen.value = false
+    joinTargetCompany.value = null
+  } catch (error) {
+    toast.add({
+      title: (error as Error).message || '加入失败',
+      color: 'error',
+    })
+  } finally {
+    joinLoading.value = false
   }
 }
 
@@ -91,6 +207,61 @@ const handleUpdate = async (payload: UpdateCompanyPayload) => {
     saving.value = false
   }
 }
+
+onMounted(async () => {
+  await companyStore.fetchMeta()
+  await refreshDashboard()
+  companyStore.fetchRecommendations('recent')
+  companyStore.fetchRecommendations('active')
+})
+
+watch(
+  () => authStore.isAuthenticated,
+  (isAuth) => {
+    if (isAuth) {
+      void refreshDashboard()
+    }
+  },
+)
+
+watch(
+  () => companyStore.dashboard.length,
+  (length) => {
+    if (length > 0 && !selectedCompanyId.value) {
+      selectedCompanyId.value = companyStore.dashboard[0]?.id ?? null
+    }
+  },
+)
+
+watch(
+  () => inviteKeyword.value,
+  (value) => {
+    if (!value.trim()) {
+      inviteCandidates.value = []
+      inviteCandidateId.value = null
+      return
+    }
+    if (inviteSearchTimer) {
+      window.clearTimeout(inviteSearchTimer)
+    }
+    inviteSearchTimer = window.setTimeout(async () => {
+      try {
+        inviteCandidates.value = await companyStore.searchUsers(value, 8)
+      } catch (error) {
+        toast.add({
+          title: (error as Error).message || '搜索失败',
+          color: 'error',
+        })
+      }
+    }, 360)
+  },
+)
+
+onBeforeUnmount(() => {
+  if (inviteSearchTimer) {
+    window.clearTimeout(inviteSearchTimer)
+  }
+})
 </script>
 
 <template>
@@ -100,6 +271,42 @@ const handleUpdate = async (payload: UpdateCompanyPayload) => {
         <UIcon name="i-lucide-arrow-left" />
         返回概览
       </UButton>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="rounded-3xl border border-slate-200 bg-white/90 px-5 py-4">
+        <p
+          class="text-xs font-semibold uppercase tracking-widest text-slate-500"
+        >
+          我的主体数量
+        </p>
+        <p class="text-3xl font-semibold text-slate-900">
+          {{ stats.companyCount }}
+        </p>
+        <p class="text-xs text-slate-500">跨公司、个体工商等主体数量总和。</p>
+      </div>
+      <div class="rounded-3xl border border-slate-200 bg-white/90 px-5 py-4">
+        <p
+          class="text-xs font-semibold uppercase tracking-widest text-slate-500"
+        >
+          个体工商数量
+        </p>
+        <p class="text-3xl font-semibold text-slate-900">
+          {{ stats.individualBusinessCount }}
+        </p>
+        <p class="text-xs text-slate-500">登记为个体工商户的条目。</p>
+      </div>
+      <div class="rounded-3xl border border-slate-200 bg-white/90 px-5 py-4">
+        <p
+          class="text-xs font-semibold uppercase tracking-widest text-slate-500"
+        >
+          已加入职员数
+        </p>
+        <p class="text-3xl font-semibold text-slate-900">
+          {{ stats.memberCount }}
+        </p>
+        <p class="text-xs text-slate-500">当前拥有的职员（含法人/高管）。</p>
+      </div>
     </div>
 
     <div class="grid gap-6 lg:grid-cols-3">
@@ -159,22 +366,28 @@ const handleUpdate = async (payload: UpdateCompanyPayload) => {
         </div>
       </UCard>
 
-      <UCard>
-        <template #header>
-          <div>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
-              提交注册申请
-            </h3>
-            <p class="text-sm text-slate-500">成功后管理员会在后台审批。</p>
-          </div>
-        </template>
-        <CompanyApplicationForm
-          :industries="industries"
-          :types="types"
-          :submitting="companyStore.submitting"
-          @submit="handleApply"
-        />
-      </UCard>
+      <div
+        class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/70"
+      >
+        <div>
+          <p
+            class="text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
+            公司注册
+          </p>
+          <h3 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
+            新主体申请
+          </h3>
+          <p class="mt-2 text-sm text-slate-500">
+            仅需填写名称/类型/行业/法人即可立案，系统会将信息发布至后台审批。
+          </p>
+        </div>
+        <div class="mt-6 flex justify-end">
+          <UButton color="primary" @click="applicationModalOpen = true">
+            提交注册申请
+          </UButton>
+        </div>
+      </div>
     </div>
 
     <div v-if="selectedCompany" class="grid gap-6 lg:grid-cols-2">
@@ -196,6 +409,62 @@ const handleUpdate = async (payload: UpdateCompanyPayload) => {
           :saving="saving"
           @submit="handleUpdate"
         />
+        <div
+          class="mt-6 border-t border-dashed border-slate-200/70 pt-5 dark:border-slate-800/60"
+        >
+          <div class="flex items-center justify-between">
+            <div>
+              <p
+                class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+              >
+                当前职员
+              </p>
+              <h4 class="text-lg font-semibold text-slate-900 dark:text-white">
+                {{ selectedCompany.members.length }} 位成员
+              </h4>
+            </div>
+            <UButton
+              size="sm"
+              color="primary"
+              variant="soft"
+              :disabled="!selectedCompany.permissions.canManageMembers"
+              @click="openInviteModal"
+            >
+              邀请职员
+            </UButton>
+          </div>
+          <div class="mt-4 space-y-3">
+            <div
+              v-for="member in selectedCompany.members"
+              :key="member.id"
+              class="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300"
+            >
+              <div>
+                <p class="font-semibold text-slate-900 dark:text-white">
+                  {{
+                    member.user?.profile?.displayName ||
+                    member.user?.name ||
+                    '未知用户'
+                  }}
+                </p>
+                <p class="text-xs text-slate-500">
+                  {{ member.position?.name || member.role }}
+                  <span v-if="member.title"> · {{ member.title }}</span>
+                </p>
+              </div>
+              <span
+                class="text-xs font-semibold text-slate-500 dark:text-slate-400"
+                >{{ member.role }}</span
+              >
+            </div>
+            <div
+              v-if="selectedCompany.members.length === 0"
+              class="rounded-2xl border border-dashed border-slate-200/70 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-800/60"
+            >
+              暂无职员数据，邀请成员或申请加入即可扩充团队。
+            </div>
+          </div>
+        </div>
       </UCard>
       <UCard>
         <CompanyTimeline :company="selectedCompany" />
@@ -234,5 +503,236 @@ const handleUpdate = async (payload: UpdateCompanyPayload) => {
         </div>
       </UCard>
     </div>
+    <div class="space-y-6">
+      <div
+        class="rounded-3xl border border-slate-200/70 bg-white/90 px-6 py-5 dark:border-slate-800/60 dark:bg-slate-900/70"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-slate-500"
+            >
+              加入申请
+            </p>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              其他可加入的主体
+            </h3>
+            <p class="text-sm text-slate-500">
+              可快速发起入职申请，与法人建立联系。
+            </p>
+          </div>
+          <UButton
+            variant="ghost"
+            color="neutral"
+            size="sm"
+            @click="companyStore.fetchRecommendations('active')"
+          >
+            刷新
+          </UButton>
+        </div>
+        <div class="mt-4 space-y-3">
+          <div
+            v-for="company in recommendedJoinTargets"
+            :key="company.id"
+            class="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-300"
+          >
+            <div class="max-w-[70%]">
+              <p class="font-semibold text-slate-900 dark:text-white">
+                {{ company.name }}
+              </p>
+              <p class="text-xs text-slate-500">
+                {{ company.summary || '暂无简介' }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <CompanyStatusBadge :status="company.status" />
+              <UButton
+                size="xs"
+                color="primary"
+                variant="soft"
+                @click="openJoinModal(company)"
+              >
+                申请加入
+              </UButton>
+            </div>
+          </div>
+          <div
+            v-if="recommendedJoinTargets.length === 0"
+            class="rounded-2xl border border-dashed border-slate-200/80 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-800/60"
+          >
+            暂无可申请的推荐主体，稍后再来。
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
+
+  <UModal
+    :open="applicationModalOpen"
+    @update:open="(value) => (applicationModalOpen = value)"
+    :ui="{
+      content:
+        'w-full max-w-3xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
+  >
+    <template #content>
+      <div class="flex h-full max-h-[85vh] flex-col">
+        <div
+          class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800"
+        >
+          <div>
+            <p
+              class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            >
+              自动入库申请
+            </p>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              注册公司 / 个体工商户
+            </h3>
+          </div>
+          <UButton
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="applicationModalOpen = false"
+          />
+        </div>
+        <div class="flex-1 overflow-y-auto px-6 py-4">
+          <div :initial="{ opacity: 0, y: 16 }" :enter="{ opacity: 1, y: 0 }">
+            <CompanyApplicationForm
+              :industries="industries"
+              :types="types"
+              :submitting="companyStore.submitting"
+              @submit="handleApply"
+            />
+          </div>
+        </div>
+      </div>
+    </template>
+  </UModal>
+
+  <UModal
+    :open="inviteModalOpen"
+    @update:open="(value) => (inviteModalOpen = value)"
+    :ui="{
+      content: 'w-full max-w-xl w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
+  >
+    <template #content>
+      <div class="flex h-full flex-col">
+        <div
+          class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800"
+        >
+          <div>
+            <p
+              class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            >
+              邀请职员
+            </p>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              选择用户并指定职位
+            </h3>
+          </div>
+          <UButton
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="inviteModalOpen = false"
+          />
+        </div>
+        <div class="flex-1 overflow-y-auto px-6 py-4">
+          <div class="space-y-4">
+            <UInput v-model="inviteKeyword" placeholder="搜索用户名 / 邮箱" />
+            <USelectMenu
+              v-model="inviteCandidateId"
+              :options="inviteOptions"
+              placeholder="选择邀请的玩家"
+              :clearable="false"
+            />
+            <USelectMenu
+              v-model="invitePositionCode"
+              :options="positionOptions"
+              placeholder="选择职位"
+            />
+            <UInput v-model="inviteTitle" placeholder="职位称谓（可选）" />
+          </div>
+        </div>
+        <div class="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
+          <div class="flex justify-end">
+            <UButton
+              color="primary"
+              :loading="inviteLoading"
+              @click="handleInvite"
+            >
+              发送邀请
+            </UButton>
+          </div>
+        </div>
+      </div>
+    </template>
+  </UModal>
+
+  <UModal
+    v-if="joinTargetCompany"
+    :open="joinModalOpen"
+    @update:open="(value) => (joinModalOpen = value)"
+    :ui="{
+      content: 'w-full max-w-lg w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
+    }"
+  >
+    <template #content>
+      <div class="flex h-full flex-col">
+        <div
+          class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800"
+        >
+          <div>
+            <p
+              class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            >
+              申请加入
+            </p>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              {{ joinTargetCompany.name }}
+            </h3>
+          </div>
+          <UButton
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="joinModalOpen = false"
+          />
+        </div>
+        <div class="flex-1 overflow-y-auto px-6 py-4">
+          <p class="text-sm text-slate-500 dark:text-slate-400">
+            {{ joinTargetCompany.summary || '暂无简介' }}
+          </p>
+          <div class="mt-4 space-y-4">
+            <USelectMenu
+              v-model="joinPositionCode"
+              :options="positionOptions"
+              placeholder="选择职位"
+            />
+            <UInput v-model="joinTitle" placeholder="期望岗位称谓（可选）" />
+          </div>
+        </div>
+        <div class="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
+          <div class="flex justify-end gap-2">
+            <UButton
+              variant="ghost"
+              color="neutral"
+              @click="joinModalOpen = false"
+            >
+              取消
+            </UButton>
+            <UButton color="primary" :loading="joinLoading" @click="handleJoin">
+              确认申请
+            </UButton>
+          </div>
+        </div>
+      </div>
+    </template>
+  </UModal>
 </template>
