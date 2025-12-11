@@ -58,6 +58,15 @@ model User {
   likesReceived           PlayerLike[]           @relation("PlayerLikesReceived")
   rankPlayerSnapshots     RankPlayerSnapshot[]   @relation("RankSnapshotsForUser")
   rankSyncJobs            RankSyncJob[]          @relation("RankSyncJobsInitiated")
+  companyMemberships      CompanyMember[]        @relation("CompanyMemberUser")
+  companyApplications     CompanyApplication[]   @relation("CompanyApplicationApplicant")
+  companyAuditRecords     CompanyAuditRecord[]   @relation("CompanyAuditActor")
+  companyPoliciesAuthored CompanyPolicy[]        @relation("CompanyPolicyAuthor")
+  companyPoliciesUpdated  CompanyPolicy[]        @relation("CompanyPolicyEditor")
+  workflowActions         WorkflowAction[]       @relation("WorkflowActionActor")
+  companiesCreated        Company[]              @relation("CompanyCreatedBy")
+  companiesUpdated        Company[]              @relation("CompanyUpdatedBy")
+  workflowInstancesCreated WorkflowInstance[]    @relation("WorkflowInstanceCreator")
 
   @@map("users")
 }
@@ -761,6 +770,305 @@ model ConfigEntry {
   @@unique([namespaceId, key], map: "uq_config_entry_namespace_key")
   @@index([namespaceId], map: "idx_config_entries_namespace")
   @@map("config_entries")
+}
+
+model CompanyIndustry {
+  id           String                @id @default(uuid())
+  code         String                @unique
+  name         String
+  description  String?
+  icon         String?
+  color        String?
+  metadata     Json?
+  parentId     String?
+  isActive     Boolean               @default(true)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  parent       CompanyIndustry?      @relation("IndustryHierarchy", fields: [parentId], references: [id])
+  children     CompanyIndustry[]     @relation("IndustryHierarchy")
+  companies    Company[]
+  applications CompanyApplication[]  @relation("IndustryApplications")
+
+  @@map("company_industries")
+}
+
+model CompanyType {
+  id                 String          @id @default(uuid())
+  code               String          @unique
+  name               String
+  description        String?
+  category           CompanyCategory @default(ENTERPRISE)
+  isDefault          Boolean         @default(false)
+  defaultWorkflow    String?
+  requiredDocuments  String[]        @default([])
+  config             Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  companies          Company[]
+  applications       CompanyApplication[]
+
+  @@map("company_types")
+}
+
+model Company {
+  id                      String                 @id @default(uuid())
+  name                    String
+  slug                    String                 @unique
+  headline                String?
+  summary                 String?
+  description             String?
+  profile                 Json?
+  logoAttachmentId        String?
+  registrationNumber      String?
+  unifiedSocialCreditCode String?
+  legalNameSnapshot       String?
+  legalIdSnapshot         String?
+  category                CompanyCategory        @default(ENTERPRISE)
+  visibility              CompanyVisibility      @default(PRIVATE)
+  status                  CompanyStatus          @default(PENDING_REVIEW)
+  isIndividualBusiness    Boolean                @default(false)
+  typeId                  String?
+  industryId              String?
+  createdById             String?
+  updatedById             String?
+  workflowInstanceId      String?                @unique
+  workflowDefinitionCode  String?
+  workflowState           String?
+  settings                Json?
+  extra                   Json?
+  contactEmail            String?
+  contactPhone            String?
+  contactAddress          String?
+  homepageUrl             String?
+  establishedAt           DateTime?
+  approvedAt              DateTime?
+  activatedAt             DateTime?
+  archivedAt              DateTime?
+  lastActiveAt            DateTime?
+  recommendationScore     Int                    @default(0)
+  highlighted             Boolean                @default(false)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  type                    CompanyType?           @relation(fields: [typeId], references: [id])
+  industry                CompanyIndustry?       @relation(fields: [industryId], references: [id])
+  createdBy               User?                  @relation("CompanyCreatedBy", fields: [createdById], references: [id])
+  updatedBy               User?                  @relation("CompanyUpdatedBy", fields: [updatedById], references: [id])
+  workflowInstance        WorkflowInstance?      @relation("CompanyWorkflowInstance", fields: [workflowInstanceId], references: [id])
+  members                 CompanyMember[]
+  policies                CompanyPolicy[]
+  applications            CompanyApplication[]
+  auditRecords            CompanyAuditRecord[]
+
+  @@index([status, createdAt], map: "idx_companies_status_created")
+  @@index([industryId], map: "idx_companies_industry")
+  @@index([typeId], map: "idx_companies_type")
+  @@map("companies")
+}
+
+model CompanyMember {
+  id          String             @id @default(uuid())
+  companyId   String
+  userId      String
+  role        CompanyMemberRole
+  title       String?
+  permissions String[]           @default([])
+  isPrimary   Boolean            @default(false)
+  metadata    Json?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User               @relation("CompanyMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId, role], map: "uq_company_member_role")
+  @@index([userId], map: "idx_company_member_user")
+  @@map("company_members")
+}
+
+model CompanyApplication {
+  id                 String                      @id @default(uuid())
+  companyId          String?
+  applicantId        String
+  typeId             String?
+  industryId         String?
+  status             CompanyApplicationStatus    @default(SUBMITTED)
+  currentStage       String?
+  payload            Json?
+  attachments        Json?
+  notes              String?
+  rejectReason       String?
+  submittedAt        DateTime                    @default(now())
+  resolvedAt         DateTime?
+  updatedAt          DateTime                    @updatedAt
+  workflowInstanceId String?                    @unique
+  company            Company?                    @relation(fields: [companyId], references: [id])
+  applicant          User                        @relation("CompanyApplicationApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
+  workflowInstance   WorkflowInstance?           @relation("ApplicationWorkflowInstance", fields: [workflowInstanceId], references: [id])
+  type               CompanyType?                @relation(fields: [typeId], references: [id])
+  industry           CompanyIndustry?            @relation("IndustryApplications", fields: [industryId], references: [id])
+  auditRecords       CompanyAuditRecord[]
+
+  @@index([applicantId], map: "idx_company_applications_applicant")
+  @@index([status], map: "idx_company_applications_status")
+  @@map("company_applications")
+}
+
+model CompanyAuditRecord {
+  id            String               @id @default(uuid())
+  companyId     String
+  applicationId String?
+  actorId       String?
+  actionKey     String
+  actionLabel   String?
+  resultState   String?
+  comment       String?
+  payload       Json?
+  createdAt     DateTime             @default(now())
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  application   CompanyApplication?  @relation(fields: [applicationId], references: [id])
+  actor         User?                @relation("CompanyAuditActor", fields: [actorId], references: [id])
+
+  @@index([companyId], map: "idx_company_audit_company")
+  @@index([applicationId], map: "idx_company_audit_application")
+  @@map("company_audit_records")
+}
+
+model CompanyPolicy {
+  id          String               @id @default(uuid())
+  companyId   String
+  code        String?
+  title       String
+  summary     String?
+  content     String
+  status      CompanyPolicyStatus  @default(DRAFT)
+  version     Int                  @default(1)
+  effectiveAt DateTime?
+  retiredAt   DateTime?
+  metadata    Json?
+  createdById String?
+  updatedById String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User?                @relation("CompanyPolicyAuthor", fields: [createdById], references: [id])
+  updatedBy   User?                @relation("CompanyPolicyEditor", fields: [updatedById], references: [id])
+
+  @@index([companyId], map: "idx_company_policies_company")
+  @@map("company_policies")
+}
+
+model WorkflowDefinition {
+  id            String               @id @default(uuid())
+  code          String               @unique
+  name          String
+  description   String?
+  version       Int                  @default(1)
+  isActive      Boolean              @default(true)
+  initialState  String
+  states        String[]
+  roles         String[]             @default([])
+  category      String?
+  config        Json?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  instances     WorkflowInstance[]
+
+  @@map("workflow_definitions")
+}
+
+model WorkflowInstance {
+  id             String                 @id @default(uuid())
+  definitionId   String
+  definitionCode String
+  status         WorkflowInstanceStatus @default(ACTIVE)
+  currentState   String
+  targetType     String
+  targetId       String
+  context        Json?
+  createdById    String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  definition     WorkflowDefinition     @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  createdBy      User?                  @relation("WorkflowInstanceCreator", fields: [createdById], references: [id])
+  actions        WorkflowAction[]
+  company        Company?               @relation("CompanyWorkflowInstance")
+  application    CompanyApplication?    @relation("ApplicationWorkflowInstance")
+
+  @@index([targetType, targetId], map: "idx_workflow_instances_target")
+  @@map("workflow_instances")
+}
+
+model WorkflowAction {
+  id         String            @id @default(uuid())
+  instanceId String
+  state      String
+  actionKey  String
+  actionName String?
+  actorId    String?
+  actorRole  String?
+  comment    String?
+  payload    Json?
+  createdAt  DateTime          @default(now())
+  instance   WorkflowInstance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  actor      User?             @relation("WorkflowActionActor", fields: [actorId], references: [id])
+
+  @@index([instanceId], map: "idx_workflow_actions_instance")
+  @@map("workflow_actions")
+}
+
+enum CompanyStatus {
+  DRAFT
+  PENDING_REVIEW
+  UNDER_REVIEW
+  NEEDS_REVISION
+  ACTIVE
+  SUSPENDED
+  REJECTED
+  ARCHIVED
+}
+
+enum CompanyVisibility {
+  PUBLIC
+  PRIVATE
+  INTERNAL
+}
+
+enum CompanyMemberRole {
+  OWNER
+  LEGAL_PERSON
+  EXECUTIVE
+  MANAGER
+  MEMBER
+  AUDITOR
+}
+
+enum CompanyApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  NEEDS_CHANGES
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum CompanyPolicyStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum CompanyCategory {
+  ENTERPRISE
+  INDIVIDUAL
+  ORGANIZATION
+}
+
+enum WorkflowInstanceStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
 }
 
 enum PlayerStatus {

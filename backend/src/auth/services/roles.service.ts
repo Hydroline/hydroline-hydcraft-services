@@ -102,6 +102,15 @@ export const PERMISSIONS = {
   CONFIG_MANAGE_GENERAL: 'config.manage.general',
   CONFIG_MANAGE_INTEGRATIONS: 'config.manage.integrations',
 
+  // 公司 / 工商系统
+  COMPANY_VIEW_ADMIN: 'company.admin.view',
+  COMPANY_MANAGE_ADMIN: 'company.admin.manage',
+  COMPANY_MANAGE_CONFIG: 'company.admin.config',
+
+  // 流程定义管理
+  WORKFLOW_VIEW_DEFINITIONS: 'workflow.view.definitions',
+  WORKFLOW_MANAGE_DEFINITIONS: 'workflow.manage.definitions',
+
   // 兼容旧权限常量（方便引用）
   LEGACY_AUTH_MANAGE_USERS: 'auth.manage.users',
   LEGACY_AUTH_MANAGE_ROLES: 'auth.manage.roles',
@@ -161,6 +170,11 @@ const GRANULAR_PERMISSION_KEYS: string[] = [
   PERMISSIONS.CONFIG_VIEW_GENERAL,
   PERMISSIONS.CONFIG_MANAGE_GENERAL,
   PERMISSIONS.CONFIG_MANAGE_INTEGRATIONS,
+  PERMISSIONS.COMPANY_VIEW_ADMIN,
+  PERMISSIONS.COMPANY_MANAGE_ADMIN,
+  PERMISSIONS.COMPANY_MANAGE_CONFIG,
+  PERMISSIONS.WORKFLOW_VIEW_DEFINITIONS,
+  PERMISSIONS.WORKFLOW_MANAGE_DEFINITIONS,
 ];
 
 const ALL_PERMISSION_KEYS = Array.from(

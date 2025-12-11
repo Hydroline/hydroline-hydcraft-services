@@ -134,6 +134,19 @@ const menuGroups = computed<MenuGroup[]>(() => [
     ],
   },
   {
+    key: 'company',
+    label: '工商系统',
+    collapsible: true,
+    defaultCollapsed: false,
+    items: [
+      {
+        label: '公司管理',
+        to: '/admin/company/registry',
+        icon: 'i-lucide-building-2',
+      },
+    ],
+  },
+  {
     key: 'advanced',
     label: '高级设置',
     collapsible: true,

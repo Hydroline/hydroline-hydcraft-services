@@ -64,6 +64,28 @@ export const userRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'company',
+        name: 'company',
+        component: () => import('@/views/user/Company/CompanyOverviewView.vue'),
+        meta: {
+          layout: 'user',
+          title: '工商系统',
+          icon: 'i-lucide-building-2',
+        },
+      },
+      {
+        path: 'company/dashboard',
+        name: 'company.dashboard',
+        component: () =>
+          import('@/views/user/Company/CompanyDashboardView.vue'),
+        meta: {
+          layout: 'user',
+          title: '公司工作台',
+          icon: 'i-lucide-briefcase',
+          requiresAuth: true,
+        },
+      },
+      {
         path: 'about',
         name: 'about',
         component: () => import('@/views/user/About/AboutView.vue'),
@@ -333,6 +355,17 @@ export const adminRoutes: RouteRecordRaw[] = [
         meta: {
           requiresAuth: true,
           requiresPermissions: ['oauth.view.stats'],
+          layout: 'admin',
+        },
+      },
+      {
+        path: 'company/registry',
+        name: 'admin.company.registry',
+        component: () =>
+          import('@/views/admin/Company/CompanyRegistryView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresPermissions: ['company.admin.view'],
           layout: 'admin',
         },
       },

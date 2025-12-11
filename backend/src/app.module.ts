@@ -18,6 +18,8 @@ import { OAuthModule } from './oauth/oauth.module';
 import { RedisModule } from './lib/redis/redis.module';
 import { RankModule } from './rank/rank.module';
 import { ServerModule } from './server/server.module';
+import { WorkflowModule } from './workflow/workflow.module';
+import { CompanyModule } from './company/company.module';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { ServerModule } from './server/server.module';
     LuckpermsModule,
     MinecraftModule,
     OAuthModule,
+    WorkflowModule,
+    CompanyModule,
   ],
   controllers: [AppController],
   providers: [AppService],
