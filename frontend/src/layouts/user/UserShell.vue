@@ -68,6 +68,7 @@ const mainNav = computed<NavItem[]>(() => {
       icon: 'i-lucide-trophy',
     },
     { name: '服务端状态', to: '/server', icon: 'i-lucide-server' },
+    { name: '交通系统', to: '/transportation', icon: 'i-lucide-train-front' },
     { name: '工商系统', to: '/company', icon: 'i-lucide-building-2' },
     { name: '关于', to: '/about', icon: 'i-lucide-info' },
   ]

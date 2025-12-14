@@ -20,6 +20,7 @@ import { RankModule } from './rank/rank.module';
 import { ServerModule } from './server/server.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { CompanyModule } from './company/company.module';
+import { TransportationModule } from './transportation/transportation.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { CompanyModule } from './company/company.module';
     OAuthModule,
     WorkflowModule,
     CompanyModule,
+    TransportationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

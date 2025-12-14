@@ -86,6 +86,40 @@ export const userRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'transportation',
+        component: () =>
+          import('@/views/user/Transportation/TransportationLayout.vue'),
+        meta: {
+          layout: 'user',
+          title: '交通系统',
+          icon: 'i-lucide-train-front',
+        },
+        children: [
+          {
+            path: '',
+            redirect: { name: 'transportation.railway' },
+          },
+          {
+            path: 'railway',
+            name: 'transportation.railway',
+            component: () =>
+              import('@/views/user/Transportation/RailwayOverviewView.vue'),
+          },
+          {
+            path: 'railway/routes/:routeId',
+            name: 'transportation.railway.route',
+            component: () =>
+              import('@/views/user/Transportation/RailwayRouteDetailView.vue'),
+          },
+          {
+            path: 'aviation',
+            name: 'transportation.aviation',
+            component: () =>
+              import('@/views/user/Transportation/AviationPlaceholderView.vue'),
+          },
+        ],
+      },
+      {
         path: 'about',
         name: 'about',
         component: () => import('@/views/user/About/AboutView.vue'),

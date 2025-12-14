@@ -21,7 +21,9 @@ export type HydrolineBeaconEvent =
   | 'get_players_data'
   | 'get_player_balance'
   | 'set_player_balance'
-  | 'add_player_balance';
+  | 'add_player_balance'
+  | 'query_mtr_entities'
+  | 'get_mtr_railway_snapshot';
 
 export interface HydrolineBeaconClientOptions {
   endpoint: string;

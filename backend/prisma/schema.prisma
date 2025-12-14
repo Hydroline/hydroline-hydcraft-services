@@ -68,6 +68,8 @@ model User {
   companiesUpdated        Company[]              @relation("CompanyUpdatedBy")
   legalRepresentativeCompanies Company[]        @relation("CompanyLegalRepresentative")
   workflowInstancesCreated WorkflowInstance[]    @relation("WorkflowInstanceCreator")
+  transportationRailwayBannersCreated TransportationRailwayBanner[] @relation("TransportationRailwayBannerCreatedBy")
+  transportationRailwayBannersUpdated TransportationRailwayBanner[] @relation("TransportationRailwayBannerUpdatedBy")
 
   @@map("users")
 }
@@ -185,6 +187,28 @@ model PlayerMessageReaction {
 
   @@unique([messageId, userId], name: "uq_player_message_reaction_user")
   @@map("player_message_reactions")
+}
+
+model TransportationRailwayBanner {
+  id           String   @id @default(uuid())
+  title        String?
+  subtitle     String?
+  description  String?
+  attachmentId String?
+  ctaLabel     String?
+  ctaLink      String?
+  isPublished  Boolean  @default(true)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdById  String?
+  updatedById  String?
+  attachment   Attachment? @relation("TransportationRailwayBannerAttachment", fields: [attachmentId], references: [id])
+  createdBy    User?       @relation("TransportationRailwayBannerCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?       @relation("TransportationRailwayBannerUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([isPublished, displayOrder], map: "idx_transportation_railway_banners_published")
+  @@map("transportation_railway_banners")
 }
 
 model UserPiicHistory {
@@ -694,6 +718,7 @@ model Attachment {
   visibilityRoles       String[]                 @default([])
   shareTokens           AttachmentShareToken[]
   tags                  AttachmentTagging[]
+  transportationRailwayBanners TransportationRailwayBanner[] @relation("TransportationRailwayBannerAttachment")
   folder                AttachmentFolder?        @relation(fields: [folderId], references: [id])
   owner                 User?                    @relation("AttachmentUploader", fields: [ownerId], references: [id])
 
