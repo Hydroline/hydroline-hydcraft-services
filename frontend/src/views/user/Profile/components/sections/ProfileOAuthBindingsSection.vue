@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { useFeatureStore } from '@/stores/feature'
-import { useOAuthStore } from '@/stores/oauth'
-import { ApiError } from '@/utils/api'
-import { resolveProviderAccent, resolveProviderIcon } from '@/utils/oauth-brand'
+import { useAuthStore } from '@/stores/user/auth'
+import { useFeatureStore } from '@/stores/shared/feature'
+import { useOAuthStore } from '@/stores/shared/oauth'
+import { ApiError } from '@/utils/http/api'
+import { resolveProviderAccent, resolveProviderIcon } from '@/utils/oauth/brand'
 
 type AccountProfile = {
   displayName?: string | null

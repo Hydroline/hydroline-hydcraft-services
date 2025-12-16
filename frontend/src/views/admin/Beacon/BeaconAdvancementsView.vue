@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useMinecraftServerStore } from '@/stores/minecraftServers'
+import { useMinecraftServerStore } from '@/stores/user/minecraftServers'
 import type {
   BeaconPlayerAdvancementsResult,
   BeaconPlayerGenericResponse,

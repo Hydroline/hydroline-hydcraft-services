@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { GenderType } from '@/stores/auth'
+import type { GenderType } from '@/stores/user/auth'
 import RegionSelector from '../RegionSelector.vue'
 import { countries } from '../region-data'
 

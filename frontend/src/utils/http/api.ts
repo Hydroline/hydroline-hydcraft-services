@@ -168,7 +168,7 @@ function performRequest<T>(
 
 async function attemptTokenRefresh(): Promise<string | null> {
   try {
-    const { useAuthStore } = await import('@/stores/auth')
+    const { useAuthStore } = await import('@/stores/user/auth')
     const auth = useAuthStore()
     if (!auth.refreshToken) {
       return null

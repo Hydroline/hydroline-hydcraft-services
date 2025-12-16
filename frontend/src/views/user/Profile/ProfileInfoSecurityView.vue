@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { useFeatureStore } from '@/stores/feature'
+import { useAuthStore } from '@/stores/user/auth'
+import { useFeatureStore } from '@/stores/shared/feature'
 import CodeSendDialog from '@/components/dialogs/CodeSendDialog.vue'
 import ProfileEmailContactsSection from './components/sections/ProfileEmailContactsSection.vue'
 import ProfilePhoneContactsSection from './components/sections/ProfilePhoneContactsSection.vue'
 import ProfileOAuthBindingsSection from './components/sections/ProfileOAuthBindingsSection.vue'
-import { ApiError } from '@/utils/api'
+import { ApiError } from '@/utils/http/api'
 
 const auth = useAuthStore()
 const feature = useFeatureStore()

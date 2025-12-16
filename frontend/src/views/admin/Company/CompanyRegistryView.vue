@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAdminCompanyStore } from '@/stores/adminCompanies'
-import { useCompanyStore } from '@/stores/companies'
+import { useAdminCompanyStore } from '@/stores/admin/companies'
+import { useCompanyStore } from '@/stores/user/companies'
 import type {
   AdminCreateCompanyPayload,
   CompanyMemberUserRef,

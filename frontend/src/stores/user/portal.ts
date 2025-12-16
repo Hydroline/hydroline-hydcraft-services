@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 import type { AdminOverviewData, PortalHomeData } from '@/types/portal'
-import { useAuthStore } from './auth'
+import { useAuthStore } from '@/stores/user/auth'
 
 export const usePortalStore = defineStore('portal', {
   state: () => ({

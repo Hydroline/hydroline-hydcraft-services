@@ -2,8 +2,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { storeToRefs } from 'pinia'
-import { useMinecraftServerStore } from '@/stores/minecraftServers'
-import { translateAuthErrorMessage } from '@/utils/auth-errors'
+import { useMinecraftServerStore } from '@/stores/user/minecraftServers'
+import { translateAuthErrorMessage } from '@/utils/errors/auth-errors'
 import type {
   BeaconMtrLogRecord,
   BeaconMtrLogsResponse,

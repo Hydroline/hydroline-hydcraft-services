@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { usePortalStore } from '@/stores/portal'
-import { useUiStore } from '@/stores/ui'
+import { usePortalStore } from '@/stores/user/portal'
+import { useUiStore } from '@/stores/shared/ui'
 import { Motion } from 'motion-v'
 import dayjs from 'dayjs'
 import HydrolineTextBold from '@/assets/resources/hydroline_text_bold.svg'

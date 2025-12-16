@@ -2,9 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import VChart from 'vue-echarts'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useCompanyStore } from '@/stores/companies'
-import { useUiStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/user/auth'
+import { useCompanyStore } from '@/stores/user/companies'
+import { useUiStore } from '@/stores/shared/ui'
 import CompanySummaryCard from '@/components/company/CompanySummaryCard.vue'
 
 const authStore = useAuthStore()

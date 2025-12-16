@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import 'leaflet/dist/leaflet.css'
-import { RailwayMap } from '@/transportation/railway/map'
+import { RailwayMap } from '@/views/user/Transportation/railway/map'
 import type {
   RailwayCurveParameters,
   RailwayGeometryPoint,

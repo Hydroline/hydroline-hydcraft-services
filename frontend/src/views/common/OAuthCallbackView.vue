@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useOAuthStore } from '@/stores/oauth'
-import { useAuthStore } from '@/stores/auth'
-import { usePortalStore } from '@/stores/portal'
-import { ApiError } from '@/utils/api'
+import { useOAuthStore } from '@/stores/shared/oauth'
+import { useAuthStore } from '@/stores/user/auth'
+import { usePortalStore } from '@/stores/user/portal'
+import { ApiError } from '@/utils/http/api'
 
 type OAuthLoginResult = {
   success?: boolean

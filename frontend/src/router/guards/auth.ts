@@ -1,6 +1,6 @@
 import type { Router } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/user/auth'
+import { useUiStore } from '@/stores/shared/ui'
 
 function toArray<T>(input: T | T[] | undefined): T[] {
   if (!input) return []

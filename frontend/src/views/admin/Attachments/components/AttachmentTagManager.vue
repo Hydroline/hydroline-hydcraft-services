@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 import type { AttachmentTagEntry } from '@/views/admin/Attachments/types'
 import type { PropType } from 'vue'
 

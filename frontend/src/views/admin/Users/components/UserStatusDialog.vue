@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, toRef, watch } from 'vue'
-import { apiFetch } from '@/utils/api'
-import { useAuthStore } from '@/stores/auth'
+import { apiFetch } from '@/utils/http/api'
+import { useAuthStore } from '@/stores/user/auth'
 import type { AdminUserDetail } from '@/types/admin'
 import { playerStatusOptions, type PlayerStatus } from '@/constants/status'
 

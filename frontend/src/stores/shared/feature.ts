@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 
 type OAuthProviderSummary = {
   key: string

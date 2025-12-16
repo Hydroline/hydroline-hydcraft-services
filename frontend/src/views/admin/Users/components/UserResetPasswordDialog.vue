@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRef, watch } from 'vue'
-import { useAdminUsersStore } from '@/stores/adminUsers'
+import { useAdminUsersStore } from '@/stores/admin/users'
 
 const props = defineProps<{
   open: boolean

@@ -3,8 +3,8 @@ import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import VChart from 'vue-echarts'
-import { usePortalStore } from '@/stores/portal'
-import { useUiStore } from '@/stores/ui'
+import { usePortalStore } from '@/stores/user/portal'
+import { useUiStore } from '@/stores/shared/ui'
 import type { AdminHealthStatus } from '@/types/portal'
 
 const portalStore = usePortalStore()

@@ -9,7 +9,7 @@ import PlayerProfileBioSection from './PlayerProfileBioSection.vue'
 import PlayerProfileMessageBoardSection from './PlayerProfileMessageBoardSection.vue'
 import PlayerAllMessagesDialog from './PlayerAllMessagesDialog.vue'
 import PlayerComposeMessageDialog from './PlayerComposeMessageDialog.vue'
-import { usePlayerPortalStore } from '@/stores/playerPortal'
+import { usePlayerPortalStore } from '@/stores/user/playerPortal'
 import type {
   PlayerMinecraftResponse,
   PlayerRegionResponse,

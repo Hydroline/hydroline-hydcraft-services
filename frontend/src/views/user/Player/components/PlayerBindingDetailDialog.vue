@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch, reactive } from 'vue'
 import dayjs from 'dayjs'
 import type { IdleAnimation, SkinViewer } from 'skinview3d'
 import type { PlayerSummary, PlayerLifecycleEvent } from '@/types/portal'
-import { usePlayerPortalStore } from '@/stores/playerPortal'
+import { usePlayerPortalStore } from '@/stores/user/playerPortal'
 import PlayerLifecycleTimelineDialog from './PlayerLifecycleTimelineDialog.vue'
 
 const props = defineProps<{

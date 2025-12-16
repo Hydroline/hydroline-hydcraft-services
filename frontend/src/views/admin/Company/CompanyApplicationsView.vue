@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAdminCompanyApplicationsStore } from '@/stores/adminCompanyApplications'
+import { useAdminCompanyApplicationsStore } from '@/stores/admin/companyApplications'
 import type {
   AdminCompanyApplicationEntry,
   CompanyApplicationStatus,

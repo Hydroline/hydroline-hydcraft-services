@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useAdminCompanyIndustriesStore } from '@/stores/adminCompanyIndustries'
+import { useAdminCompanyIndustriesStore } from '@/stores/admin/companyIndustries'
 import type { CompanyIndustry } from '@/types/company'
 
 const store = useAdminCompanyIndustriesStore()

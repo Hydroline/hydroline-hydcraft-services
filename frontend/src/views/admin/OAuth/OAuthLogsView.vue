@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useOAuthStore } from '@/stores/oauth'
-import { ApiError } from '@/utils/api'
+import { useOAuthStore } from '@/stores/shared/oauth'
+import { ApiError } from '@/utils/http/api'
 
 const oauthStore = useOAuthStore()
 const { providers } = storeToRefs(oauthStore)

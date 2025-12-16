@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useAdminRbacStore } from '@/stores/adminRbac'
-import { useUiStore } from '@/stores/ui'
+import { useAdminRbacStore } from '@/stores/admin/rbac'
+import { useUiStore } from '@/stores/shared/ui'
 
 const uiStore = useUiStore()
 const rbacStore = useAdminRbacStore()

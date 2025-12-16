@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { useCompanyStore } from '@/stores/companies'
+import { useCompanyStore } from '@/stores/user/companies'
 import type {
   CompanyIndustry,
   CompanyType,

@@ -6,7 +6,7 @@ import type {
   PlayerLoginRecommendation,
   PlayerLoginRecommendationsResponse,
 } from '@/types/portal'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 
 const PAGE_SIZE = 10
 

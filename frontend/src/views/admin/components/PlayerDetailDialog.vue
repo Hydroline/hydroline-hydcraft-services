@@ -7,8 +7,8 @@ import type {
   PlayerGameStatsResponse,
   PlayerStatsResponse,
 } from '@/types/portal'
-import { apiFetch } from '@/utils/api'
-import { useAuthStore } from '@/stores/auth'
+import { apiFetch } from '@/utils/http/api'
+import { useAuthStore } from '@/stores/user/auth'
 
 const props = defineProps<{
   open: boolean

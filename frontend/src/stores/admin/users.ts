@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { apiFetch } from '@/utils/api'
-import { useAuthStore } from './auth'
+import { apiFetch } from '@/utils/http/api'
+import { useAuthStore } from '@/stores/user/auth'
 import type { AdminUserListItem, AdminUserListResponse } from '@/types/admin'
 
 type SortOrder = 'asc' | 'desc'

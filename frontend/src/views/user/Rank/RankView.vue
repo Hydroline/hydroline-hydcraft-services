@@ -3,8 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Motion } from 'motion-v'
 import dayjs from 'dayjs'
-import { apiFetch } from '@/utils/api'
-import { useAuthStore } from '@/stores/auth'
+import { apiFetch } from '@/utils/http/api'
+import { useAuthStore } from '@/stores/user/auth'
 import type {
   RankPlayerItem,
   RankResponse,

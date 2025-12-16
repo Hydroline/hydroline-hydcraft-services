@@ -2,9 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import RailwayMapPanel from '@/transportation/railway/components/RailwayMapPanel.vue'
-import { useTransportationRailwayStore } from '@/transportation/railway/store'
-import { useAuthStore } from '@/stores/auth'
+import RailwayMapPanel from '@/views/user/Transportation/railway/components/RailwayMapPanel.vue'
+import { useTransportationRailwayStore } from '@/stores/transportation/railway'
+import { useAuthStore } from '@/stores/user/auth'
 import type {
   RailwayBanner,
   RailwayEntity,

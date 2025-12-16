@@ -3,11 +3,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import RailwayMapPanel from '@/transportation/railway/components/RailwayMapPanel.vue'
-import { useTransportationRailwayStore } from '@/transportation/railway/store'
+import RailwayMapPanel from '@/views/user/Transportation/railway/components/RailwayMapPanel.vue'
+import { useTransportationRailwayStore } from '@/stores/transportation/railway'
 import type { RailwayRouteDetail } from '@/types/transportation'
-import { getDimensionName } from '@/utils/dimension-names'
-import { parseRouteName } from '@/utils/route-name'
+import { getDimensionName } from '@/utils/minecraft/dimension-names'
+import { parseRouteName } from '@/utils/route/route-name'
 
 dayjs.extend(relativeTime)
 

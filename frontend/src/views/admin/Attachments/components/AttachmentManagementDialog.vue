@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 import type { AdminAttachmentSummary } from '@/types/admin'
 import type { VisibilityModeOption } from '@/views/admin/Attachments/types'
 import type { PropType } from 'vue'

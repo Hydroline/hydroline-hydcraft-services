@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { apiFetch, ApiError } from '@/utils/api'
-import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
+import { apiFetch, ApiError } from '@/utils/http/api'
+import { useAuthStore } from '@/stores/user/auth'
+import { useUiStore } from '@/stores/shared/ui'
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()

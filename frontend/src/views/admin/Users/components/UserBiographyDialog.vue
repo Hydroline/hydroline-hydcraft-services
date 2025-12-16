@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
-import { apiFetch } from '@/utils/api'
-import { translateAuthErrorMessage } from '@/utils/auth-errors'
+import { apiFetch } from '@/utils/http/api'
+import { translateAuthErrorMessage } from '@/utils/errors/auth-errors'
 import type { PlayerBiography } from '@/types/portal'
 import MonacoMarkdownEditor from '@/components/editors/MonacoMarkdownEditor.vue'
 

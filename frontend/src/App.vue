@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/stores/user/auth'
 import { zh_cn } from '@nuxt/ui/locale'
 import { useRoute } from 'vue-router'
 

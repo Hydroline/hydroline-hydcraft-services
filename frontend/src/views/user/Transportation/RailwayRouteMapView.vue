@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import RailwayMapPanel from '@/transportation/railway/components/RailwayMapPanel.vue'
-import { useTransportationRailwayStore } from '@/transportation/railway/store'
+import RailwayMapPanel from '@/views/user/Transportation/railway/components/RailwayMapPanel.vue'
+import { useTransportationRailwayStore } from '@/stores/transportation/railway'
 import type { RailwayRouteDetail } from '@/types/transportation'
 
 const route = useRoute()

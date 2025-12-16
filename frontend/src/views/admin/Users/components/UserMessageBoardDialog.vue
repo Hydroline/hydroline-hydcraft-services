@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
-import { apiFetch } from '@/utils/api'
-import { translateAuthErrorMessage } from '@/utils/auth-errors'
+import { apiFetch } from '@/utils/http/api'
+import { translateAuthErrorMessage } from '@/utils/errors/auth-errors'
 import type { PlayerMessageBoardEntry } from '@/types/portal'
 
 const props = defineProps<{ open: boolean; userId: string | null }>()

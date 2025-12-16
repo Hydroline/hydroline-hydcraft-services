@@ -2,8 +2,8 @@
 import { computed, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { Motion } from 'motion-v'
-import { usePlayerPortalStore } from '@/stores/playerPortal'
-import { translateAuthErrorMessage } from '@/utils/auth-errors'
+import { usePlayerPortalStore } from '@/stores/user/playerPortal'
+import { translateAuthErrorMessage } from '@/utils/errors/auth-errors'
 import type {
   PlayerMessageBoardEntry,
   PlayerMessageReactionType,

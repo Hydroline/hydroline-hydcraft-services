@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
-import { ApiError, apiFetch } from '@/utils/api'
+import { ApiError, apiFetch } from '@/utils/http/api'
 import type { RegionValue } from '@/views/user/Profile/components/RegionSelector.vue'
-import { useAuthStore } from '@/stores/auth'
-import { useFeatureStore } from '@/stores/feature'
-import { useAdminUsersStore } from '@/stores/adminUsers'
-import { useAdminRbacStore } from '@/stores/adminRbac'
+import { useAuthStore } from '@/stores/user/auth'
+import { useFeatureStore } from '@/stores/shared/feature'
+import { useAdminUsersStore } from '@/stores/admin/users'
+import { useAdminRbacStore } from '@/stores/admin/rbac'
 import type {
   AdminBindingHistoryEntry,
   AdminUserDetail,

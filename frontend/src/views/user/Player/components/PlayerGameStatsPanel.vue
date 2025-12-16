@@ -9,7 +9,7 @@ import type {
   PlayerSummary,
   PlayerGameStatsResponse,
 } from '@/types/portal'
-import { usePlayerPortalStore } from '@/stores/playerPortal'
+import { usePlayerPortalStore } from '@/stores/user/playerPortal'
 import {
   createHydcraftDynmapMap,
   DynmapMapController,

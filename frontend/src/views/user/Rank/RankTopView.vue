@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { Motion } from 'motion-v'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 import type {
   RankLeaderEntry,
   RankLeaderboards,

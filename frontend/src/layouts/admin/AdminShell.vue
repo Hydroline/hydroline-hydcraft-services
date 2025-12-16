@@ -5,9 +5,9 @@ import { storeToRefs } from 'pinia'
 import AppLoadingBar from '@/components/common/AppLoadingBar.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import UserAvatar from '@/components/common/UserAvatar.vue'
-import { useAuthStore } from '@/stores/auth'
-import { usePortalStore } from '@/stores/portal'
-import { apiFetch, ApiError } from '@/utils/api'
+import { useAuthStore } from '@/stores/user/auth'
+import { usePortalStore } from '@/stores/user/portal'
+import { apiFetch, ApiError } from '@/utils/http/api'
 
 const route = useRoute()
 const authStore = useAuthStore()

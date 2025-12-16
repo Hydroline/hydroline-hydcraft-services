@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 import type {
   AttachmentFolderEntry,
   VisibilityModeOption,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { AdminOauthAccount } from '@/types/admin'
-import { resolveProviderAccent, resolveProviderIcon } from '@/utils/oauth-brand'
+import { resolveProviderAccent, resolveProviderIcon } from '@/utils/oauth/brand'
 
 type ProviderSummary = {
   key: string

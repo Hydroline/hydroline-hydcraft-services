@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { apiFetch } from '@/utils/api'
-import { useAuthStore } from '@/stores/auth'
+import { apiFetch } from '@/utils/http/api'
+import { useAuthStore } from '@/stores/user/auth'
 import type { CompanyType } from '@/types/company'
 
 interface UpsertTypePayload {

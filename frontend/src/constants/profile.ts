@@ -1,5 +1,5 @@
 // 通用的资料配置常量与下拉选项
-import { getTimezones } from '@/utils/timezones'
+import { getTimezones } from '@/utils/time/timezones'
 
 export type PhoneRegionCode = 'CN' | 'HK' | 'MO' | 'TW'
 

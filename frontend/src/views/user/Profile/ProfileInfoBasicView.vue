@@ -12,10 +12,10 @@ import {
   useAuthStore,
   type GenderType,
   type UpdateCurrentUserPayload,
-} from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
-import { useFeatureStore } from '@/stores/feature'
-import { ApiError } from '@/utils/api'
+} from '@/stores/user/auth'
+import { useUiStore } from '@/stores/shared/ui'
+import { useFeatureStore } from '@/stores/shared/feature'
+import { ApiError } from '@/utils/http/api'
 
 type FormState = {
   name: string

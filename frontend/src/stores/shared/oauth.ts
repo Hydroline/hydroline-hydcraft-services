@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { apiFetch, ApiError } from '@/utils/api'
-import { useAuthStore } from '@/stores/auth'
+import { apiFetch, ApiError } from '@/utils/http/api'
+import { useAuthStore } from '@/stores/user/auth'
 
 export type AdminOAuthProvider = {
   id: string

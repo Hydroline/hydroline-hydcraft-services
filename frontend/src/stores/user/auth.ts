@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { apiFetch, ApiError } from '@/utils/api'
-import { useUiStore } from '@/stores/ui'
+import { apiFetch, ApiError } from '@/utils/http/api'
+import { useUiStore } from '@/stores/shared/ui'
 
 const ACCESS_TOKEN_KEY = 'hydroline.accessToken'
 const REFRESH_TOKEN_KEY = 'hydroline.refreshToken'

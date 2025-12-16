@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
-import { usePlayerPortalStore } from '@/stores/playerPortal'
-import { translateAuthErrorMessage } from '@/utils/auth-errors'
+import { usePlayerPortalStore } from '@/stores/user/playerPortal'
+import { translateAuthErrorMessage } from '@/utils/errors/auth-errors'
 import type { PlayerBiography } from '@/types/portal'
 import MonacoMarkdownEditor from '@/components/editors/MonacoMarkdownEditor.vue'
 

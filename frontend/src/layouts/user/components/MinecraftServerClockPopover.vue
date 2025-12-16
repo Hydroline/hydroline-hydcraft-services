@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
 import { Motion } from 'motion-v'
 import dayjs from 'dayjs'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 
 import type { MinecraftPingResult } from '@/types/minecraft'
 

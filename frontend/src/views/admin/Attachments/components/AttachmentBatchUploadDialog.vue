@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { apiFetch, ApiError } from '@/utils/api'
+import { apiFetch, ApiError } from '@/utils/http/api'
 import type {
   BatchUploadRow,
   VisibilityModeOption,

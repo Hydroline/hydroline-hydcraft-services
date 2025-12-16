@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import dayjs from 'dayjs'
 import { Motion } from 'motion-v'
 import VChart from 'vue-echarts'
-import { apiFetch } from '@/utils/api'
+import { apiFetch } from '@/utils/http/api'
 
 type ServerStatusResponse = {
   servers: PublicServerStatusItem[]

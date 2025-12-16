@@ -2,9 +2,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { computed, onMounted, ref } from 'vue'
 import SessionsSection from './components/sections/SessionsSection.vue'
-import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
-import { ApiError } from '@/utils/api'
+import { useAuthStore } from '@/stores/user/auth'
+import { useUiStore } from '@/stores/shared/ui'
+import { ApiError } from '@/utils/http/api'
 const auth = useAuthStore()
 const ui = useUiStore()
 

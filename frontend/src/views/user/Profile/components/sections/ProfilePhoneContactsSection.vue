@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { useFeatureStore } from '@/stores/feature'
-import { ApiError } from '@/utils/api'
-import { translateAuthErrorMessage } from '@/utils/auth-errors'
+import { useAuthStore } from '@/stores/user/auth'
+import { useFeatureStore } from '@/stores/shared/feature'
+import { ApiError } from '@/utils/http/api'
+import { translateAuthErrorMessage } from '@/utils/errors/auth-errors'
 import { phoneRegions } from '@/constants/profile'
 
 const auth = useAuthStore()

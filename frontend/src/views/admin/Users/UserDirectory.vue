@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useAdminUsersStore } from '@/stores/adminUsers'
-import { useAdminRbacStore } from '@/stores/adminRbac'
-import { useUiStore } from '@/stores/ui'
+import { useAdminUsersStore } from '@/stores/admin/users'
+import { useAdminRbacStore } from '@/stores/admin/rbac'
+import { useUiStore } from '@/stores/shared/ui'
 import type { AdminUserListItem } from '@/types/admin'
 import UserDetailDialog from '@/views/admin/components/UserDetailDialog.vue'
 import PlayerDetailDialog from '@/views/admin/components/PlayerDetailDialog.vue'

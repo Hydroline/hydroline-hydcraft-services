@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useMinecraftServerStore } from '@/stores/minecraftServers'
-import { useUiStore } from '@/stores/ui'
-import { useAuthStore } from '@/stores/auth'
-import { apiFetch } from '@/utils/api'
+import { useMinecraftServerStore } from '@/stores/user/minecraftServers'
+import { useUiStore } from '@/stores/shared/ui'
+import { useAuthStore } from '@/stores/user/auth'
+import { apiFetch } from '@/utils/http/api'
 import type {
   BeaconStatusResponse,
   BeaconConnectionStatus,

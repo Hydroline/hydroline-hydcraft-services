@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
-import { usePlayerPortalStore } from '@/stores/playerPortal'
-import { translateAuthErrorMessage } from '@/utils/auth-errors'
+import { usePlayerPortalStore } from '@/stores/user/playerPortal'
+import { translateAuthErrorMessage } from '@/utils/errors/auth-errors'
 
 const props = defineProps<{
   open: boolean

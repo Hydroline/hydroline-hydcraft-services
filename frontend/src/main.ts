@@ -7,9 +7,9 @@ import lucideIcons from '@iconify-json/lucide/icons.json'
 import logosIcons from '@iconify-json/logos/icons.json'
 
 import router from './router'
-import { useUiStore } from '@/stores/ui'
-import { useAuthStore } from '@/stores/auth'
-import { useFeatureStore } from '@/stores/feature'
+import { useUiStore } from '@/stores/shared/ui'
+import { useAuthStore } from '@/stores/user/auth'
+import { useFeatureStore } from '@/stores/shared/feature'
 
 import './assets/styles/tailwind.css'
 import './assets/styles/style.css'

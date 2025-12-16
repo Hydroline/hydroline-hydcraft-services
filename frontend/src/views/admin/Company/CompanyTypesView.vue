@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useAdminCompanyTypesStore } from '@/stores/adminCompanyTypes'
+import { useAdminCompanyTypesStore } from '@/stores/admin/companyTypes'
 import type { CompanyType } from '@/types/company'
 
 const store = useAdminCompanyTypesStore()

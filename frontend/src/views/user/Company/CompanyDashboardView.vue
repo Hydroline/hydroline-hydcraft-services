@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { useCompanyStore } from '@/stores/companies'
+import { useAuthStore } from '@/stores/user/auth'
+import { useCompanyStore } from '@/stores/user/companies'
 import CompanyStatusBadge from '@/components/company/CompanyStatusBadge.vue'
 import CompanyApplicationForm from '@/components/company/CompanyApplicationForm.vue'
 import CompanyProfileForm from '@/components/company/CompanyProfileForm.vue'
