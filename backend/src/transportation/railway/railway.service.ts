@@ -700,11 +700,7 @@ export class TransportationRailwayService {
     return {
       source: 'rails' as const,
       points: path.map((position) => ({ x: position.x, z: position.z })),
-      segments: this.collectRouteSegments(
-        finder,
-        platformNodes,
-        pathResult?.segments ?? [],
-      ),
+      segments: pathResult?.segments ?? undefined,
     };
   }
 
@@ -870,40 +866,6 @@ export class TransportationRailwayService {
         graph.connections.get(toId)!.set(fromId, reversed);
       }
     }
-  }
-
-  private collectRouteSegments(
-    finder: MtrRouteFinder,
-    platformNodes: PlatformNode[],
-    primarySegments: RailGeometrySegment[],
-  ) {
-    const registry = new Map<string, RailGeometrySegment>();
-    const insertSegment = (segment: RailGeometrySegment | null | undefined) => {
-      if (!segment?.start || !segment?.end) {
-        return;
-      }
-      const key = this.buildSegmentKey(segment.start, segment.end);
-      if (!registry.has(key)) {
-        registry.set(key, segment);
-      }
-    };
-    primarySegments.forEach((segment) => insertSegment(segment));
-    for (let index = 0; index < platformNodes.length - 1; index += 1) {
-      const current = platformNodes[index];
-      const next = platformNodes[index + 1];
-      if (!current?.nodes?.length || !next?.nodes?.length) {
-        continue;
-      }
-      const variants = finder.findRouteVariants(current.nodes, next.nodes);
-      variants.forEach((variant) =>
-        variant.segments.forEach((segment) => insertSegment(segment)),
-      );
-    }
-    return Array.from(registry.values());
-  }
-
-  private buildSegmentKey(start: BlockPosition, end: BlockPosition) {
-    return `${start.x},${start.y},${start.z}->${end.x},${end.y},${end.z}`;
   }
 
   private computePlatformCenter(platform: RailwayPlatformRecord) {
@@ -1088,6 +1050,14 @@ export class TransportationRailwayService {
     if (!metadata) {
       return null;
     }
+    const reverseCurve = (curve: RailCurveParameters | null) => {
+      if (!curve) return null;
+      const reversedFlag = !(curve.reverse ?? false);
+      return {
+        ...curve,
+        reverse: reversedFlag,
+      };
+    };
     return {
       targetNodeId,
       railType: metadata.railType,
@@ -1097,12 +1067,9 @@ export class TransportationRailwayService {
       yStart: metadata.yEnd,
       yEnd: metadata.yStart,
       verticalCurveRadius: metadata.verticalCurveRadius,
-      primary: metadata.secondary ?? metadata.primary,
-      secondary: metadata.primary ?? metadata.secondary,
-      preferredCurve: this.pickPreferredRailCurve(
-        metadata.secondary ?? metadata.primary,
-        metadata.primary ?? metadata.secondary,
-      ),
+      primary: reverseCurve(metadata.primary),
+      secondary: reverseCurve(metadata.secondary),
+      preferredCurve: metadata.preferredCurve,
     };
   }
 

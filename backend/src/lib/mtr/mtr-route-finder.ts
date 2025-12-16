@@ -60,38 +60,6 @@ export class MtrRouteFinder {
     return collected.length ? { points: collected, segments } : null;
   }
 
-  findRouteVariants(
-    startNodes: RailGraphNode[],
-    targetNodes: RailGraphNode[],
-  ): PathResult[] {
-    const results: PathResult[] = [];
-    if (!startNodes.length || !targetNodes.length) {
-      return results;
-    }
-    const targetSet = new Set(
-      targetNodes
-        .map((node) => node.id)
-        .filter((id): id is string =>
-          Boolean(id && this.graph.positions.has(id)),
-        ),
-    );
-    if (!targetSet.size) {
-      return results;
-    }
-    for (const node of startNodes) {
-      if (!node?.id || !this.graph.positions.has(node.id)) {
-        continue;
-      }
-      const path = this.findPathFromSingle(node.id, targetSet);
-      if (!path) {
-        continue;
-      }
-      results.push(path);
-      this.bumpDensityAlongPath(path.segments);
-    }
-    return results;
-  }
-
   private initializeDensity() {
     for (const [from, neighbors] of this.graph.adjacency) {
       for (const to of neighbors) {
@@ -133,64 +101,6 @@ export class MtrRouteFinder {
       previous.set(id, null);
       openSet.push({ id, cost: 0 });
     }
-    let visits = 0;
-    while (openSet.length) {
-      openSet.sort((a, b) => a.cost - b.cost);
-      const current = openSet.shift()!;
-      const knownCost = distances.get(current.id) ?? Number.POSITIVE_INFINITY;
-      if (current.cost > knownCost) {
-        continue;
-      }
-      visits += 1;
-      if (visits > MAX_SEARCH_VISITS) {
-        break;
-      }
-      if (targetSet.has(current.id)) {
-        return this.reconstructPath(current.id, previous);
-      }
-      const neighbors = this.graph.adjacency.get(current.id);
-      if (!neighbors?.size) {
-        continue;
-      }
-      const currentPosition = this.graph.positions.get(current.id);
-      if (!currentPosition) {
-        continue;
-      }
-      for (const neighbor of neighbors) {
-        const neighborPosition = this.graph.positions.get(neighbor);
-        if (!neighborPosition) {
-          continue;
-        }
-        const connection =
-          this.graph.connections.get(current.id)?.get(neighbor) ?? null;
-        const edgeCost = this.calculateEdgeCost(
-          connection,
-          currentPosition,
-          neighborPosition,
-        );
-        const newCost = knownCost + edgeCost;
-        const existingCost =
-          distances.get(neighbor) ?? Number.POSITIVE_INFINITY;
-        if (newCost < existingCost) {
-          distances.set(neighbor, newCost);
-          previous.set(neighbor, current.id);
-          openSet.push({ id: neighbor, cost: newCost });
-        }
-      }
-    }
-    return null;
-  }
-
-  private findPathFromSingle(
-    startId: string,
-    targetSet: Set<string>,
-  ): PathResult | null {
-    if (!this.graph.positions.has(startId) || !targetSet.size) {
-      return null;
-    }
-    const openSet: Candidate[] = [{ id: startId, cost: 0 }];
-    const distances = new Map<string, number>([[startId, 0]]);
-    const previous = new Map<string, string | null>([[startId, null]]);
     let visits = 0;
     while (openSet.length) {
       openSet.sort((a, b) => a.cost - b.cost);
