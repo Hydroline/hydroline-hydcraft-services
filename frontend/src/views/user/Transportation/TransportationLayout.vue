@@ -10,13 +10,15 @@ const tabs = [
     label: '铁路系统',
     name: 'transportation.railway',
     disabled: false,
-    description: 'Beacon Railway / Dynmap',
+    description: '全服正在运行的周目的铁路系统数据',
+    icon: 'i-lucide-train',
   },
   {
-    label: '航空系统（筹备中）',
+    label: '航空系统',
     name: 'transportation.aviation',
     disabled: true,
     description: '即将上线的航空交通数据',
+    icon: 'i-lucide-navigation',
   },
 ]
 
@@ -35,39 +37,23 @@ function handleTabClick(name: string, disabled: boolean) {
 </script>
 
 <template>
-  <div class="mx-auto flex w-full max-w-8xl flex-col gap-5 px-4 py-6 md:py-10">
-    <header
-      class="rounded-3xl border border-slate-200/70 bg-white/80 p-6 shadow-sm backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70"
-    >
-      <p
-        class="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400"
-      >
-        Hydroline Transportation
-      </p>
-      <div
-        class="mt-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
-      >
-        <div>
-          <h1 class="text-3xl font-semibold text-slate-900 dark:text-white">
-            交通系统管控台
-          </h1>
-          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            汇总各启用 Beacon
-            的铁路、航空等交通数据，统一展示线路、车站与实时运行态势。
-          </p>
-        </div>
+  <div class="relative mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 md:py-10">
+    <header>
+      <div class="flex justify-center gap-4">
         <div class="flex flex-wrap gap-2">
           <UTooltip
             v-for="tab in tabs"
             :key="tab.name"
-            :text="tab.disabled ? '数据整理中，敬请期待' : tab.description"
+            :text="tab.disabled ? undefined : tab.description"
           >
             <UButton
-              :color="activeTab === tab.name ? 'primary' : 'neutral'"
-              :variant="activeTab === tab.name ? 'solid' : 'soft'"
+              class="flex items-center gap-1 text-xs"
+              color="primary"
+              :variant="activeTab === tab.name ? 'soft' : 'ghost'"
               :disabled="tab.disabled"
               @click="handleTabClick(tab.name, tab.disabled)"
             >
+              <UIcon :name="tab.icon" class="size-4" />
               {{ tab.label }}
             </UButton>
           </UTooltip>

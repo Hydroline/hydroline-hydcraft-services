@@ -6,6 +6,8 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 import RailwayMapPanel from '@/transportation/railway/components/RailwayMapPanel.vue'
 import { useTransportationRailwayStore } from '@/transportation/railway/store'
 import type { RailwayRouteDetail } from '@/types/transportation'
+import { getDimensionName } from '@/utils/dimension-names'
+import { parseRouteName } from '@/utils/route-name'
 
 dayjs.extend(relativeTime)
 
@@ -49,6 +51,8 @@ const metadataList = computed(() => {
     },
   ]
 })
+
+const routeName = computed(() => parseRouteName(detail.value?.route.name))
 
 const stations = computed(() => detail.value?.stations ?? [])
 const platforms = computed(() => detail.value?.platforms ?? [])
@@ -151,7 +155,8 @@ onMounted(() => {
 <template>
   <div class="space-y-6">
     <UButton
-      color="neutral"
+      size="sm"
+      class="absolute left-4 top-6 md:top-10"
       variant="ghost"
       icon="i-lucide-arrow-left"
       @click="router.push({ name: 'transportation.railway' })"
@@ -159,62 +164,96 @@ onMounted(() => {
       返回概览
     </UButton>
 
-    <div>
-      <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
-        Dynmap 路径
-      </h3>
-      <div
-        class="mt-3 relative rounded-3xl border border-slate-200/70 dark:border-slate-800"
-      >
-        <RailwayMapPanel
-          :geometry="detail?.geometry ?? null"
-          :stops="detail?.stops ?? []"
-          :color="detail?.route.color ?? null"
-          :loading="!detail"
-          height="720px"
-        />
-        <div
-          class="pointer-events-none absolute inset-x-4 top-4 flex justify-end z-999"
-        >
-          <UButton
-            size="sm"
-            variant="soft"
-            color="primary"
-            class="pointer-events-auto"
-            icon="i-lucide-compass"
-            @click="goDetailedMap"
+    <div class="mt-3">
+      <div class="flex flex-col gap-1">
+        <p class="text-sm uppercase text-slate-500 mb-2">铁路线路详情</p>
+
+        <div>
+          <div class="text-4xl font-semibold text-slate-900 dark:text-white">
+            {{ routeName.title }}
+          </div>
+          <div
+            class="flex items-center gap-1.5 text-lg font-semibold text-slate-600 dark:text-slate-300"
+            v-if="routeName.subtitle"
           >
-            查看详细地图
-          </UButton>
+            {{ routeName.subtitle }}
+
+            <UBadge variant="solid" size="sm" v-if="routeName.badge">
+              {{ routeName.badge }}
+            </UBadge>
+
+            <UBadge variant="soft" size="sm">
+              {{ detail?.server.name || params.serverId }}
+            </UBadge>
+
+            <UBadge variant="soft" size="sm">
+              {{ getDimensionName(detail?.dimension || params.dimension) }}
+            </UBadge>
+          </div>
         </div>
       </div>
     </div>
 
-    <UCard>
-      <template #header>
-        <div class="flex flex-col gap-1">
-          <p class="text-xs uppercase text-slate-500">铁路线路详情</p>
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-            {{ detail?.route.name || '未命名线路' }}
-          </h1>
-          <p class="text-sm text-slate-500">
-            服务器：{{ detail?.server.name || params.serverId }} ·
-            {{ detail?.dimension || params.dimension || '未知维度' }}
-          </p>
-        </div>
-      </template>
-      <div v-if="loading" class="text-sm text-slate-500">加载中…</div>
-      <div v-else-if="errorMessage" class="text-sm text-red-500">
-        {{ errorMessage }}
+    <div
+      class="mt-3 relative rounded-3xl border border-slate-200/70 dark:border-slate-800"
+    >
+      <RailwayMapPanel
+        :geometry="detail?.geometry ?? null"
+        :stops="detail?.stops ?? []"
+        :color="detail?.route.color ?? null"
+        :loading="!detail"
+        height="420px"
+      />
+      <div
+        class="pointer-events-none absolute inset-x-4 top-4 flex justify-end z-999"
+      >
+        <UButton
+          size="sm"
+          variant="ghost"
+          color="neutral"
+          class="pointer-events-auto backdrop-blur-2xl text-white bg-black/20 dark:bg-slate-900/10 hover:bg-white/20 dark:hover:bg-slate-900/20 shadow"
+          icon="i-lucide-compass"
+          @click="goDetailedMap"
+        >
+          查看地图
+        </UButton>
       </div>
+    </div>
+
+    <div>
+      <div v-if="loading" class="text-sm text-slate-500">加载中…</div>
       <div v-else-if="detail" class="space-y-6">
+        <section class="flex flex-col">
+          <h3 class="text-lg text-slate-600 dark:text-slate-300">所经站点</h3>
+          <div class="mt-3 flex gap-3 overflow-x-auto">
+            <p v-if="stations.length === 0" class="text-sm text-slate-500">
+              暂无站点数据
+            </p>
+
+            <div
+              v-for="station in stations"
+              :key="station.id"
+              class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
+            >
+              <p class="font-medium text-slate-900 dark:text-white">
+                {{ station.name || station.id }}
+              </p>
+              <p class="text-xs text-slate-500">
+                区域：{{ station.bounds.xMin }} ~ {{ station.bounds.xMax }},
+                {{ station.bounds.zMin }} ~ {{ station.bounds.zMax }}
+              </p>
+              <p class="text-xs text-slate-500">
+                区号：{{ station.zone ?? '—' }}
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section class="grid gap-4 lg:grid-cols-2">
           <div class="space-y-3">
-            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
-              基本信息
-            </h3>
+            <h3 class="text-lg text-slate-600 dark:text-slate-300">基本信息</h3>
             <div
-              class="grid gap-3 rounded-2xl border border-slate-200/70 p-4 dark:border-slate-800"
+              class="grid gap-3 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
             >
               <div
                 class="grid gap-2 text-sm text-slate-600 dark:text-slate-300"
@@ -246,12 +285,11 @@ onMounted(() => {
               </div>
             </div>
           </div>
+
           <div class="space-y-3">
-            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
-              数据状态
-            </h3>
+            <h3 class="text-lg text-slate-600 dark:text-slate-300">数据状态</h3>
             <div
-              class="grid gap-2 rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-slate-800"
+              class="grid gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
             >
               <div
                 v-for="item in metadataList"
@@ -282,42 +320,13 @@ onMounted(() => {
           </div>
         </section>
 
-        <section class="grid gap-4 grid-cols-2">
-          <div>
-            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
-              所经站点
-            </h3>
-            <div class="mt-3 space-y-3">
-              <p v-if="stations.length === 0" class="text-sm text-slate-500">
-                暂无站点数据。
-              </p>
-              <div
-                v-for="station in stations"
-                :key="station.id"
-                class="rounded-2xl border border-slate-200/70 p-3 text-sm dark:border-slate-800"
-              >
-                <p class="font-medium text-slate-900 dark:text-white">
-                  {{ station.name || station.id }}
-                </p>
-                <p class="text-xs text-slate-500">
-                  区域：{{ station.bounds.xMin }} ~ {{ station.bounds.xMax }},
-                  {{ station.bounds.zMin }} ~ {{ station.bounds.zMax }}
-                </p>
-                <p class="text-xs text-slate-500">
-                  区号：{{ station.zone ?? '—' }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <section class="space-y-3">
-          <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
+          <h3 class="text-lg text-slate-600 dark:text-slate-300">
             平台 & 关联车厂
           </h3>
           <div class="grid gap-4 lg:grid-cols-2">
             <div
-              class="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-slate-800"
+              class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
             >
               <h4 class="mb-2 font-medium text-slate-700 dark:text-white">
                 平台
@@ -345,21 +354,17 @@ onMounted(() => {
                 </tbody>
               </table>
             </div>
+
             <div
-              class="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-slate-800"
+              class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
             >
               <h4 class="mb-2 font-medium text-slate-700 dark:text-white">
                 关联车厂/车段
               </h4>
               <div class="space-y-2">
-                <p v-if="depots.length === 0" class="text-slate-500">
-                  暂无关联数据。
-                </p>
-                <div
-                  v-for="depot in depots"
-                  :key="depot.id"
-                  class="rounded-xl border border-slate-100 p-2 dark:border-slate-700"
-                >
+                <p v-if="depots.length === 0">暂无关联数据。</p>
+
+                <div v-for="depot in depots" :key="depot.id">
                   <p class="font-medium text-slate-900 dark:text-white">
                     {{ depot.name || depot.id }}
                   </p>
@@ -372,6 +377,6 @@ onMounted(() => {
           </div>
         </section>
       </div>
-    </UCard>
+    </div>
   </div>
 </template>
