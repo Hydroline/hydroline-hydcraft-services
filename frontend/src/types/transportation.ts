@@ -57,6 +57,38 @@ export interface RailwayGeometryPoint {
   z: number
 }
 
+export interface RailwayCurveParameters {
+  h: number | null
+  k: number | null
+  r: number | null
+  tStart: number | null
+  tEnd: number | null
+  reverse: boolean | null
+  isStraight: boolean | null
+}
+
+export type PreferredRailCurve = 'primary' | 'secondary' | null
+
+export interface RailwayGeometrySegmentConnection {
+  targetNodeId: string
+  railType: string | null
+  transportMode: string | null
+  modelKey: string | null
+  isSecondaryDir: boolean | null
+  yStart: number | null
+  yEnd: number | null
+  verticalCurveRadius: number | null
+  primary: RailwayCurveParameters | null
+  secondary: RailwayCurveParameters | null
+  preferredCurve?: PreferredRailCurve
+}
+
+export interface RailwayGeometrySegment {
+  start: { x: number; y: number; z: number }
+  end: { x: number; y: number; z: number }
+  connection: RailwayGeometrySegmentConnection | null
+}
+
 export interface RailwayRouteDetail {
   server: { id: string; name: string }
   dimension: string | null
@@ -89,6 +121,7 @@ export interface RailwayRouteDetail {
   geometry: {
     source: 'rails' | 'platform-centers' | 'station-bounds'
     points: RailwayGeometryPoint[]
+    segments?: RailwayGeometrySegment[]
   }
 }
 

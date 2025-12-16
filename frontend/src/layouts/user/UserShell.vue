@@ -224,7 +224,7 @@ const routerPush = (path: string) => {
       :class="[isSidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64']"
     >
       <header
-        class="sticky top-0 z-40 grid h-16 grid-cols-[1fr_auto_1fr] items-center px-4 border-b transition-all duration-300"
+        class="sticky top-0 z-40000 grid h-16 grid-cols-[1fr_auto_1fr] items-center px-4 border-b transition-all duration-300"
         :class="{
           'backdrop-blur-xl bg-white/60 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800':
             !isMainPage || isScrolled,

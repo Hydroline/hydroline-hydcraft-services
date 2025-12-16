@@ -110,6 +110,7 @@ export class DynmapMapController {
       preferCanvas: true,
       zoomControl: options.showZoomControl ?? true,
       attributionControl: false,
+      scrollWheelZoom: true,
     })
 
     tileLayer.addTo(map)

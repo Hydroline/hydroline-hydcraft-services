@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import 'leaflet/dist/leaflet.css'
-import { RailwayMap } from '@/transportation/railway/map'
+import RailwayMapPanel from '@/transportation/railway/components/RailwayMapPanel.vue'
 import { useTransportationRailwayStore } from '@/transportation/railway/store'
 import type { RailwayRouteDetail } from '@/types/transportation'
 
@@ -18,9 +17,6 @@ const transportationStore = useTransportationRailwayStore()
 const detail = ref<RailwayRouteDetail | null>(null)
 const loading = ref(true)
 const errorMessage = ref<string | null>(null)
-
-const mapContainerRef = ref<HTMLElement | null>(null)
-const railwayMap = ref<RailwayMap | null>(null)
 
 const params = computed(() => {
   const routeId = route.params.routeId as string | undefined
@@ -67,37 +63,12 @@ function getStationName(stationId: string | null | undefined) {
   return station?.name || `站点 ${stationId}`
 }
 
-function teardownMap() {
-  railwayMap.value?.destroy()
-  railwayMap.value = null
-}
-
-function drawGeometry() {
-  if (!detail.value || !railwayMap.value) return
-  railwayMap.value.drawGeometry(detail.value.geometry.points, {
-    color: detail.value.route.color,
-    weight: 4,
-    opacity: 0.85,
+function goDetailedMap() {
+  router.push({
+    name: 'transportation.railway.route.map',
+    params: route.params,
+    query: route.query,
   })
-}
-
-function clearGeometry() {
-  if (!railwayMap.value) return
-  railwayMap.value.drawGeometry([])
-}
-
-async function initMap() {
-  if (!mapContainerRef.value) return
-  if (!railwayMap.value) {
-    const map = new RailwayMap()
-    map.mount({
-      container: mapContainerRef.value,
-      zoom: 2,
-      showZoomControl: true,
-    })
-    railwayMap.value = map
-  }
-  drawGeometry()
 }
 
 async function fetchDetail() {
@@ -105,7 +76,6 @@ async function fetchDetail() {
   if (!routeId || !serverId) {
     errorMessage.value = '缺少 routeId 或 serverId 参数'
     detail.value = null
-    clearGeometry()
     loading.value = false
     return
   }
@@ -117,14 +87,12 @@ async function fetchDetail() {
       true,
     )
     detail.value = result
-    await initMap()
   } catch (error) {
     console.error(error)
     errorMessage.value =
       error instanceof Error ? error.message : '加载失败，请稍后再试'
     toast.add({ title: errorMessage.value, color: 'error' })
     detail.value = null
-    clearGeometry()
   } finally {
     loading.value = false
   }
@@ -140,10 +108,6 @@ watch(
 onMounted(() => {
   void fetchDetail()
 })
-
-onBeforeUnmount(() => {
-  teardownMap()
-})
 </script>
 
 <template>
@@ -156,6 +120,36 @@ onBeforeUnmount(() => {
     >
       返回概览
     </UButton>
+
+    <div>
+      <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
+        Dynmap 路径
+      </h3>
+      <div
+        class="mt-3 relative rounded-3xl border border-slate-200/70 dark:border-slate-800"
+      >
+        <RailwayMapPanel
+          :geometry="detail?.geometry ?? null"
+          :color="detail?.route.color ?? null"
+          :loading="!detail"
+          height="720px"
+        />
+        <div
+          class="pointer-events-none absolute inset-x-4 top-4 flex justify-end z-999"
+        >
+          <UButton
+            size="sm"
+            variant="soft"
+            color="primary"
+            class="pointer-events-auto"
+            icon="i-lucide-compass"
+            @click="goDetailedMap"
+          >
+            查看详细地图
+          </UButton>
+        </div>
+      </div>
+    </div>
 
     <UCard>
       <template #header>
@@ -234,20 +228,7 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section class="grid gap-4 lg:grid-cols-2">
-          <div>
-            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
-              Dynmap 路径
-            </h3>
-            <div
-              class="mt-3 rounded-3xl border border-slate-200/70 p-2 dark:border-slate-800"
-            >
-              <div
-                ref="mapContainerRef"
-                class="h-[360px] w-full overflow-hidden rounded-2xl"
-              ></div>
-            </div>
-          </div>
+        <section class="grid gap-4 grid-cols-2">
           <div>
             <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
               所经站点

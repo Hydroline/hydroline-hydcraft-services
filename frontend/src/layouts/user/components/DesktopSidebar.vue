@@ -80,7 +80,7 @@ const handleToggle = () => {
 <template>
   <!-- Desktop Sidebar -->
   <aside
-    class="fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-slate-200 bg-white/60 backdrop-blur-xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-950/70 lg:flex"
+    class="fixed inset-y-0 left-0 z-40000 hidden flex-col border-r border-slate-200 bg-white/60 backdrop-blur-xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-950/70 lg:flex"
     :class="[isSidebarCollapsed ? 'w-16' : 'w-64']"
   >
     <div class="h-16 border-b border-slate-200 dark:border-slate-800">

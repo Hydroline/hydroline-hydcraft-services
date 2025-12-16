@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import 'leaflet/dist/leaflet.css'
-import { RailwayMap } from '@/transportation/railway/map'
+import RailwayMapPanel from '@/transportation/railway/components/RailwayMapPanel.vue'
 import { useTransportationRailwayStore } from '@/transportation/railway/store'
 import { useAuthStore } from '@/stores/auth'
 import type {
@@ -18,8 +16,6 @@ dayjs.extend(relativeTime)
 
 const transportationStore = useTransportationRailwayStore()
 const authStore = useAuthStore()
-const router = useRouter()
-const route = useRoute()
 const toast = useToast()
 
 const overview = computed(() => transportationStore.overview)
@@ -81,10 +77,6 @@ const activeRecommendation = computed<RailwayRoute | null>(
   () => recommendations.value[selectedRecommendationIndex.value] ?? null,
 )
 const recommendationDetail = ref<RailwayRouteDetail | null>(null)
-
-const mapContainerRef = ref<HTMLElement | null>(null)
-const railwayMap = ref<RailwayMap | null>(null)
-const mapReady = ref(false)
 
 function resetBannerForm(banner?: RailwayBanner | null) {
   bannerForm.attachmentId = banner?.attachmentId ?? ''
@@ -174,7 +166,6 @@ function buildRouteDetailLink(item: RailwayRoute) {
 async function refreshRecommendationDetail(routeItem: RailwayRoute | null) {
   if (!routeItem) {
     recommendationDetail.value = null
-    clearRouteGeometry()
     return
   }
   try {
@@ -184,7 +175,6 @@ async function refreshRecommendationDetail(routeItem: RailwayRoute | null) {
       dimension: routeItem.dimension ?? undefined,
     })
     recommendationDetail.value = detail
-    drawRouteGeometry(detail)
   } catch (error) {
     console.error(error)
     toast.add({
@@ -193,46 +183,6 @@ async function refreshRecommendationDetail(routeItem: RailwayRoute | null) {
       color: 'error',
     })
   }
-}
-
-function teardownMap() {
-  railwayMap.value?.destroy()
-  railwayMap.value = null
-  mapReady.value = false
-}
-
-async function initMap() {
-  if (!mapContainerRef.value || railwayMap.value) return
-  try {
-    const map = new RailwayMap()
-    map.mount({
-      container: mapContainerRef.value,
-      zoom: 2,
-      showZoomControl: true,
-    })
-    railwayMap.value = map
-    mapReady.value = true
-    if (recommendationDetail.value) {
-      drawRouteGeometry(recommendationDetail.value)
-    }
-  } catch (error) {
-    mapReady.value = false
-    console.error(error)
-  }
-}
-
-function drawRouteGeometry(detail: RailwayRouteDetail | null) {
-  if (!detail || !railwayMap.value) return
-  railwayMap.value.drawGeometry(detail.geometry.points, {
-    color: detail.route.color ?? null,
-    weight: 4,
-    opacity: 0.85,
-  })
-}
-
-function clearRouteGeometry() {
-  if (!railwayMap.value) return
-  railwayMap.value.drawGeometry([])
 }
 
 async function handleSubmitBanner() {
@@ -303,7 +253,6 @@ watch(
       void refreshRecommendationDetail(items[0])
     } else {
       recommendationDetail.value = null
-      clearRouteGeometry()
     }
   },
 )
@@ -324,7 +273,6 @@ watch(
 onMounted(async () => {
   await transportationStore.fetchOverview()
   startBannerCycle()
-  await initMap()
   if (activeRecommendation.value) {
     void refreshRecommendationDetail(activeRecommendation.value)
   }
@@ -332,7 +280,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopBannerCycle()
-  teardownMap()
 })
 </script>
 
@@ -579,14 +526,15 @@ onBeforeUnmount(() => {
               仅展示推荐线路的路线骨架，点击上方可切换
             </p>
           </div>
-          <UBadge v-if="!mapReady" color="warning" variant="soft" size="xs">
-            地图初始化中
-          </UBadge>
         </div>
-        <div
-          ref="mapContainerRef"
-          class="h-[360px] w-full overflow-hidden rounded-b-2xl"
-        ></div>
+        <div class="p-3 pt-0">
+          <RailwayMapPanel
+            :geometry="recommendationDetail?.geometry ?? null"
+            :color="recommendationDetail?.route.color ?? null"
+            :loading="!recommendationDetail"
+            height="360px"
+          />
+        </div>
       </div>
     </section>
 

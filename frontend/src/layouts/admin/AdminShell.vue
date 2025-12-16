@@ -260,7 +260,7 @@ onMounted(() => {
     <AppLoadingBar />
 
     <header
-      class="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-950/80"
+      class="sticky top-0 z-40000 flex h-14 items-center justify-between border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-950/80"
     >
       <div class="flex items-center gap-3">
         <UButton
@@ -308,7 +308,7 @@ onMounted(() => {
       <transition name="slide-fade">
         <aside
           v-if="sidebarOpen"
-          class="fixed inset-y-0 left-0 z-30 w-72 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:bg-slate-950/95 lg:hidden"
+          class="fixed inset-y-0 left-0 z-40000 w-72 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:bg-slate-950/95 lg:hidden"
         >
           <nav class="space-y-4 text-sm">
             <section

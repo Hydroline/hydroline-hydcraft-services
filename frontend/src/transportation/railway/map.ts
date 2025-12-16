@@ -22,7 +22,7 @@ function toHexColor(value: number | null | undefined) {
 
 export class RailwayMap {
   private controller: DynmapMapController
-  private polyline: L.Polyline | null = null
+  private polylines: L.Polyline[] = []
 
   constructor() {
     this.controller = createHydcraftDynmapMap()
@@ -36,33 +36,57 @@ export class RailwayMap {
     return this.controller
   }
 
-  drawGeometry(points: RailwayGeometryPoint[], options?: DrawOptions) {
-    this.polyline?.remove()
-    this.polyline = null
-    if (!points?.length) return
-    const latlngs = points
-      .map((point) =>
-        this.controller.toLatLng({
-          x: point.x,
-          z: point.z,
-        }),
-      )
-      .filter(Boolean) as L.LatLngExpression[]
-    if (!latlngs.length) return
+  drawGeometry(paths: RailwayGeometryPoint[][] = [], options?: DrawOptions) {
+    this.clearPolylines()
     const map = this.controller.getLeafletInstance()
     if (!map) return
-    this.polyline = L.polyline(latlngs, {
-      color: toHexColor(options?.color ?? null),
-      weight: options?.weight ?? 4,
-      opacity: options?.opacity ?? 0.85,
-    }).addTo(map)
+    const color = toHexColor(options?.color ?? null)
     const focusZoom = options?.focusZoom ?? 4
-    this.controller.flyToBlock(points[0], focusZoom)
+    if (!paths.length) return
+    const focusPoint = paths[0]?.[0]
+    let bounds: L.LatLngBounds | null = null
+    for (const path of paths) {
+      if (!path?.length) continue
+      const latlngs = path
+        .map((point) =>
+          this.controller.toLatLng({
+            x: point.x,
+            z: point.z,
+          }),
+        )
+        .filter(Boolean) as L.LatLngExpression[]
+      if (!latlngs.length) continue
+      const polyline = L.polyline(latlngs, {
+        color,
+        weight: options?.weight ?? 4,
+        opacity: options?.opacity ?? 0.85,
+      }).addTo(map)
+      this.polylines.push(polyline)
+      const polyBounds = polyline.getBounds()
+      bounds = bounds ? bounds.extend(polyBounds) : polyBounds
+    }
+    if (bounds && bounds.isValid()) {
+      const padding = L.point(32, 32)
+      const targetZoom = map.getBoundsZoom(bounds, false, padding)
+      if (targetZoom < map.getMinZoom()) {
+        map.setMinZoom(targetZoom)
+      }
+      map.flyToBounds(bounds, {
+        padding: [padding.x, padding.y],
+        maxZoom: focusZoom,
+      })
+    } else if (focusPoint) {
+      this.controller.flyToBlock(focusPoint, focusZoom)
+    }
   }
 
   destroy() {
-    this.polyline?.remove()
-    this.polyline = null
+    this.clearPolylines()
     this.controller.destroy()
+  }
+
+  private clearPolylines() {
+    this.polylines.forEach((polyline) => polyline.remove())
+    this.polylines = []
   }
 }

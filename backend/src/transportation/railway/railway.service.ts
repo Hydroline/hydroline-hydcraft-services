@@ -21,10 +21,19 @@ import {
   decodeBlockPosition,
   encodeBlockPosition,
 } from '../utils/block-pos.util';
+import { MtrRouteFinder } from '../../lib/mtr/mtr-route-finder';
+import type {
+  PlatformNode,
+  RailConnectionMetadata,
+  RailCurveParameters,
+  RailGeometrySegment,
+  RailGraph,
+  RailGraphNode,
+  PreferredRailCurve,
+} from './railway-graph.types';
 
 const BEACON_TIMEOUT_MS = 10000;
 const DEFAULT_RECOMMENDATION_COUNT = 4;
-const MAX_RAIL_SEARCH_VISITS = 20000;
 
 const bannerInclude =
   Prisma.validator<Prisma.TransportationRailwayBannerInclude>()({
@@ -205,22 +214,8 @@ type RouteDetailResult = {
   geometry: {
     source: 'rails' | 'platform-centers' | 'station-bounds';
     points: Array<{ x: number; z: number }>;
+    segments?: RailGeometrySegment[];
   };
-};
-
-type RailGraphNode = {
-  id: string;
-  position: BlockPosition;
-};
-
-type PlatformNode = {
-  platformId: string | null;
-  nodes: RailGraphNode[];
-};
-
-type RailGraph = {
-  positions: Map<string, BlockPosition>;
-  adjacency: Map<string, Set<string>>;
 };
 
 @Injectable()
@@ -696,13 +691,20 @@ export class TransportationRailwayService {
     if (!graph) {
       return null;
     }
-    const path = this.findRailPath(platformNodes, graph);
+    const finder = new MtrRouteFinder(graph);
+    const pathResult = finder.findRoute(platformNodes);
+    const path = pathResult?.points ?? null;
     if (!path?.length) {
       return null;
     }
     return {
       source: 'rails' as const,
       points: path.map((position) => ({ x: position.x, z: position.z })),
+      segments: this.collectRouteSegments(
+        finder,
+        platformNodes,
+        pathResult?.segments ?? [],
+      ),
     };
   }
 
@@ -785,6 +787,7 @@ export class TransportationRailwayService {
     const graph: RailGraph = {
       positions: new Map(),
       adjacency: new Map(),
+      connections: new Map(),
     };
     for (const row of rows) {
       const payload = this.toJsonRecord(row.payload);
@@ -822,6 +825,7 @@ export class TransportationRailwayService {
           nodePosition,
           connectionId,
           connectionPosition,
+          this.normalizeRailConnectionMetadata(connection, connectionId),
         );
       }
     }
@@ -847,109 +851,59 @@ export class TransportationRailwayService {
     fromPosition: BlockPosition,
     toId: string,
     toPosition: BlockPosition,
+    metadata: RailConnectionMetadata | null,
   ) {
     this.appendRailNode(graph, fromId, fromPosition);
     this.appendRailNode(graph, toId, toPosition);
     graph.adjacency.get(fromId)!.add(toId);
     graph.adjacency.get(toId)!.add(fromId);
+    if (metadata) {
+      if (!graph.connections.has(fromId)) {
+        graph.connections.set(fromId, new Map());
+      }
+      if (!graph.connections.has(toId)) {
+        graph.connections.set(toId, new Map());
+      }
+      graph.connections.get(fromId)!.set(toId, metadata);
+      const reversed = this.reverseConnectionMetadata(metadata, fromId);
+      if (reversed) {
+        graph.connections.get(toId)!.set(fromId, reversed);
+      }
+    }
   }
 
-  private findRailPath(platformNodes: PlatformNode[], graph: RailGraph) {
-    if (!platformNodes.length) {
-      return null;
-    }
-    if (platformNodes.length === 1) {
-      return platformNodes[0].nodes.map((node) => node.position);
-    }
-    const collected: BlockPosition[] = [];
-    for (let index = 0; index < platformNodes.length - 1; index++) {
+  private collectRouteSegments(
+    finder: MtrRouteFinder,
+    platformNodes: PlatformNode[],
+    primarySegments: RailGeometrySegment[],
+  ) {
+    const registry = new Map<string, RailGeometrySegment>();
+    const insertSegment = (segment: RailGeometrySegment | null | undefined) => {
+      if (!segment?.start || !segment?.end) {
+        return;
+      }
+      const key = this.buildSegmentKey(segment.start, segment.end);
+      if (!registry.has(key)) {
+        registry.set(key, segment);
+      }
+    };
+    primarySegments.forEach((segment) => insertSegment(segment));
+    for (let index = 0; index < platformNodes.length - 1; index += 1) {
       const current = platformNodes[index];
       const next = platformNodes[index + 1];
-      const segment = this.findRailPathBetween(
-        current.nodes,
-        next.nodes,
-        graph,
+      if (!current?.nodes?.length || !next?.nodes?.length) {
+        continue;
+      }
+      const variants = finder.findRouteVariants(current.nodes, next.nodes);
+      variants.forEach((variant) =>
+        variant.segments.forEach((segment) => insertSegment(segment)),
       );
-      if (!segment?.length) {
-        return null;
-      }
-      if (!collected.length) {
-        collected.push(...segment);
-        continue;
-      }
-      const lastPoint = collected[collected.length - 1];
-      segment.forEach((point, idx) => {
-        if (idx === 0 && lastPoint && this.isSameBlockPos(lastPoint, point)) {
-          return;
-        }
-        collected.push(point);
-      });
     }
-    return collected.length ? collected : null;
+    return Array.from(registry.values());
   }
 
-  private findRailPathBetween(
-    startNodes: RailGraphNode[],
-    targetNodes: RailGraphNode[],
-    graph: RailGraph,
-  ) {
-    const startIds = startNodes
-      .map((node) => node.id)
-      .filter((id): id is string => Boolean(id && graph.positions.has(id)));
-    const targetSet = new Set(
-      targetNodes
-        .map((node) => node.id)
-        .filter((id): id is string => Boolean(id && graph.positions.has(id))),
-    );
-    if (!startIds.length || !targetSet.size) {
-      return null;
-    }
-    const queue: string[] = [];
-    const previous = new Map<string, string | null>();
-    for (const id of startIds) {
-      queue.push(id);
-      previous.set(id, null);
-    }
-    let visits = 0;
-    while (queue.length) {
-      const current = queue.shift() as string;
-      visits += 1;
-      if (targetSet.has(current)) {
-        return this.reconstructRailPath(current, previous, graph);
-      }
-      if (visits > MAX_RAIL_SEARCH_VISITS) {
-        break;
-      }
-      const neighbors = graph.adjacency.get(current);
-      if (!neighbors?.size) {
-        continue;
-      }
-      for (const neighbor of neighbors) {
-        if (previous.has(neighbor)) {
-          continue;
-        }
-        previous.set(neighbor, current);
-        queue.push(neighbor);
-      }
-    }
-    return null;
-  }
-
-  private reconstructRailPath(
-    targetId: string,
-    previous: Map<string, string | null>,
-    graph: RailGraph,
-  ) {
-    const pathIds: string[] = [];
-    let cursor: string | null | undefined = targetId;
-    while (cursor) {
-      pathIds.push(cursor);
-      cursor = previous.get(cursor) ?? null;
-    }
-    pathIds.reverse();
-    return pathIds
-      .map((id) => graph.positions.get(id))
-      .filter((position): position is BlockPosition => Boolean(position));
+  private buildSegmentKey(start: BlockPosition, end: BlockPosition) {
+    return `${start.x},${start.y},${start.z}->${end.x},${end.y},${end.z}`;
   }
 
   private computePlatformCenter(platform: RailwayPlatformRecord) {
@@ -1079,6 +1033,110 @@ export class TransportationRailwayService {
       );
     }
     return [];
+  }
+
+  private normalizeRailConnectionMetadata(
+    value: Record<string, unknown>,
+    targetNodeId: string,
+  ): RailConnectionMetadata | null {
+    const buildCurve = (suffix: '_1' | '_2'): RailCurveParameters | null => {
+      const h = this.toNumber(value[`h${suffix}`]);
+      const k = this.toNumber(value[`k${suffix}`]);
+      const r = this.toNumber(value[`r${suffix}`]);
+      const tStart = this.toNumber(value[`t_start${suffix}`]);
+      const tEnd = this.toNumber(value[`t_end${suffix}`]);
+      const reverse = this.toBoolean(value[`reverse_t${suffix}`]);
+      const isStraight = this.toBoolean(value[`is_straight${suffix}`]);
+      const hasValue = [h, k, r, tStart, tEnd].some((item) => item != null);
+      if (!hasValue && reverse == null && isStraight == null) {
+        return null;
+      }
+      return {
+        h,
+        k,
+        r,
+        tStart,
+        tEnd,
+        reverse,
+        isStraight,
+      };
+    };
+
+    const primary = buildCurve('_1');
+    const secondary = buildCurve('_2');
+    const preferredCurve = this.pickPreferredRailCurve(primary, secondary);
+
+    return {
+      targetNodeId,
+      railType: this.readString(value['rail_type']) ?? null,
+      transportMode: this.readString(value['transport_mode']) ?? null,
+      modelKey: this.readString(value['model_key']) ?? null,
+      isSecondaryDir: this.toBoolean(value['is_secondary_dir']),
+      yStart: this.toNumber(value['y_start']),
+      yEnd: this.toNumber(value['y_end']),
+      verticalCurveRadius: this.toNumber(value['vertical_curve_radius']),
+      primary,
+      secondary,
+      preferredCurve,
+    };
+  }
+
+  private reverseConnectionMetadata(
+    metadata: RailConnectionMetadata | null,
+    targetNodeId: string,
+  ): RailConnectionMetadata | null {
+    if (!metadata) {
+      return null;
+    }
+    return {
+      targetNodeId,
+      railType: metadata.railType,
+      transportMode: metadata.transportMode,
+      modelKey: metadata.modelKey,
+      isSecondaryDir: metadata.isSecondaryDir,
+      yStart: metadata.yEnd,
+      yEnd: metadata.yStart,
+      verticalCurveRadius: metadata.verticalCurveRadius,
+      primary: metadata.secondary ?? metadata.primary,
+      secondary: metadata.primary ?? metadata.secondary,
+      preferredCurve: this.pickPreferredRailCurve(
+        metadata.secondary ?? metadata.primary,
+        metadata.primary ?? metadata.secondary,
+      ),
+    };
+  }
+
+  private pickPreferredRailCurve(
+    primary: RailCurveParameters | null,
+    secondary: RailCurveParameters | null,
+  ): PreferredRailCurve {
+    const primaryExists = Boolean(primary);
+    const secondaryExists = Boolean(secondary);
+    const primaryForward = primaryExists && !this.isReverseCurve(primary);
+    const secondaryForward = secondaryExists && !this.isReverseCurve(secondary);
+    if (primaryForward && !secondaryForward) {
+      return 'primary';
+    }
+    if (secondaryForward && !primaryForward) {
+      return 'secondary';
+    }
+    if (primaryForward) {
+      return 'primary';
+    }
+    if (secondaryForward) {
+      return 'secondary';
+    }
+    if (primaryExists) {
+      return 'primary';
+    }
+    if (secondaryExists) {
+      return 'secondary';
+    }
+    return null;
+  }
+
+  private isReverseCurve(curve: RailCurveParameters | null): boolean {
+    return Boolean(curve?.reverse);
   }
 
   private toJsonRecord(
@@ -1278,6 +1336,38 @@ export class TransportationRailwayService {
     if (typeof value === 'number') return value;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private readString(value: unknown) {
+    if (typeof value === 'string' && value.trim().length) {
+      return value.trim();
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(Math.trunc(value));
+    }
+    return null;
+  }
+
+  private toBoolean(value: unknown): boolean | null {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      if (value === 1) return true;
+      if (value === 0) return false;
+      return value > 0;
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) return null;
+      if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) {
+        return true;
+      }
+      if (['false', '0', 'no', 'n', 'off'].includes(normalized)) {
+        return false;
+      }
+    }
+    return null;
   }
 
   private toCleanPayload(value: unknown): Record<string, unknown> | null {
