@@ -10,10 +10,16 @@ import {
   TransportationRailwayEntityCategory,
   TransportationRailwaySyncJob,
   TransportationRailwaySyncStatus,
+  TransportationRailwayMod,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HydrolineBeaconPoolService } from '../../lib/hydroline-beacon';
 import { HydrolineBeaconEvent } from '../../lib/hydroline-beacon/beacon.client';
+import {
+  DEFAULT_RAILWAY_TYPE,
+  RAILWAY_TYPE_CONFIG,
+  RailwayTypeConfig,
+} from './railway-type.config';
 
 const BEACON_TIMEOUT_MS = 10000;
 const QUERY_LIMIT = 200;
@@ -26,6 +32,7 @@ type BeaconServerRecord = {
   beaconKey: string;
   beaconRequestTimeoutMs?: number | null;
   beaconMaxRetry?: number | null;
+  railwayMod: TransportationRailwayMod;
 };
 
 type QueryMtrEntitiesResponse = {
@@ -190,10 +197,11 @@ export class TransportationRailwaySyncService implements OnModuleInit {
   ) {
     let offset = 0;
     let truncated = false;
+    const config = this.getRailwayModConfig(server.railwayMod);
     do {
       const response = await this.emitBeacon<QueryMtrEntitiesResponse>(
         server,
-        'query_mtr_entities',
+        config.queryEvent,
         {
           category,
           limit: QUERY_LIMIT,
@@ -212,6 +220,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
     await this.prisma.transportationRailwayEntity.deleteMany({
       where: {
         serverId: server.id,
+        railwayMod: server.railwayMod,
         category: entityType,
         syncedAt: { lt: syncMarker },
       },
@@ -229,20 +238,23 @@ export class TransportationRailwaySyncService implements OnModuleInit {
       return;
     }
     const filePath = this.readString(row.file_path);
+    const railwayMod = this.resolveRailwayMod(server.railwayMod);
     const dimensionContext =
       this.readString(row.dimension_context) ??
-      this.inferDimensionContext(filePath);
+      this.inferDimensionContext(filePath, railwayMod);
     const payload = this.normalizePayload(row.payload);
     const lastUpdated = this.readTimestamp(row.last_updated);
     await this.prisma.transportationRailwayEntity.upsert({
       where: {
-        serverId_category_entityId: {
+        serverId_railwayMod_category_entityId: {
           serverId: server.id,
+          railwayMod,
           category,
           entityId,
         },
       },
       update: {
+        railwayMod,
         dimensionContext,
         transportMode: this.readString(row.transport_mode),
         name: this.readString(row.name),
@@ -254,6 +266,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
       },
       create: {
         serverId: server.id,
+        railwayMod,
         category,
         entityId,
         dimensionContext,
@@ -269,18 +282,21 @@ export class TransportationRailwaySyncService implements OnModuleInit {
     if (dimensionContext) {
       await this.prisma.transportationRailwayDimension.upsert({
         where: {
-          serverId_dimensionContext: {
+          serverId_railwayMod_dimensionContext: {
             serverId: server.id,
+            railwayMod,
             dimensionContext,
           },
         },
         update: {
+          railwayMod,
           namespace: this.extractNamespace(dimensionContext),
           dimension: this.extractDimension(dimensionContext),
           lastUpdated: syncMarker,
         },
         create: {
           serverId: server.id,
+          railwayMod,
           dimensionContext,
           namespace: this.extractNamespace(dimensionContext),
           dimension: this.extractDimension(dimensionContext),
@@ -366,21 +382,25 @@ export class TransportationRailwaySyncService implements OnModuleInit {
     return segments.length >= 3 ? segments[2] : null;
   }
 
-  private inferDimensionContext(filePath: string | null) {
+  private inferDimensionContext(
+    filePath: string | null,
+    type?: TransportationRailwayMod,
+  ) {
     if (!filePath) {
       return null;
     }
+    const config = this.getRailwayModConfig(type);
     const normalized = filePath.replace(/\\/g, '/');
     const parts = normalized.split('/').filter(Boolean);
-    const idx = parts.findIndex((part) => part === 'mtr');
+    const idx = parts.findIndex((part) => part === config.dimensionPrefix);
     if (idx < 0) {
       return null;
     }
     if (idx + 2 < parts.length) {
-      return `mtr/${parts[idx + 1]}/${parts[idx + 2]}`;
+      return `${config.dimensionPrefix}/${parts[idx + 1]}/${parts[idx + 2]}`;
     }
     if (idx + 1 < parts.length) {
-      return `mtr/${parts[idx + 1]}`;
+      return `${config.dimensionPrefix}/${parts[idx + 1]}`;
     }
     return null;
   }
@@ -522,6 +542,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
         beaconKey: true,
         beaconRequestTimeoutMs: true,
         beaconMaxRetry: true,
+        transportationRailwayMod: true,
       },
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
     });
@@ -534,6 +555,22 @@ export class TransportationRailwaySyncService implements OnModuleInit {
         beaconKey: row.beaconKey!,
         beaconRequestTimeoutMs: row.beaconRequestTimeoutMs,
         beaconMaxRetry: row.beaconMaxRetry,
+        railwayMod: row.transportationRailwayMod ?? DEFAULT_RAILWAY_TYPE,
+        railwayType: row.transportationRailwayMod ?? DEFAULT_RAILWAY_TYPE,
       }));
+  }
+
+  private resolveRailwayMod(type?: TransportationRailwayMod) {
+    if (type && RAILWAY_TYPE_CONFIG[type]) {
+      return type;
+    }
+    return DEFAULT_RAILWAY_TYPE;
+  }
+
+  private getRailwayModConfig(
+    type?: TransportationRailwayMod,
+  ): RailwayTypeConfig {
+    const resolved = this.resolveRailwayMod(type);
+    return RAILWAY_TYPE_CONFIG[resolved];
   }
 }

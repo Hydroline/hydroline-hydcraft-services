@@ -155,7 +155,10 @@ function selectRecommendation(index: number) {
 function buildRouteDetailLink(item: RailwayRoute) {
   return {
     name: 'transportation.railway.route',
-    params: { routeId: item.id },
+    params: {
+      routeId: item.id,
+      railwayType: item.railwayType.toLowerCase(),
+    },
     query: {
       serverId: item.server.id,
       dimension: item.dimension ?? undefined,
@@ -173,6 +176,7 @@ async function refreshRecommendationDetail(routeItem: RailwayRoute | null) {
       routeId: routeItem.id,
       serverId: routeItem.server.id,
       dimension: routeItem.dimension ?? undefined,
+      railwayType: routeItem.railwayType,
     })
     recommendationDetail.value = detail
   } catch (error) {

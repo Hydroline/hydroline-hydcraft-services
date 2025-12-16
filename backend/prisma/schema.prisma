@@ -215,6 +215,7 @@ model TransportationRailwayBanner {
 model TransportationRailwayEntity {
   id                  String                                  @id @default(uuid())
   serverId            String
+  railwayMod          TransportationRailwayMod               @default(MTR)
   category            TransportationRailwayEntityCategory
   entityId            String
   dimensionContext    String?
@@ -228,14 +229,15 @@ model TransportationRailwayEntity {
   createdAt           DateTime                                @default(now())
   updatedAt           DateTime                                @updatedAt
 
-  @@unique([serverId, category, entityId], map: "uq_transportation_railway_entity")
-  @@index([serverId, category, dimensionContext], map: "idx_transportation_railway_entity_scope")
+  @@unique([serverId, railwayMod, category, entityId], map: "uq_transportation_railway_entity")
+  @@index([serverId, railwayMod, category, dimensionContext], map: "idx_transportation_railway_entity_scope")
   @@map("transportation_railway_entities")
 }
 
 model TransportationRailwayDimension {
   id               String   @id @default(uuid())
   serverId         String
+  railwayMod       TransportationRailwayMod @default(MTR)
   dimensionContext String
   namespace        String?
   dimension        String?
@@ -243,7 +245,7 @@ model TransportationRailwayDimension {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  @@unique([serverId, dimensionContext], map: "uq_transportation_railway_dimension")
+  @@unique([serverId, railwayMod, dimensionContext], map: "uq_transportation_railway_dimension")
   @@map("transportation_railway_dimensions")
 }
 
@@ -686,6 +688,7 @@ model MinecraftServer {
   beaconEnabled          Boolean?                    @default(false)
   beaconEndpoint         String?
   beaconKey              String?
+  transportationRailwayMod  TransportationRailwayMod  @default(MTR)
   beaconMaxRetry         Int?
   beaconRequestTimeoutMs Int?
   pingRecords            MinecraftServerPingRecord[]
@@ -1276,6 +1279,10 @@ enum TransportationRailwayEntityCategory {
   ROUTE
   SIGNAL_BLOCK
   STATION
+}
+
+enum TransportationRailwayMod {
+  MTR
 }
 
 enum TransportationRailwaySyncStatus {

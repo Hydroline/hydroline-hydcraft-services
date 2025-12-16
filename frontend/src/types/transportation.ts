@@ -27,6 +27,7 @@ export interface RailwayEntity {
     id: string
     name: string
   }
+  railwayType: string
 }
 
 export interface RailwayRoute extends RailwayEntity {
@@ -92,6 +93,7 @@ export interface RailwayGeometrySegment {
 export interface RailwayRouteDetail {
   server: { id: string; name: string }
   dimension: string | null
+  railwayType: string
   route: RailwayRoute
   metadata: {
     lastDeployed: number | null

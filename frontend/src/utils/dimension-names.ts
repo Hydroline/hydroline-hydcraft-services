@@ -4,7 +4,7 @@ const DIMENSION_NAME_MAP: Record<string, string> = {
   'minecraft:overworld': '主世界',
   'minecraft:the_nether': '地狱',
   'minecraft:the_end': '末地',
-  'DIM1': '末地',
+  DIM1: '末地',
   'DIM-1': '地狱',
 }
 

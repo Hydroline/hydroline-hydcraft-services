@@ -17,15 +17,16 @@ const geometry = computed(() => detail.value?.geometry ?? null)
 
 const params = computed(() => {
   const routeId = route.params.routeId as string | undefined
+  const railwayType = route.params.railwayType as string | undefined
   const serverId = route.query.serverId as string | undefined
   const dimension = (route.query.dimension as string | undefined) ?? undefined
-  return { routeId, serverId, dimension }
+  return { routeId, serverId, dimension, railwayType }
 })
 
 async function fetchDetail() {
-  const { routeId, serverId, dimension } = params.value
-  if (!routeId || !serverId) {
-    errorMessage.value = '缺少 routeId 或 serverId 参数'
+  const { routeId, serverId, dimension, railwayType } = params.value
+  if (!routeId || !serverId || !railwayType) {
+    errorMessage.value = '缺少 routeId、serverId 或铁路类型参数'
     detail.value = null
     loading.value = false
     return
@@ -34,7 +35,7 @@ async function fetchDetail() {
   errorMessage.value = null
   try {
     const result = await transportationStore.fetchRouteDetail(
-      { routeId, serverId, dimension },
+      { routeId, serverId, dimension, railwayType },
       true,
     )
     detail.value = result

@@ -13,6 +13,7 @@ interface RouteCacheParams {
   routeId: string
   serverId: string
   dimension?: string | null
+  railwayType: string
 }
 
 export const useTransportationRailwayStore = defineStore(
@@ -56,7 +57,7 @@ export const useTransportationRailwayStore = defineStore(
       },
       buildRouteCacheKey(params: RouteCacheParams) {
         const dimension = params.dimension ?? ''
-        return `${params.serverId}::${params.routeId}::${dimension}`
+        return `${params.serverId}::${params.routeId}::${dimension}::${params.railwayType}`
       },
       async fetchRouteDetail(params: RouteCacheParams, force = false) {
         const cacheKey = this.buildRouteCacheKey(params)
@@ -72,7 +73,7 @@ export const useTransportationRailwayStore = defineStore(
             query.set('dimension', params.dimension)
           }
           const detail = await apiFetch<RailwayRouteDetail>(
-            `/transportation/railway/routes/${encodeURIComponent(params.routeId)}?${query.toString()}`,
+            `/transportation/railway/routes/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.routeId)}?${query.toString()}`,
           )
           this.routeDetails[cacheKey] = detail
           return detail
