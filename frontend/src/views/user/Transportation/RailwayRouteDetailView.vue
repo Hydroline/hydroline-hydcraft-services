@@ -492,7 +492,6 @@ async function fetchDetail() {
       true,
     )
     detail.value = result
-    void fetchLogs(true)
   } catch (error) {
     console.error(error)
     errorMessage.value =
