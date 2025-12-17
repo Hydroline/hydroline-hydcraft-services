@@ -164,6 +164,7 @@ const modpackInfo = computed(() => {
 })
 
 const routeColorHex = computed(() => routeAccentColor.value)
+const combinePaths = computed(() => pathViewMode.value === 'default')
 const geometryForView = computed(() => {
   const geometry = detail.value?.geometry
   if (!geometry) {
@@ -243,12 +244,12 @@ function formatOffsetSeconds(offset: number) {
 
 function formatStationNameParts(value: string | null | undefined) {
   if (!value) {
-    return { title: '未知', subtitle: '—' }
+    return { title: '未知', subtitle: null }
   }
   const [title, subtitle] = value.split('|')
   return {
     title: (title || '未知').trim(),
-    subtitle: subtitle?.trim() || '—',
+    subtitle: subtitle?.trim() || null,
   }
 }
 
@@ -452,6 +453,7 @@ onMounted(() => {
         :color="detail?.route.color ?? null"
         :loading="!detail"
         :auto-focus="mapAutoFocus"
+        :combine-paths="combinePaths"
         height="520px"
       />
 
@@ -541,9 +543,11 @@ onMounted(() => {
                       {{ item.title }}
                     </p>
                     <p
-                      class="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 truncate"
+                      class="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 truncate h-4"
                     >
-                      {{ item.subtitle }}
+                      <span v-if="item.subtitle !== null">{{
+                        item.subtitle
+                      }}</span>
                     </p>
                   </div>
 

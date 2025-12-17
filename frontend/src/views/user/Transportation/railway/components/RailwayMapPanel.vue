@@ -28,6 +28,7 @@ const props = withDefaults(
     height?: string | number
     loading?: boolean
     autoFocus?: boolean
+    combinePaths?: boolean
   }>(),
   {
     zoom: 3,
@@ -36,6 +37,7 @@ const props = withDefaults(
     loading: false,
     stops: () => [] as RailwayRouteDetail['stops'],
     autoFocus: true,
+    combinePaths: true,
   },
 )
 
@@ -108,7 +110,45 @@ const secondaryPolylines = computed(() =>
   secondaryEntryList.value.flatMap((entry) => entry.polylines),
 )
 
-const primaryCentroid = computed(() => computeCentroid(primaryPolylines.value))
+const MERGE_DISTANCE_THRESHOLD = 50
+
+const flatSecondaryPoints = computed(() => secondaryPolylines.value.flat())
+
+const adjustPointWithSecondary = (point: RailwayGeometryPoint) => {
+  if (!props.combinePaths) return point
+  let closest: RailwayGeometryPoint | null = null
+  let minDistance = Infinity
+  for (const candidate of flatSecondaryPoints.value) {
+    const dx = candidate.x - point.x
+    const dz = candidate.z - point.z
+    const distance = Math.hypot(dx, dz)
+    if (distance < minDistance) {
+      minDistance = distance
+      closest = candidate
+    }
+  }
+  if (closest && minDistance <= MERGE_DISTANCE_THRESHOLD) {
+    return {
+      x: Math.round((point.x + closest.x) / 2),
+      z: Math.round((point.z + closest.z) / 2),
+    }
+  }
+  return point
+}
+
+const combinedPrimaryPolylines = computed(() =>
+  primaryPolylines.value.map((path) =>
+    path.map((point) => adjustPointWithSecondary(point)),
+  ),
+)
+
+const primaryCentroid = computed(() =>
+  computeCentroid(
+    props.combinePaths
+      ? combinedPrimaryPolylines.value
+      : primaryPolylines.value,
+  ),
+)
 const secondaryCentroid = computed(() =>
   computeCentroid(secondaryPolylines.value),
 )
@@ -120,6 +160,22 @@ const shouldForceSeparate = computed(() => {
   return Math.hypot(dx, dz) >= SECONDARY_SEPARATION_THRESHOLD
 })
 
+const showSplitLines = ref(false)
+const skipAutoFocus = ref(false)
+
+const handleSplitZoom = () => {
+  const controller = railwayMap.value?.getController()
+  const map = controller?.getLeafletInstance()
+  if (!map) return
+  const shouldShowSplit =
+    !props.combinePaths || map.getZoom() >= SECONDARY_ZOOM_THRESHOLD
+  if (showSplitLines.value !== shouldShowSplit) {
+    showSplitLines.value = shouldShowSplit
+    skipAutoFocus.value = true
+    scheduleDraw()
+  }
+}
+
 function destroyMap() {
   mapCursorCleanup.value?.()
   mapCursorCleanup.value = null
@@ -130,16 +186,26 @@ function destroyMap() {
 
 function drawGeometry() {
   if (!railwayMap.value) return
-  railwayMap.value.drawGeometry(primaryPolylines.value, {
+  const useMidline = props.combinePaths && !showSplitLines.value
+  const primaryPaths = useMidline
+    ? combinedPrimaryPolylines.value
+    : primaryPolylines.value
+  const secondaryPaths = useMidline ? [] : secondaryPolylines.value
+  const secondaryZoomThreshold = useMidline
+    ? Number.POSITIVE_INFINITY
+    : SECONDARY_ZOOM_THRESHOLD
+  const autoFocus = skipAutoFocus.value ? false : (props.autoFocus ?? true)
+  railwayMap.value.drawGeometry(primaryPaths, {
     color: props.color ?? null,
     weight: 4,
     opacity: 0.9,
     focusZoom: props.zoom,
-    secondaryPaths: secondaryPolylines.value,
-    secondaryZoomThreshold: SECONDARY_ZOOM_THRESHOLD,
-    forceShowSecondary: shouldForceSeparate.value,
-    autoFocus: props.autoFocus ?? true,
+    secondaryPaths,
+    secondaryZoomThreshold,
+    forceShowSecondary: !useMidline && shouldForceSeparate.value,
+    autoFocus,
   })
+  skipAutoFocus.value = false
 }
 
 function initMap() {
@@ -186,6 +252,7 @@ function attachMapCursorTracking() {
   map.on('mouseout', handleLeave)
   map.on('dragstart', handleLeave)
   map.on('zoomstart', handleLeave)
+  map.on('zoomend', handleSplitZoom)
 
   mapContainer.addEventListener('pointerleave', handleDomLeave, {
     passive: true,
@@ -195,11 +262,14 @@ function attachMapCursorTracking() {
   })
   window.addEventListener('blur', handleWindowBlur)
 
+  handleSplitZoom()
+
   mapCursorCleanup.value = () => {
     map.off('mousemove', handleMove)
     map.off('mouseout', handleLeave)
     map.off('dragstart', handleLeave)
     map.off('zoomstart', handleLeave)
+    map.off('zoomend', handleSplitZoom)
 
     mapContainer.removeEventListener('pointerleave', handleDomLeave)
     mapContainer.removeEventListener('mouseleave', handleDomLeave)
@@ -246,6 +316,16 @@ watch(
     syncStops()
   },
   { deep: true },
+)
+
+watch(
+  () => props.combinePaths,
+  () => {
+    showSplitLines.value = !props.combinePaths
+    skipAutoFocus.value = true
+    handleSplitZoom()
+    scheduleDraw()
+  },
 )
 
 onMounted(() => {
