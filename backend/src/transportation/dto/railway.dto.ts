@@ -107,4 +107,9 @@ export class RailwayRouteLogQueryDto extends RailwayRouteDetailQueryDto {
   @Type(() => Number)
   @IsInt()
   limit?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  search?: string | null;
 }

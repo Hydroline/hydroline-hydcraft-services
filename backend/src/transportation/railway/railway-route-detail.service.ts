@@ -14,7 +14,10 @@ import {
 } from '@prisma/client';
 import { HydrolineBeaconPoolService } from '../../lib/hydroline-beacon';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RailwayRouteDetailQueryDto } from '../dto/railway.dto';
+import {
+  RailwayRouteDetailQueryDto,
+  RailwayRouteLogQueryDto,
+} from '../dto/railway.dto';
 import { BeaconServerRecord } from './railway-common';
 import { emitBeacon } from './railway-beacon.util';
 import type {
@@ -47,6 +50,14 @@ type BeaconMtrLogsResponse = {
   page?: number;
   page_size?: number;
   records?: Array<Record<string, unknown>>;
+};
+
+type BeaconExecuteSqlResponse = {
+  success?: boolean;
+  error?: string;
+  columns?: string[];
+  rows?: Array<Record<string, unknown>>;
+  truncated?: boolean;
 };
 
 function estimateGeometryLengthKm(geometry: RouteDetailResult['geometry']) {
@@ -811,6 +822,148 @@ export class TransportationRailwayRouteDetailService {
       return value as Record<string, unknown>;
     }
     return null;
+  }
+
+  private async searchRouteLogsByKeyword(
+    server: BeaconServerRecord,
+    dimensionContext: string | null,
+    keyword: string,
+    page: number,
+    limit: number,
+  ): Promise<RailwayRouteLogResult> {
+    const sanitized = this.sanitizeLogSearchKeyword(keyword);
+    if (!sanitized) {
+      throw new BadRequestException('日志关键词无效');
+    }
+    const likePattern = `%${sanitized}%`;
+    const searchColumns = [
+      'entry_id',
+      'entry_name',
+      'class_name',
+      'player_name',
+      'player_uuid',
+      'source_file_path',
+      'old_data',
+      'new_data',
+    ];
+    const searchClause = searchColumns
+      .map((column) => `${column} LIKE '${likePattern}'`)
+      .join(' OR ');
+    const conditions: string[] = [];
+    if (dimensionContext) {
+      conditions.push(
+        `dimension_context = '${this.escapeSqlLiteral(dimensionContext)}'`,
+      );
+    }
+    conditions.push(`(${searchClause})`);
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const offset = (page - 1) * limit;
+    const columnList = [
+      'id',
+      'timestamp',
+      'player_name',
+      'player_uuid',
+      'class_name',
+      'entry_id',
+      'entry_name',
+      'change_type',
+      'dimension_context',
+      'source_file_path',
+      'source_line',
+      'new_data',
+      'old_data',
+    ];
+    const baseSql = `
+      SELECT ${columnList.join(', ')}
+      FROM mtr_logs
+      ${whereClause}
+    `;
+    const dataSql = `
+      ${baseSql}
+      ORDER BY timestamp DESC, id DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+    const countSql = `
+      SELECT COUNT(*) AS total
+      FROM mtr_logs
+      ${whereClause}
+    `;
+    const countResponse = await emitBeacon<BeaconExecuteSqlResponse>(
+      this.beaconPool,
+      server,
+      'execute_sql',
+      {
+        sql: countSql,
+        maxRows: 1,
+      },
+    );
+    if (!countResponse?.success) {
+      const message =
+        typeof countResponse?.error === 'string'
+          ? countResponse.error
+          : '无法获取线路日志';
+      throw new BadRequestException(message);
+    }
+    const total =
+      toNumber(countResponse.rows?.[0]?.['total']) ??
+      toNumber(countResponse.rows?.[0]?.total) ??
+      0;
+    const dataResponse = await emitBeacon<BeaconExecuteSqlResponse>(
+      this.beaconPool,
+      server,
+      'execute_sql',
+      {
+        sql: dataSql,
+        maxRows: limit,
+      },
+    );
+    if (!dataResponse?.success) {
+      const message =
+        typeof dataResponse?.error === 'string'
+          ? dataResponse.error
+          : '无法获取线路日志';
+      throw new BadRequestException(message);
+    }
+    const entries = (dataResponse.rows ?? []).map((record) =>
+      this.transformLogRecord(record),
+    );
+    return {
+      server: { id: server.id, name: server.displayName },
+      railwayType: server.railwayMod,
+      total,
+      page,
+      pageSize: limit,
+      entries,
+    };
+  }
+
+  private sanitizeLogSearchKeyword(value: string) {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      return '';
+    }
+    const normalized = trimmed
+      .replace(/--/g, ' ')
+      .replace(/;/g, ' ')
+      .replace(/\r?\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .slice(0, 64);
+    const escaped = normalized
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "''")
+      .replace(/[%_]/g, ' ');
+    return escaped.trim();
+  }
+
+  private escapeSqlLiteral(value: string) {
+    return value
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "''")
+      .replace(/\r?\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .slice(0, 256)
+      .trim();
   }
 
   private buildIdCandidates(value: string | null | undefined) {
@@ -1808,7 +1961,7 @@ export class TransportationRailwayRouteDetailService {
   async getRouteLogs(
     routeId: string,
     railwayMod: TransportationRailwayMod,
-    query: RailwayRouteDetailQueryDto & { page?: number; limit?: number },
+    query: RailwayRouteLogQueryDto,
   ): Promise<RailwayRouteLogResult> {
     if (!routeId || !query?.serverId) {
       throw new BadRequestException('路线 ID 与 serverId 必填');
@@ -1834,6 +1987,20 @@ export class TransportationRailwayRouteDetailService {
       : null;
     const dimensionContext =
       explicitContext ?? routeRow.dimensionContext ?? null;
+    const rawSearch = query.search;
+    const searchKeyword =
+      typeof rawSearch === 'string' && rawSearch.trim().length > 0
+        ? rawSearch.trim()
+        : undefined;
+    if (searchKeyword) {
+      return this.searchRouteLogsByKeyword(
+        server,
+        dimensionContext,
+        searchKeyword,
+        page,
+        limit,
+      );
+    }
     const payload: Record<string, unknown> = {
       entryId: normalizedRouteId,
       page,
