@@ -212,11 +212,10 @@ model TransportationRailwayBanner {
   @@map("transportation_railway_banners")
 }
 
-model TransportationRailwayEntity {
-  id                  String                                  @id @default(uuid())
+model TransportationRailwayRoute {
+  id                  String                     @id @default(uuid())
   serverId            String
-  railwayMod          TransportationRailwayMod               @default(MTR)
-  category            TransportationRailwayEntityCategory
+  railwayMod          TransportationRailwayMod   @default(MTR)
   entityId            String
   dimensionContext    String?
   transportMode       String?
@@ -226,12 +225,117 @@ model TransportationRailwayEntity {
   payload             Json
   lastBeaconUpdatedAt DateTime?
   syncedAt            DateTime
-  createdAt           DateTime                                @default(now())
-  updatedAt           DateTime                                @updatedAt
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 
-  @@unique([serverId, railwayMod, category, entityId], map: "uq_transportation_railway_entity")
-  @@index([serverId, railwayMod, category, dimensionContext], map: "idx_transportation_railway_entity_scope")
-  @@map("transportation_railway_entities")
+  @@unique([serverId, railwayMod, entityId], map: "uq_transportation_railway_route")
+  @@index([serverId, railwayMod, dimensionContext], map: "idx_transportation_railway_route_scope")
+  @@map("transportation_railway_routes")
+}
+
+model TransportationRailwayStation {
+  id                  String                     @id @default(uuid())
+  serverId            String
+  railwayMod          TransportationRailwayMod   @default(MTR)
+  entityId            String
+  dimensionContext    String?
+  transportMode       String?
+  name                String?
+  color               Int?
+  filePath            String?
+  payload             Json
+  lastBeaconUpdatedAt DateTime?
+  syncedAt            DateTime
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@unique([serverId, railwayMod, entityId], map: "uq_transportation_railway_station")
+  @@index([serverId, railwayMod, dimensionContext], map: "idx_transportation_railway_station_scope")
+  @@map("transportation_railway_stations")
+}
+
+model TransportationRailwayPlatform {
+  id                  String                     @id @default(uuid())
+  serverId            String
+  railwayMod          TransportationRailwayMod   @default(MTR)
+  entityId            String
+  dimensionContext    String?
+  transportMode       String?
+  name                String?
+  color               Int?
+  filePath            String?
+  payload             Json
+  lastBeaconUpdatedAt DateTime?
+  syncedAt            DateTime
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@unique([serverId, railwayMod, entityId], map: "uq_transportation_railway_platform")
+  @@index([serverId, railwayMod, dimensionContext], map: "idx_transportation_railway_platform_scope")
+  @@map("transportation_railway_platforms")
+}
+
+model TransportationRailwayDepot {
+  id                  String                     @id @default(uuid())
+  serverId            String
+  railwayMod          TransportationRailwayMod   @default(MTR)
+  entityId            String
+  dimensionContext    String?
+  transportMode       String?
+  name                String?
+  color               Int?
+  filePath            String?
+  payload             Json
+  lastBeaconUpdatedAt DateTime?
+  syncedAt            DateTime
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@unique([serverId, railwayMod, entityId], map: "uq_transportation_railway_depot")
+  @@index([serverId, railwayMod, dimensionContext], map: "idx_transportation_railway_depot_scope")
+  @@map("transportation_railway_depots")
+}
+
+model TransportationRailwayRail {
+  id                  String                     @id @default(uuid())
+  serverId            String
+  railwayMod          TransportationRailwayMod   @default(MTR)
+  entityId            String
+  dimensionContext    String?
+  transportMode       String?
+  name                String?
+  color               Int?
+  filePath            String?
+  payload             Json
+  lastBeaconUpdatedAt DateTime?
+  syncedAt            DateTime
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@unique([serverId, railwayMod, entityId], map: "uq_transportation_railway_rail")
+  @@index([serverId, railwayMod, dimensionContext], map: "idx_transportation_railway_rail_scope")
+  @@map("transportation_railway_rails")
+}
+
+model TransportationRailwaySignalBlock {
+  id                  String                     @id @default(uuid())
+  serverId            String
+  railwayMod          TransportationRailwayMod   @default(MTR)
+  entityId            String
+  dimensionContext    String?
+  transportMode       String?
+  name                String?
+  color               Int?
+  filePath            String?
+  payload             Json
+  lastBeaconUpdatedAt DateTime?
+  syncedAt            DateTime
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@unique([serverId, railwayMod, entityId], map: "uq_transportation_railway_signal_block")
+  @@index([serverId, railwayMod, dimensionContext], map: "idx_transportation_railway_signal_scope")
+  @@map("transportation_railway_signal_blocks")
 }
 
 model TransportationRailwayDimension {
@@ -1270,15 +1374,6 @@ enum OAuthLogAction {
 enum OAuthLogStatus {
   SUCCESS
   FAILURE
-}
-
-enum TransportationRailwayEntityCategory {
-  DEPOT
-  PLATFORM
-  RAIL
-  ROUTE
-  SIGNAL_BLOCK
-  STATION
 }
 
 enum TransportationRailwayMod {

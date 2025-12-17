@@ -118,6 +118,20 @@ export const userRoutes: RouteRecordRaw[] = [
               import('@/views/user/Transportation/RailwayRouteMapView.vue'),
           },
           {
+            path: 'railway/stations/:railwayType/:stationId',
+            name: 'transportation.railway.station',
+            component: () =>
+              import(
+                '@/views/user/Transportation/RailwayStationDetailView.vue'
+              ),
+          },
+          {
+            path: 'railway/depots/:railwayType/:depotId',
+            name: 'transportation.railway.depot',
+            component: () =>
+              import('@/views/user/Transportation/RailwayDepotDetailView.vue'),
+          },
+          {
             path: 'aviation',
             name: 'transportation.aviation',
             component: () =>

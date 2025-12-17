@@ -7,7 +7,6 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   Prisma,
-  TransportationRailwayEntityCategory,
   TransportationRailwaySyncJob,
   TransportationRailwaySyncStatus,
   TransportationRailwayMod,
@@ -56,22 +55,30 @@ type RailwaySyncJobStatus = {
   completedAt: string | null;
 };
 
+type RailwayEntityCategory =
+  | 'DEPOT'
+  | 'PLATFORM'
+  | 'RAIL'
+  | 'ROUTE'
+  | 'SIGNAL_BLOCK'
+  | 'STATION';
+
 const CATEGORY_MAP: Array<{
   key: string;
-  type: TransportationRailwayEntityCategory;
+  type: RailwayEntityCategory;
 }> = [
-  { key: 'depots', type: TransportationRailwayEntityCategory.DEPOT },
+  { key: 'depots', type: 'DEPOT' },
   {
     key: 'platforms',
-    type: TransportationRailwayEntityCategory.PLATFORM,
+    type: 'PLATFORM',
   },
-  { key: 'rails', type: TransportationRailwayEntityCategory.RAIL },
-  { key: 'routes', type: TransportationRailwayEntityCategory.ROUTE },
+  { key: 'rails', type: 'RAIL' },
+  { key: 'routes', type: 'ROUTE' },
   {
     key: 'signal-blocks',
-    type: TransportationRailwayEntityCategory.SIGNAL_BLOCK,
+    type: 'SIGNAL_BLOCK',
   },
-  { key: 'stations', type: TransportationRailwayEntityCategory.STATION },
+  { key: 'stations', type: 'STATION' },
 ];
 
 @Injectable()
@@ -192,7 +199,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
   private async syncCategory(
     server: BeaconServerRecord,
     category: string,
-    entityType: TransportationRailwayEntityCategory,
+    entityType: RailwayEntityCategory,
     syncMarker: Date,
   ) {
     let offset = 0;
@@ -216,20 +223,12 @@ export class TransportationRailwaySyncService implements OnModuleInit {
       truncated = Boolean(response?.truncated);
       offset += rows.length;
     } while (truncated);
-
-    await this.prisma.transportationRailwayEntity.deleteMany({
-      where: {
-        serverId: server.id,
-        railwayMod: server.railwayMod,
-        category: entityType,
-        syncedAt: { lt: syncMarker },
-      },
-    });
+    await this.deleteStaleEntities(entityType, server, syncMarker);
   }
 
   private async upsertEntity(
     server: BeaconServerRecord,
-    category: TransportationRailwayEntityCategory,
+    category: RailwayEntityCategory,
     row: Record<string, unknown>,
     syncMarker: Date,
   ) {
@@ -244,40 +243,17 @@ export class TransportationRailwaySyncService implements OnModuleInit {
       this.inferDimensionContext(filePath, railwayMod);
     const payload = this.normalizePayload(row.payload);
     const lastUpdated = this.readTimestamp(row.last_updated);
-    await this.prisma.transportationRailwayEntity.upsert({
-      where: {
-        serverId_railwayMod_category_entityId: {
-          serverId: server.id,
-          railwayMod,
-          category,
-          entityId,
-        },
-      },
-      update: {
-        railwayMod,
-        dimensionContext,
-        transportMode: this.readString(row.transport_mode),
-        name: this.readString(row.name),
-        color: this.readNumber(row.color),
-        filePath,
-        payload,
-        lastBeaconUpdatedAt: lastUpdated,
-        syncedAt: syncMarker,
-      },
-      create: {
-        serverId: server.id,
-        railwayMod,
-        category,
-        entityId,
-        dimensionContext,
-        transportMode: this.readString(row.transport_mode),
-        name: this.readString(row.name),
-        color: this.readNumber(row.color),
-        filePath,
-        payload,
-        lastBeaconUpdatedAt: lastUpdated,
-        syncedAt: syncMarker,
-      },
+    await this.persistEntityByCategory(category, server, {
+      entityId,
+      railwayMod,
+      dimensionContext,
+      transportMode: this.readString(row.transport_mode),
+      name: this.readString(row.name),
+      color: this.readNumber(row.color),
+      filePath,
+      payload,
+      lastBeaconUpdatedAt: lastUpdated,
+      syncedAt: syncMarker,
     });
     if (dimensionContext) {
       await this.prisma.transportationRailwayDimension.upsert({
@@ -308,7 +284,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
 
   private async upsertRowsInBatches(
     server: BeaconServerRecord,
-    category: TransportationRailwayEntityCategory,
+    category: RailwayEntityCategory,
     rows: Array<Record<string, unknown>>,
     syncMarker: Date,
   ) {
@@ -326,10 +302,10 @@ export class TransportationRailwaySyncService implements OnModuleInit {
   }
 
   private normalizePayload(value: unknown): StoredJsonValue {
-    if (!value) return Prisma.JsonNull;
+    if (value == null) return Prisma.JsonNull;
     if (typeof value === 'string') {
       try {
-        return JSON.parse(value) as Prisma.InputJsonValue;
+        return this.parseJsonWithBigintSupport(value);
       } catch (error) {
         this.logger.warn(
           `Failed to parse MTR payload: ${(error as Error).message}`,
@@ -338,9 +314,182 @@ export class TransportationRailwaySyncService implements OnModuleInit {
       }
     }
     if (typeof value === 'object') {
-      return value as Prisma.InputJsonValue;
+      return this.ensureSafeJsonValue(value);
     }
     return Prisma.JsonNull;
+  }
+
+  private parseJsonWithBigintSupport(value: string): StoredJsonValue {
+    const wrapped = value.replace(
+      /([:\[,]\s*)(-?\d{16,})(?=\s*[,\}\]])/g,
+      (_, prefix: string, digits: string) => `${prefix}"${digits}"`,
+    );
+    const parsed = JSON.parse(wrapped);
+    return this.ensureSafeJsonValue(parsed);
+  }
+
+  private ensureSafeJsonValue(value: unknown): StoredJsonValue {
+    if (value == null) {
+      return Prisma.JsonNull;
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) =>
+        this.ensureSafeJsonValue(entry),
+      ) as Prisma.InputJsonValue;
+    }
+    if (typeof value === 'object') {
+      const result: Record<string, StoredJsonValue> = {};
+      for (const [key, entry] of Object.entries(value)) {
+        result[key] = this.ensureSafeJsonValue(entry);
+      }
+      return result as Prisma.InputJsonValue;
+    }
+    if (typeof value === 'number' && !Number.isSafeInteger(value)) {
+      return value.toString();
+    }
+    return value as Prisma.InputJsonValue;
+  }
+
+  private async deleteStaleEntities(
+    category: RailwayEntityCategory,
+    server: BeaconServerRecord,
+    syncMarker: Date,
+  ) {
+    const where = {
+      serverId: server.id,
+      railwayMod: server.railwayMod,
+      syncedAt: { lt: syncMarker },
+    };
+    switch (category) {
+      case 'DEPOT':
+        await this.prisma.transportationRailwayDepot.deleteMany({ where });
+        break;
+      case 'PLATFORM':
+        await this.prisma.transportationRailwayPlatform.deleteMany({ where });
+        break;
+      case 'RAIL':
+        await this.prisma.transportationRailwayRail.deleteMany({ where });
+        break;
+      case 'ROUTE':
+        await this.prisma.transportationRailwayRoute.deleteMany({ where });
+        break;
+      case 'SIGNAL_BLOCK':
+        await this.prisma.transportationRailwaySignalBlock.deleteMany({
+          where,
+        });
+        break;
+      case 'STATION':
+        await this.prisma.transportationRailwayStation.deleteMany({ where });
+        break;
+      default:
+        break;
+    }
+  }
+
+  private async persistEntityByCategory(
+    category: RailwayEntityCategory,
+    server: BeaconServerRecord,
+    entity: {
+      entityId: string;
+      railwayMod: TransportationRailwayMod;
+      dimensionContext: string | null;
+      transportMode: string | null;
+      name: string | null;
+      color: number | null;
+      filePath: string | null;
+      payload: StoredJsonValue;
+      lastBeaconUpdatedAt: Date | null;
+      syncedAt: Date;
+    },
+  ) {
+    const baseData = {
+      railwayMod: entity.railwayMod,
+      dimensionContext: entity.dimensionContext,
+      transportMode: entity.transportMode,
+      name: entity.name,
+      color: entity.color,
+      filePath: entity.filePath,
+      payload: entity.payload as Prisma.InputJsonValue,
+      lastBeaconUpdatedAt: entity.lastBeaconUpdatedAt,
+      syncedAt: entity.syncedAt,
+    };
+    const where = {
+      serverId_railwayMod_entityId: {
+        serverId: server.id,
+        railwayMod: entity.railwayMod,
+        entityId: entity.entityId,
+      },
+    };
+    switch (category) {
+      case 'DEPOT':
+        await this.prisma.transportationRailwayDepot.upsert({
+          where,
+          update: baseData,
+          create: {
+            serverId: server.id,
+            entityId: entity.entityId,
+            ...baseData,
+          },
+        });
+        break;
+      case 'PLATFORM':
+        await this.prisma.transportationRailwayPlatform.upsert({
+          where,
+          update: baseData,
+          create: {
+            serverId: server.id,
+            entityId: entity.entityId,
+            ...baseData,
+          },
+        });
+        break;
+      case 'RAIL':
+        await this.prisma.transportationRailwayRail.upsert({
+          where,
+          update: baseData,
+          create: {
+            serverId: server.id,
+            entityId: entity.entityId,
+            ...baseData,
+          },
+        });
+        break;
+      case 'ROUTE':
+        await this.prisma.transportationRailwayRoute.upsert({
+          where,
+          update: baseData,
+          create: {
+            serverId: server.id,
+            entityId: entity.entityId,
+            ...baseData,
+          },
+        });
+        break;
+      case 'SIGNAL_BLOCK':
+        await this.prisma.transportationRailwaySignalBlock.upsert({
+          where,
+          update: baseData,
+          create: {
+            serverId: server.id,
+            entityId: entity.entityId,
+            ...baseData,
+          },
+        });
+        break;
+      case 'STATION':
+        await this.prisma.transportationRailwayStation.upsert({
+          where,
+          update: baseData,
+          create: {
+            serverId: server.id,
+            entityId: entity.entityId,
+            ...baseData,
+          },
+        });
+        break;
+      default:
+        break;
+    }
   }
 
   private readString(value: unknown) {

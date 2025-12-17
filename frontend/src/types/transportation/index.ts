@@ -127,6 +127,7 @@ export interface RailwayRouteDetail {
       dwellTime: number | null
       pos1: { x: number; y: number; z: number } | null
       pos2: { x: number; y: number; z: number } | null
+      routeIds: string[]
     }
   >
   depots: RailwayEntity[]
@@ -165,3 +166,65 @@ export type RailwayBannerPayload = {
 }
 
 export type RailwayBannerUpdatePayload = Partial<RailwayBannerPayload>
+
+export interface RailwayStationDetail {
+  server: { id: string; name: string }
+  railwayType: string
+  station: RailwayRouteDetail['stations'][number]
+  platforms: Array<
+    RailwayRouteDetail['platforms'][number] & {
+      routeIds: string[]
+    }
+  >
+  routes: RailwayRoute[]
+  metadata: {
+    lastUpdated: number | null
+  }
+}
+
+export interface RailwayDepotDetail {
+  server: { id: string; name: string }
+  railwayType: string
+  depot: RailwayEntity & {
+    bounds: {
+      xMin: number | null
+      xMax: number | null
+      zMin: number | null
+      zMax: number | null
+    }
+    routeIds: string[]
+    useRealTime: boolean | null
+    repeatInfinitely: boolean | null
+    cruisingAltitude: number | null
+    frequencies: number[] | null
+  }
+  routes: RailwayRoute[]
+  metadata: {
+    lastUpdated: number | null
+  }
+}
+
+export interface RailwayRouteLogEntry {
+  id: number
+  timestamp: string
+  playerName: string | null
+  playerUuid: string | null
+  changeType: string | null
+  className: string | null
+  entryId: string | null
+  entryName: string | null
+  dimensionContext: string | null
+  sourceFilePath: string | null
+  sourceLine: number | null
+  newData: Record<string, unknown> | null
+  oldData: Record<string, unknown> | null
+}
+
+export interface RailwayRouteLogResult {
+  server: { id: string; name: string }
+  railwayType: string
+  total: number
+  page: number
+  pageSize: number
+  entries: RailwayRouteLogEntry[]
+}

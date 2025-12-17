@@ -8,8 +8,8 @@ import {
   watchEffect,
 } from 'vue'
 import 'leaflet/dist/leaflet.css'
-import type { LeafletMouseEvent } from 'leaflet'
-import { RailwayMap } from '@/views/user/Transportation/railway/map'
+import type { LeafletEvent, LeafletMouseEvent } from 'leaflet'
+import { RailwayMap } from '@/views/user/Transportation/railway/maps/routeMap'
 import type {
   RailwayCurveParameters,
   RailwayGeometryPoint,
@@ -51,7 +51,7 @@ const containerHeight = computed(() => {
   if (typeof height === 'string') return height
   return '360px'
 })
-const SECONDARY_ZOOM_THRESHOLD = 3
+const SECONDARY_ZOOM_THRESHOLD = 4
 const SECONDARY_SEPARATION_THRESHOLD = 12
 type GeometryPathEntry = {
   id: string
@@ -96,18 +96,21 @@ const primaryEntry = computed(() => {
   return forced ?? geometryPathEntries.value[0]
 })
 
-const primaryEntryId = computed(() => primaryEntry.value?.id ?? null)
-
 const primaryPolylines = computed(() => primaryEntry.value?.polylines ?? [])
 
-const secondaryEntryList = computed(() =>
-  geometryPathEntries.value.filter(
-    (entry) => entry.id !== primaryEntryId.value,
-  ),
-)
+const secondaryEntryList = computed(() => {
+  if (!props.combinePaths) return []
+  const primary = primaryEntry.value
+  if (!primary) return []
+  return geometryPathEntries.value.filter((entry) => entry !== primary)
+})
 
 const secondaryPolylines = computed(() =>
   secondaryEntryList.value.flatMap((entry) => entry.polylines),
+)
+
+const directionalPolylines = computed(() =>
+  geometryPathEntries.value.flatMap((entry) => entry.polylines),
 )
 
 const MERGE_DISTANCE_THRESHOLD = 50
@@ -136,11 +139,46 @@ const adjustPointWithSecondary = (point: RailwayGeometryPoint) => {
   return point
 }
 
-const combinedPrimaryPolylines = computed(() =>
-  primaryPolylines.value.map((path) =>
-    path.map((point) => adjustPointWithSecondary(point)),
-  ),
-)
+const secondaryHash = computed(() => {
+  const points = flatSecondaryPoints.value
+  let hash = 0
+  for (const point of points) {
+    hash = Math.imul(point.x, 73856093) ^ Math.imul(point.z, 19349663) ^ hash
+  }
+  return hash
+})
+
+const geometrySignature = computed(() => {
+  const geometry = props.geometry
+  const paths = geometry?.paths ?? []
+  const ids = paths.map((path) => path.id ?? path.source ?? '').join('|')
+  const lengths = paths
+    .map((path) => path.points?.length ?? path.segments?.length ?? 0)
+    .join(',')
+  return `${ids}:${lengths}:${secondaryHash.value}:${props.combinePaths}`
+})
+
+let combinedCacheState = {
+  signature: '',
+  value: [] as RailwayGeometryPoint[][],
+}
+
+const combinedPrimaryPolylines = computed(() => {
+  if (!props.combinePaths) return primaryPolylines.value
+  const signature = geometrySignature.value
+  if (combinedCacheState.signature !== signature) {
+    combinedCacheState.signature = signature
+    const primary = primaryEntry.value
+    if (!primary) {
+      combinedCacheState.value = []
+    } else {
+      combinedCacheState.value = primary.polylines.map((path) =>
+        path.map((point) => adjustPointWithSecondary(point)),
+      )
+    }
+  }
+  return combinedCacheState.value
+})
 
 const primaryCentroid = computed(() =>
   computeCentroid(
@@ -162,19 +200,28 @@ const shouldForceSeparate = computed(() => {
 
 const showSplitLines = ref(false)
 const skipAutoFocus = ref(false)
+let lastDrawSignature = ''
 
 const handleSplitZoom = () => {
   const controller = railwayMap.value?.getController()
   const map = controller?.getLeafletInstance()
   if (!map) return
-  const shouldShowSplit =
-    !props.combinePaths || map.getZoom() >= SECONDARY_ZOOM_THRESHOLD
+  const shouldShowSplit = !props.combinePaths
+    ? true
+    : map.getZoom() >= SECONDARY_ZOOM_THRESHOLD
   if (showSplitLines.value !== shouldShowSplit) {
     showSplitLines.value = shouldShowSplit
     skipAutoFocus.value = true
     scheduleDraw()
   }
 }
+
+watch(
+  () => geometrySignature.value,
+  () => {
+    lastDrawSignature = ''
+  },
+)
 
 function destroyMap() {
   mapCursorCleanup.value?.()
@@ -186,15 +233,30 @@ function destroyMap() {
 
 function drawGeometry() {
   if (!railwayMap.value) return
+  const directionalMode = !props.combinePaths
   const useMidline = props.combinePaths && !showSplitLines.value
-  const primaryPaths = useMidline
-    ? combinedPrimaryPolylines.value
-    : primaryPolylines.value
-  const secondaryPaths = useMidline ? [] : secondaryPolylines.value
-  const secondaryZoomThreshold = useMidline
+  const primaryPaths = directionalMode
+    ? directionalPolylines.value
+    : useMidline
+      ? combinedPrimaryPolylines.value
+      : primaryPolylines.value
+  const secondaryPaths = directionalMode
+    ? []
+    : useMidline
+      ? []
+      : secondaryPolylines.value
+  const secondaryZoomThreshold = directionalMode
     ? Number.POSITIVE_INFINITY
-    : SECONDARY_ZOOM_THRESHOLD
+    : useMidline
+      ? Number.POSITIVE_INFINITY
+      : SECONDARY_ZOOM_THRESHOLD
   const autoFocus = skipAutoFocus.value ? false : (props.autoFocus ?? true)
+  const drawSignature = `${geometrySignature.value}:${showSplitLines.value}`
+  if (drawSignature === lastDrawSignature) {
+    skipAutoFocus.value = false
+    return
+  }
+  lastDrawSignature = drawSignature
   railwayMap.value.drawGeometry(primaryPaths, {
     color: props.color ?? null,
     weight: 4,
@@ -202,7 +264,8 @@ function drawGeometry() {
     focusZoom: props.zoom,
     secondaryPaths,
     secondaryZoomThreshold,
-    forceShowSecondary: !useMidline && shouldForceSeparate.value,
+    forceShowSecondary:
+      !directionalMode && !useMidline && shouldForceSeparate.value,
     autoFocus,
   })
   skipAutoFocus.value = false

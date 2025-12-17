@@ -5,7 +5,11 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import RailwayMapPanel from '@/views/user/Transportation/railway/components/RailwayMapPanel.vue'
 import { useTransportationRailwayStore } from '@/stores/transportation/railway'
-import type { RailwayRouteDetail } from '@/types/transportation'
+import type {
+  RailwayGeometryPoint,
+  RailwayRouteDetail,
+  RailwayRouteLogResult,
+} from '@/types/transportation'
 import { getDimensionName } from '@/utils/minecraft/dimension-names'
 import { parseRouteName } from '@/utils/route/route-name'
 import modpackCreateImg from '@/assets/resources/modpacks/Create.jpg'
@@ -21,6 +25,9 @@ const transportationStore = useTransportationRailwayStore()
 const detail = ref<RailwayRouteDetail | null>(null)
 const loading = ref(true)
 const errorMessage = ref<string | null>(null)
+const logs = ref<RailwayRouteLogResult | null>(null)
+const logLoading = ref(true)
+const logError = ref<string | null>(null)
 
 type PathViewMode = 'default' | 'up' | 'down'
 
@@ -30,6 +37,13 @@ const pathViewModeOptions = [
   { label: '上行', value: 'up' },
   { label: '下行', value: 'down' },
 ]
+
+const geometryPaths = computed(() => detail.value?.geometry.paths ?? [])
+const hasDirectionalPaths = computed(
+  () =>
+    geometryPaths.value.filter((path) => path && path.isPrimary === false)
+      .length > 0,
+)
 
 const params = computed(() => {
   const routeId = route.params.routeId as string | undefined
@@ -52,11 +66,12 @@ const isCircularRoute = computed(() => {
       value.toUpperCase() !== 'NONE',
   )
 })
-const pathViewModeItems = computed(() =>
-  isCircularRoute.value
-    ? pathViewModeOptions.filter((item) => item.value === 'default')
-    : pathViewModeOptions,
-)
+const pathViewModeItems = computed(() => {
+  if (isCircularRoute.value || !hasDirectionalPaths.value) {
+    return pathViewModeOptions.filter((item) => item.value === 'default')
+  }
+  return pathViewModeOptions
+})
 
 let skipAutoFocusForNextPathChange = false
 
@@ -81,6 +96,13 @@ watch(pathViewMode, (current, previous) => {
 
 watch(isCircularRoute, (value) => {
   if (value && pathViewMode.value !== 'default') {
+    skipAutoFocusForNextPathChange = true
+    pathViewMode.value = 'default'
+  }
+})
+
+watch(hasDirectionalPaths, (value) => {
+  if (!value && pathViewMode.value !== 'default') {
     skipAutoFocusForNextPathChange = true
     pathViewMode.value = 'default'
   }
@@ -116,6 +138,12 @@ const routeName = computed(() => parseRouteName(detail.value?.route.name))
 const stations = computed(() => detail.value?.stations ?? [])
 const platforms = computed(() => detail.value?.platforms ?? [])
 const depots = computed(() => detail.value?.depots ?? [])
+const primaryDepot = computed(() => depots.value[0] ?? null)
+const depotLabel = computed(() =>
+  depots.value.length
+    ? depots.value.map((depot) => depot.name || depot.id).join('、')
+    : '暂无车厂信息',
+)
 const orderedStops = computed(() => {
   const stops = detail.value?.stops ?? []
   return [...stops].sort((a, b) => a.order - b.order)
@@ -152,6 +180,93 @@ const routeAccentColor = computed(() => {
   return `#${hex}`
 })
 
+function getStopAnchor(
+  stop: RailwayRouteDetail['stops'][number] | undefined,
+): RailwayGeometryPoint | null {
+  if (!stop) return null
+  if (stop.position) {
+    return stop.position
+  }
+  const bounds = stop.bounds
+  if (
+    bounds &&
+    bounds.xMin != null &&
+    bounds.xMax != null &&
+    bounds.zMin != null &&
+    bounds.zMax != null
+  ) {
+    return {
+      x: (bounds.xMin + bounds.xMax) / 2,
+      z: (bounds.zMin + bounds.zMax) / 2,
+    }
+  }
+  return null
+}
+
+function getPathStartPoint(
+  path: RailwayRouteDetail['geometry']['paths'][number],
+) {
+  if (!path) return null
+  if (path.points?.length) {
+    return path.points[0]
+  }
+  const segment = path.segments?.[0]
+  if (segment) {
+    const start = segment.start
+    if (
+      typeof start.x === 'number' &&
+      typeof start.z === 'number' &&
+      Number.isFinite(start.x) &&
+      Number.isFinite(start.z)
+    ) {
+      return { x: start.x, z: start.z }
+    }
+  }
+  return null
+}
+
+function pickBestPathForStop(
+  paths: NonNullable<RailwayRouteDetail['geometry']['paths']>,
+  stop: RailwayRouteDetail['stops'][number] | null,
+) {
+  if (!paths.length) return null
+  const anchor = getStopAnchor(stop ?? undefined)
+  if (!anchor) {
+    return paths[0]
+  }
+  let best = paths[0]
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const path of paths) {
+    const point = getPathStartPoint(path)
+    if (!point) continue
+    const dx = point.x - anchor.x
+    const dz = point.z - anchor.z
+    const distance = dx * dx + dz * dz
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = path
+    }
+  }
+  return best
+}
+
+type Direction = 'up' | 'down'
+
+function resolveDirectionForMode(mode: PathViewMode): Direction {
+  if (mode === 'up') {
+    return 'up'
+  }
+  return 'down'
+}
+
+function getReferenceStopForDirection(
+  direction: Direction,
+): RailwayRouteDetail['stops'][number] | null {
+  const stops = orderedStops.value
+  if (!stops.length) return null
+  return direction === 'up' ? stops[0] : stops[stops.length - 1]
+}
+
 const modpackInfo = computed(() => {
   const mod = detail.value?.railwayType
   if (mod === 'MTR') {
@@ -174,29 +289,44 @@ const geometryForView = computed(() => {
   if (!paths?.length) {
     return geometry
   }
-  if (pathViewMode.value === 'default') {
-    return geometry
-  }
-  const wantsUp = pathViewMode.value === 'up'
-  const filtered = paths.filter((path, index) => {
+  const modeDirection = resolveDirectionForMode(pathViewMode.value)
+  const wantsUp = modeDirection === 'up'
+  const directionalPaths = paths.filter((path, index) => {
     const isPrimary =
       typeof path.isPrimary === 'boolean' ? path.isPrimary : index === 0
     return wantsUp ? isPrimary : !isPrimary
   })
-  if (!filtered.length) {
-    return { ...geometry, paths: [] }
+  const fallbackPaths = directionalPaths.length ? directionalPaths : paths
+  const referenceStop = getReferenceStopForDirection(modeDirection)
+  const chosenPath = pickBestPathForStop(fallbackPaths, referenceStop)
+  if (!chosenPath) {
+    return { ...geometry, paths: fallbackPaths }
   }
-  return { ...geometry, paths: filtered }
+  const secondaryPaths = paths
+    .filter((path) => path !== chosenPath)
+    .map((path) => ({ ...path, isPrimary: false }))
+  const primaryPath = { ...chosenPath, isPrimary: true }
+  if (pathViewMode.value === 'default') {
+    return { ...geometry, paths: [primaryPath, ...secondaryPaths] }
+  }
+  return { ...geometry, paths: [primaryPath] }
 })
 const stopDisplayItems = computed(() =>
   displayedStops.value.map((stop) => {
     const displayName = resolveStopStationName(stop)
     const nameParts = formatStationNameParts(displayName)
+    const station =
+      stop.stationId != null
+        ? stations.value.find((item) => item.id === stop.stationId)
+        : null
     return {
       stop,
       title: nameParts.title,
       subtitle: nameParts.subtitle,
       platformLabel: getStopPlatformLabel(stop),
+      stationId: stop.stationId,
+      stationColor: station?.color ?? null,
+      dwellTime: stop.dwellTime ?? null,
     }
   }),
 )
@@ -328,12 +458,22 @@ function getPlatformListingStation(
   return getStationName(platform.stationId)
 }
 
-function goDetailedMap() {
-  router.push({
-    name: 'transportation.railway.route.map',
-    params: route.params,
-    query: route.query,
-  })
+function colorToHex(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return null
+  const sanitized = Math.max(0, Math.floor(value))
+  return `#${sanitized.toString(16).padStart(6, '0').slice(-6)}`
+}
+
+function getPlayerAvatar(playerName: string | null | undefined) {
+  if (!playerName) return null
+  return `https://mc-heads.hydcraft.cn/avatar/${encodeURIComponent(playerName)}/80`
+}
+
+function formatLogTimestamp(value: string | null | undefined) {
+  if (!value) return '—'
+  const d = dayjs(value)
+  if (!d.isValid()) return value
+  return d.format('YYYY-MM-DD HH:mm')
 }
 
 async function fetchDetail() {
@@ -352,6 +492,7 @@ async function fetchDetail() {
       true,
     )
     detail.value = result
+    void fetchLogs(true)
   } catch (error) {
     console.error(error)
     errorMessage.value =
@@ -363,15 +504,81 @@ async function fetchDetail() {
   }
 }
 
+async function fetchLogs(force = true) {
+  const { routeId, serverId, dimension, railwayType } = params.value
+  if (!routeId || !serverId || !railwayType) {
+    logs.value = null
+    return
+  }
+  logLoading.value = true
+  logError.value = null
+  try {
+    const result = await transportationStore.fetchRouteLogs(
+      { routeId, serverId, dimension, railwayType, limit: 8, page: 1 },
+      force,
+    )
+    logs.value = result
+  } catch (error) {
+    console.error(error)
+    logError.value = error instanceof Error ? error.message : '日志加载失败'
+    toast.add({ title: logError.value, color: 'error' })
+    logs.value = null
+  } finally {
+    logLoading.value = false
+  }
+}
+
+function goDetailedMap() {
+  router.push({
+    name: 'transportation.railway.route.map',
+    params: route.params,
+    query: route.query,
+  })
+}
+
+function goStationDetail(stationId: string | null | undefined) {
+  if (!stationId || !params.value.railwayType) return
+  router.push({
+    name: 'transportation.railway.station',
+    params: {
+      railwayType: params.value.railwayType,
+      stationId,
+    },
+    query: route.query,
+  })
+}
+
+function goDepotDetail(depotId: string | null | undefined) {
+  if (!depotId || !params.value.railwayType) return
+  router.push({
+    name: 'transportation.railway.depot',
+    params: {
+      railwayType: params.value.railwayType,
+      depotId,
+    },
+    query: route.query,
+  })
+}
+
+function goPlayerProfile(playerName: string | null | undefined) {
+  if (!playerName) return
+  router.push({
+    name: 'player.name',
+    params: { playerName },
+  })
+}
+
 watch(
   () => route.fullPath,
   () => {
     void fetchDetail()
+    void fetchLogs()
   },
 )
 
 onMounted(() => {
   void fetchDetail()
+  void fetchLogs()
 })
 </script>
 
@@ -692,56 +899,146 @@ onMounted(() => {
         </section>
 
         <section class="space-y-3">
-          <h3 class="text-lg text-slate-600 dark:text-slate-300">
-            平台 & 关联车厂
-          </h3>
-          <div class="grid gap-4 lg:grid-cols-2">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-lg text-slate-600 dark:text-slate-300">站点</h3>
             <div
-              class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
+              class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
             >
-              <h4 class="mb-2 font-medium text-slate-700 dark:text-white">
-                平台
-              </h4>
-              <table class="w-full text-left text-sm">
-                <thead>
-                  <tr class="text-slate-500">
-                    <th class="py-1">名称</th>
-                    <th class="py-1">所属站</th>
-                    <th class="py-1">停靠</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="platform in platforms"
-                    :key="platform.id"
-                    class="border-t border-slate-100 text-slate-700 dark:border-slate-800 dark:text-slate-200"
-                  >
-                    <td class="py-1">{{ getPlatformDisplayName(platform) }}</td>
-                    <td class="py-1">
-                      {{ getPlatformListingStation(platform) }}
-                    </td>
-                    <td class="py-1">{{ platform.dwellTime ?? '—' }} tick</td>
-                  </tr>
-                </tbody>
-              </table>
+              <UIcon name="i-lucide-corner-down-left" class="h-4 w-4" />
+              <button
+                type="button"
+                class="underline-offset-2 hover:underline"
+                @click="goDepotDetail(primaryDepot?.id)"
+              >
+                本线路列车由 {{ depotLabel }} 发出
+              </button>
             </div>
+          </div>
+          <div
+            class="rounded-xl border border-slate-200/60 bg-white/90 p-4 dark:border-slate-800/60 dark:bg-slate-900/70"
+          >
+            <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <div
+                v-for="item in stopDisplayItems"
+                :key="`station-card-${item.stop.platformId ?? item.stop.stationId ?? item.stop.order}`"
+                class="py-3 first:pt-0 last:pb-0"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    class="text-left"
+                    @click="goStationDetail(item.stationId)"
+                  >
+                    <p
+                      class="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white"
+                    >
+                      <span
+                        class="inline-flex h-3 w-3 rounded-full border border-slate-200 dark:border-slate-700"
+                        :style="
+                          item.stationColor
+                            ? { backgroundColor: colorToHex(item.stationColor) }
+                            : undefined
+                        "
+                      ></span>
+                      {{ item.title }}
+                    </p>
+                    <p class="text-xs text-slate-500">
+                      {{ item.subtitle || '—' }}
+                    </p>
+                  </button>
+                  <div class="text-right text-xs text-slate-500">
+                    <p>停留 {{ item.dwellTime ?? '—' }} tick</p>
+                    <div
+                      class="mt-1 inline-flex items-center rounded border border-slate-200 px-2 py-0.5 font-mono text-[10px] text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                    >
+                      {{ item.platformLabel }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-            <div
-              class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
+        <section class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg text-slate-600 dark:text-slate-300">
+              线路修改日志
+            </h3>
+            <UButton
+              size="xs"
+              variant="ghost"
+              icon="i-lucide-refresh-cw"
+              @click="fetchLogs(true)"
             >
-              <h4 class="mb-2 font-medium text-slate-700 dark:text-white">
-                关联车厂/车段
-              </h4>
-              <div class="space-y-2">
-                <p v-if="depots.length === 0" class="text-sm">暂无关联数据。</p>
-
-                <div v-for="depot in depots" :key="depot.id">
-                  <p class="font-medium text-sm text-slate-900 dark:text-white">
-                    {{ depot.name || depot.id }}
-                  </p>
-                  <p class="text-sm text-slate-500">
-                    颜色：{{ depot.color || '—' }}
-                  </p>
+              刷新
+            </UButton>
+          </div>
+          <div
+            class="rounded-xl border border-slate-200/60 bg-white/90 p-4 dark:border-slate-800/60 dark:bg-slate-900/70"
+          >
+            <p v-if="logLoading" class="text-sm text-slate-500">日志加载中…</p>
+            <p v-else-if="logError" class="text-sm text-red-500">
+              {{ logError }}
+            </p>
+            <p
+              v-else-if="!logs || logs.entries.length === 0"
+              class="text-sm text-slate-500"
+            >
+              暂无日志记录。
+            </p>
+            <div v-else class="space-y-3">
+              <div
+                v-for="entry in logs.entries"
+                :key="entry.id"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100/70 px-3 py-2 dark:border-slate-800/60"
+              >
+                <div class="flex items-center gap-3">
+                  <button
+                    type="button"
+                    class="flex-shrink-0"
+                    @click="goPlayerProfile(entry.playerName)"
+                  >
+                    <img
+                      v-if="getPlayerAvatar(entry.playerName)"
+                      :src="getPlayerAvatar(entry.playerName) || undefined"
+                      class="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700"
+                      alt="player avatar"
+                    />
+                    <div
+                      v-else
+                      class="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400"
+                    >
+                      无
+                    </div>
+                  </button>
+                  <div>
+                    <p
+                      class="text-sm font-semibold text-slate-900 dark:text-white"
+                    >
+                      {{ entry.playerName || '未知玩家' }}
+                    </p>
+                    <p class="text-xs text-slate-500">
+                      {{ entry.changeType || '—' }} ·
+                      {{ entry.entryName || entry.className || entry.entryId }}
+                    </p>
+                    <p class="text-xs text-slate-400">
+                      {{ formatLogTimestamp(entry.timestamp) }}
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-500">
+                  <UBadge size="xs" variant="soft">
+                    {{ entry.entryId || '—' }}
+                  </UBadge>
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    icon="i-lucide-user-round"
+                    @click="goPlayerProfile(entry.playerName)"
+                  >
+                    玩家
+                  </UButton>
                 </div>
               </div>
             </div>

@@ -5,12 +5,22 @@ import type {
   RailwayBanner,
   RailwayBannerPayload,
   RailwayBannerUpdatePayload,
+  RailwayDepotDetail,
   RailwayOverview,
   RailwayRouteDetail,
+  RailwayRouteLogResult,
+  RailwayStationDetail,
 } from '@/types/transportation'
 
 interface RouteCacheParams {
   routeId: string
+  serverId: string
+  dimension?: string | null
+  railwayType: string
+}
+
+interface EntityCacheParams {
+  id: string
   serverId: string
   dimension?: string | null
   railwayType: string
@@ -24,6 +34,9 @@ export const useTransportationRailwayStore = defineStore(
       overviewLoading: false,
       overviewError: null as string | null,
       routeDetails: {} as Record<string, RailwayRouteDetail>,
+      stationDetails: {} as Record<string, RailwayStationDetail>,
+      depotDetails: {} as Record<string, RailwayDepotDetail>,
+      routeLogs: {} as Record<string, RailwayRouteLogResult>,
       routeLoading: false,
       adminBanners: [] as RailwayBanner[],
       adminBannersLoading: false,
@@ -59,6 +72,10 @@ export const useTransportationRailwayStore = defineStore(
         const dimension = params.dimension ?? ''
         return `${params.serverId}::${params.routeId}::${dimension}::${params.railwayType}`
       },
+      buildEntityCacheKey(params: EntityCacheParams) {
+        const dimension = params.dimension ?? ''
+        return `${params.serverId}::${params.id}::${dimension}::${params.railwayType}`
+      },
       async fetchRouteDetail(params: RouteCacheParams, force = false) {
         const cacheKey = this.buildRouteCacheKey(params)
         if (this.routeDetails[cacheKey] && !force) {
@@ -80,6 +97,60 @@ export const useTransportationRailwayStore = defineStore(
         } finally {
           this.routeLoading = false
         }
+      },
+      async fetchStationDetail(params: EntityCacheParams, force = false) {
+        const cacheKey = this.buildEntityCacheKey(params)
+        if (this.stationDetails[cacheKey] && !force) {
+          return this.stationDetails[cacheKey]
+        }
+        const query = new URLSearchParams({ serverId: params.serverId })
+        if (params.dimension) {
+          query.set('dimension', params.dimension)
+        }
+        const detail = await apiFetch<RailwayStationDetail>(
+          `/transportation/railway/stations/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.id)}?${query.toString()}`,
+        )
+        this.stationDetails[cacheKey] = detail
+        return detail
+      },
+      async fetchDepotDetail(params: EntityCacheParams, force = false) {
+        const cacheKey = this.buildEntityCacheKey(params)
+        if (this.depotDetails[cacheKey] && !force) {
+          return this.depotDetails[cacheKey]
+        }
+        const query = new URLSearchParams({ serverId: params.serverId })
+        if (params.dimension) {
+          query.set('dimension', params.dimension)
+        }
+        const detail = await apiFetch<RailwayDepotDetail>(
+          `/transportation/railway/depots/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.id)}?${query.toString()}`,
+        )
+        this.depotDetails[cacheKey] = detail
+        return detail
+      },
+      async fetchRouteLogs(
+        params: RouteCacheParams & { page?: number; limit?: number },
+        force = false,
+      ) {
+        const page = params.page ?? 1
+        const limit = params.limit ?? 10
+        const cacheKey = `${this.buildRouteCacheKey(params)}::${page}::${limit}`
+        if (this.routeLogs[cacheKey] && !force) {
+          return this.routeLogs[cacheKey]
+        }
+        const query = new URLSearchParams({
+          serverId: params.serverId,
+          page: String(page),
+          limit: String(limit),
+        })
+        if (params.dimension) {
+          query.set('dimension', params.dimension)
+        }
+        const detail = await apiFetch<RailwayRouteLogResult>(
+          `/transportation/railway/routes/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.routeId)}/logs?${query.toString()}`,
+        )
+        this.routeLogs[cacheKey] = detail
+        return detail
       },
       async fetchAdminBanners() {
         this.adminBannersLoading = true

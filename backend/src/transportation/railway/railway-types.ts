@@ -178,3 +178,77 @@ export type RouteDetailResult = {
     } | null;
   }>;
 };
+
+export type RailwayStationDetailResult = {
+  server: { id: string; name: string };
+  railwayType: TransportationRailwayMod;
+  station: NormalizedEntity & {
+    bounds: {
+      xMin: number | null;
+      xMax: number | null;
+      zMin: number | null;
+      zMax: number | null;
+    };
+    zone: number | null;
+  };
+  platforms: Array<
+    NormalizedEntity & {
+      stationId: string | null;
+      dwellTime: number | null;
+      pos1: { x: number; y: number; z: number } | null;
+      pos2: { x: number; y: number; z: number } | null;
+      routeIds: string[];
+    }
+  >;
+  routes: NormalizedRoute[];
+  metadata: {
+    lastUpdated: number | null;
+  };
+};
+
+export type RailwayDepotDetailResult = {
+  server: { id: string; name: string };
+  railwayType: TransportationRailwayMod;
+  depot: NormalizedEntity & {
+    bounds: {
+      xMin: number | null;
+      xMax: number | null;
+      zMin: number | null;
+      zMax: number | null;
+    };
+    routeIds: string[];
+    useRealTime: boolean | null;
+    repeatInfinitely: boolean | null;
+    cruisingAltitude: number | null;
+    frequencies: number[] | null;
+  };
+  routes: NormalizedRoute[];
+  metadata: {
+    lastUpdated: number | null;
+  };
+};
+
+export type RailwayRouteLogEntry = {
+  id: number;
+  timestamp: string;
+  playerName: string | null;
+  playerUuid: string | null;
+  changeType: string | null;
+  className: string | null;
+  entryId: string | null;
+  entryName: string | null;
+  dimensionContext: string | null;
+  sourceFilePath: string | null;
+  sourceLine: number | null;
+  newData: Record<string, unknown> | null;
+  oldData: Record<string, unknown> | null;
+};
+
+export type RailwayRouteLogResult = {
+  server: { id: string; name: string };
+  railwayType: TransportationRailwayMod;
+  total: number;
+  page: number;
+  pageSize: number;
+  entries: RailwayRouteLogEntry[];
+};

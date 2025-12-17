@@ -96,3 +96,15 @@ export class RailwayRouteDetailQueryDto {
   @IsString()
   dimension?: string | null;
 }
+
+export class RailwayRouteLogQueryDto extends RailwayRouteDetailQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  limit?: number;
+}
