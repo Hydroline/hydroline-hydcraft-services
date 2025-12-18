@@ -62,7 +62,7 @@ export class WorkflowService {
   async upsertDefinition(dto: UpsertWorkflowDefinitionDto) {
     const normalized = this.normalizeConfig(dto.states);
     if (normalized.states.length === 0) {
-      throw new BadRequestException('工作流至少需要一个状态');
+      throw new BadRequestException('Workflow requires at least one state');
     }
     const initialState = normalized.states[0].key;
     const roleSet = new Set<string>();
@@ -99,12 +99,16 @@ export class WorkflowService {
   ): Promise<WorkflowInstanceWithDefinition> {
     const definition = await this.getDefinitionByCode(input.definitionCode);
     if (!definition || !definition.isActive) {
-      throw new BadRequestException('指定的工作流定义不存在或不可用');
+      throw new BadRequestException(
+        'Specified workflow definition does not exist or is unavailable',
+      );
     }
     const config = this.parseDefinitionConfig(definition);
     const initialState = config.states[0]?.key ?? definition.initialState;
     if (!initialState) {
-      throw new BadRequestException('工作流定义缺少初始状态');
+      throw new BadRequestException(
+        'Workflow definition is missing initial state',
+      );
     }
 
     const instance = await this.prisma.workflowInstance.create({
@@ -131,7 +135,7 @@ export class WorkflowService {
       include: { definition: true },
     });
     if (!instance) {
-      throw new NotFoundException('找不到对应的流程实例');
+      throw new NotFoundException('Process instance not found');
     }
     const definition = instance.definition as WorkflowDefinitionWithConfig;
     const config = this.parseDefinitionConfig(definition);
@@ -140,7 +144,9 @@ export class WorkflowService {
       (entry) => entry.key === input.actionKey,
     );
     if (!action) {
-      throw new BadRequestException('当前状态不支持该操作');
+      throw new BadRequestException(
+        'Current state does not support this operation',
+      );
     }
 
     const allowedRoles = action.roles ?? [];
@@ -151,7 +157,9 @@ export class WorkflowService {
       allowedRoles.length > 0 &&
       !allowedRoles.some((role) => role === '*' || actorRoles.has(role))
     ) {
-      throw new ForbiddenException('没有执行该流程动作的权限');
+      throw new ForbiddenException(
+        'No permission to execute this process action',
+      );
     }
 
     const nextState = this.getStateConfig(config, action.to);
@@ -214,14 +222,18 @@ export class WorkflowService {
   private getStateConfig(config: WorkflowDefinitionConfig, stateKey: string) {
     const found = config.states.find((entry) => entry.key === stateKey);
     if (!found) {
-      throw new NotFoundException(`未在流程配置中找到状态 ${stateKey}`);
+      throw new NotFoundException(
+        `State ${stateKey} not found in workflow configuration`,
+      );
     }
     return found;
   }
 
   private normalizeConfig(states: WorkflowStateInputDto[]) {
     if (!Array.isArray(states) || states.length === 0) {
-      throw new BadRequestException('至少需要 1 个状态配置');
+      throw new BadRequestException(
+        'At least 1 state configuration is required',
+      );
     }
     const stateMap = new Map<string, WorkflowStateConfig>();
 

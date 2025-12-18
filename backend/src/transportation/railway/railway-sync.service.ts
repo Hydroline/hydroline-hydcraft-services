@@ -144,7 +144,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
     const servers = await this.listBeaconServers();
     const target = servers.find((server) => server.id === serverId);
     if (!target) {
-      throw new NotFoundException('未找到启用 Beacon 的服务器');
+      throw new NotFoundException('Beacon-enabled server not found');
     }
     this.ensureBeaconClient(target);
     await this.waitForBeaconConnections([target.id]);
@@ -175,7 +175,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
       where: { id: jobId },
     });
     if (!job) {
-      throw new NotFoundException('同步任务不存在');
+      throw new NotFoundException('Sync task not found');
     }
     return this.buildJobStatus(job);
   }

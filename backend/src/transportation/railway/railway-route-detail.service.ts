@@ -144,11 +144,13 @@ export class TransportationRailwayRouteDetailService {
     query: RailwayRouteDetailQueryDto,
   ): Promise<RouteDetailResult> {
     if (!routeId || !query?.serverId) {
-      throw new BadRequestException('路线 ID 与 serverId 必填');
+      throw new BadRequestException('Route ID and serverId are required');
     }
     const server = await this.getBeaconServerById(query.serverId);
     if (server.railwayMod !== railwayMod) {
-      throw new BadRequestException('指定的铁路类型与服务器配置不匹配');
+      throw new BadRequestException(
+        'Specified railway type does not match server configuration',
+      );
     }
     const normalizedRouteId = routeId.trim();
 
@@ -159,16 +161,16 @@ export class TransportationRailwayRouteDetailService {
       query.dimension ?? null,
     );
     if (!routeEntity) {
-      throw new NotFoundException('未找到对应线路');
+      throw new NotFoundException('Route not found');
     }
     const routeRecord = this.buildRouteRecordFromEntity(routeEntity);
     if (!routeRecord) {
-      throw new NotFoundException('路线数据缺失');
+      throw new NotFoundException('Route data missing');
     }
 
     const normalizedRoute = this.normalizeStoredRoute(routeEntity, server);
     if (!normalizedRoute) {
-      throw new NotFoundException('无法解析路线数据');
+      throw new NotFoundException('Unable to parse route data');
     }
 
     const orderedPlatformIds = normalizeIdList(routeRecord.platform_ids ?? []);
@@ -289,11 +291,13 @@ export class TransportationRailwayRouteDetailService {
     query: RailwayRouteDetailQueryDto,
   ): Promise<RailwayStationDetailResult> {
     if (!stationId || !query?.serverId) {
-      throw new BadRequestException('车站 ID 与 serverId 必填');
+      throw new BadRequestException('Station ID and serverId are required');
     }
     const server = await this.getBeaconServerById(query.serverId);
     if (server.railwayMod !== railwayMod) {
-      throw new BadRequestException('指定的铁路类型与服务器配置不匹配');
+      throw new BadRequestException(
+        'Specified railway type does not match server configuration',
+      );
     }
     const normalizedStationId = stationId.trim();
     const stationRow = await this.fetchStoredEntityRow(
@@ -303,18 +307,18 @@ export class TransportationRailwayRouteDetailService {
       query.dimension ?? null,
     );
     if (!stationRow) {
-      throw new NotFoundException('未找到对应车站');
+      throw new NotFoundException('Station not found');
     }
     const stationPayload = this.toJsonRecord(stationRow.payload);
     if (!stationPayload) {
-      throw new NotFoundException('车站数据缺失');
+      throw new NotFoundException('Station data missing');
     }
     const stationRecord = this.buildStationRecordFromEntity(
       stationRow.entityId,
       stationPayload,
     );
     if (!stationRecord) {
-      throw new NotFoundException('车站数据缺失');
+      throw new NotFoundException('Station data missing');
     }
     const normalizedStation = this.normalizeStationRecord(
       stationRecord,
@@ -435,11 +439,13 @@ export class TransportationRailwayRouteDetailService {
     query: RailwayRouteDetailQueryDto,
   ): Promise<RailwayDepotDetailResult> {
     if (!depotId || !query?.serverId) {
-      throw new BadRequestException('车厂 ID 与 serverId 必填');
+      throw new BadRequestException('Depot ID and serverId are required');
     }
     const server = await this.getBeaconServerById(query.serverId);
     if (server.railwayMod !== railwayMod) {
-      throw new BadRequestException('指定的铁路类型与服务器配置不匹配');
+      throw new BadRequestException(
+        'Specified railway type does not match server configuration',
+      );
     }
     const normalizedDepotId = depotId.trim();
     const depotRow = await this.fetchStoredEntityRow(
@@ -449,7 +455,7 @@ export class TransportationRailwayRouteDetailService {
       query.dimension ?? null,
     );
     if (!depotRow) {
-      throw new NotFoundException('未找到对应车厂');
+      throw new NotFoundException('Depot not found');
     }
     const depotPayload = this.toJsonRecord(depotRow.payload);
     const normalizedDepot =
@@ -513,10 +519,10 @@ export class TransportationRailwayRouteDetailService {
       },
     });
     if (!server || !server.beaconEnabled) {
-      throw new NotFoundException('服务器未启用 Beacon');
+      throw new NotFoundException('Beacon not enabled on server');
     }
     if (!server.beaconEndpoint || !server.beaconKey) {
-      throw new BadRequestException('Beacon 配置不完整');
+      throw new BadRequestException('Beacon configuration incomplete');
     }
     return {
       id: server.id,
@@ -962,7 +968,7 @@ export class TransportationRailwayRouteDetailService {
   ): Promise<RailwayRouteLogResult> {
     const sanitized = this.sanitizeLogSearchKeyword(keyword);
     if (!sanitized) {
-      throw new BadRequestException('日志关键词无效');
+      throw new BadRequestException('Invalid log keyword');
     }
     const likePattern = `%${sanitized}%`;
     const searchColumns = [
@@ -2167,11 +2173,13 @@ export class TransportationRailwayRouteDetailService {
     query: RailwayRouteLogQueryDto,
   ): Promise<RailwayRouteLogResult> {
     if (!routeId || !query?.serverId) {
-      throw new BadRequestException('路线 ID 与 serverId 必填');
+      throw new BadRequestException('Route ID and serverId are required');
     }
     const server = await this.getBeaconServerById(query.serverId);
     if (server.railwayMod !== railwayMod) {
-      throw new BadRequestException('指定的铁路类型与服务器配置不匹配');
+      throw new BadRequestException(
+        'Specified railway type does not match server configuration',
+      );
     }
     const normalizedRouteId = routeId.trim();
     const routeRow = await this.fetchStoredEntityRow(
@@ -2181,7 +2189,7 @@ export class TransportationRailwayRouteDetailService {
       query.dimension ?? null,
     );
     if (!routeRow) {
-      throw new NotFoundException('未找到对应线路');
+      throw new NotFoundException('Route not found');
     }
     const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 50);
     const page = Math.max(Number(query.page) || 1, 1);
@@ -2247,11 +2255,13 @@ export class TransportationRailwayRouteDetailService {
     query: RailwayRouteLogQueryDto,
   ): Promise<RailwayRouteLogResult> {
     if (!stationId || !query?.serverId) {
-      throw new BadRequestException('车站 ID 与 serverId 必填');
+      throw new BadRequestException('Station ID and serverId are required');
     }
     const server = await this.getBeaconServerById(query.serverId);
     if (server.railwayMod !== railwayMod) {
-      throw new BadRequestException('指定的铁路类型与服务器配置不匹配');
+      throw new BadRequestException(
+        'Specified railway type does not match server configuration',
+      );
     }
     const normalizedStationId = stationId.trim();
     const stationRow = await this.fetchStoredEntityRow(
@@ -2261,7 +2271,7 @@ export class TransportationRailwayRouteDetailService {
       query.dimension ?? null,
     );
     if (!stationRow) {
-      throw new NotFoundException('未找到对应车站');
+      throw new NotFoundException('Station not found');
     }
     const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 50);
     const page = Math.max(Number(query.page) || 1, 1);
@@ -2291,11 +2301,13 @@ export class TransportationRailwayRouteDetailService {
     query: RailwayRouteLogQueryDto,
   ): Promise<RailwayRouteLogResult> {
     if (!depotId || !query?.serverId) {
-      throw new BadRequestException('车厂 ID 与 serverId 必填');
+      throw new BadRequestException('Depot ID and serverId are required');
     }
     const server = await this.getBeaconServerById(query.serverId);
     if (server.railwayMod !== railwayMod) {
-      throw new BadRequestException('指定的铁路类型与服务器配置不匹配');
+      throw new BadRequestException(
+        'Specified railway type does not match server configuration',
+      );
     }
     const normalizedDepotId = depotId.trim();
     const depotRow = await this.fetchStoredEntityRow(
@@ -2305,7 +2317,7 @@ export class TransportationRailwayRouteDetailService {
       query.dimension ?? null,
     );
     if (!depotRow) {
-      throw new NotFoundException('未找到对应车厂');
+      throw new NotFoundException('Depot not found');
     }
     const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 50);
     const page = Math.max(Number(query.page) || 1, 1);

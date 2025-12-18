@@ -34,7 +34,7 @@ export class TransportationRailwayAdminController {
   private getUserId(req: Request) {
     const userId = (req.user as { id?: string } | undefined)?.id;
     if (!userId) {
-      throw new BadRequestException('用户未登录');
+      throw new BadRequestException('User not logged in');
     }
     return userId;
   }

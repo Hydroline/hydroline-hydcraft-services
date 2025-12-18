@@ -142,6 +142,57 @@ const STATIC_TRANSLATIONS: Record<string, string> = {
   'Failed to load station detail': '加载车站详情失败',
   'Failed to load route detail': '加载线路详情失败',
   'Station map generation failed': '车站地图生成失败',
+  'Please select a railway category': '请选择铁路类别',
+  'Unrecognized railway type': '未识别的铁路类型',
+  'Banner not found': 'Banner 不存在',
+  'Attachment not found': '附件不存在',
+  'Please set the attachment to public access first':
+    '请先将附件设置为公开可访问',
+  'User not logged in': '用户未登录',
+  'Beacon-enabled server not found': '未找到启用 Beacon 的服务器',
+  'Sync task not found': '同步任务不存在',
+  'Route ID and serverId are required': '路线 ID 与 serverId 必填',
+  'Specified railway type does not match server configuration':
+    '指定的铁路类型与服务器配置不匹配',
+  'Route data missing': '路线数据缺失',
+  'Unable to parse route data': '无法解析路线数据',
+  'Station ID and serverId are required': '车站 ID 与 serverId 必填',
+  'Station data missing': '车站数据缺失',
+  'Depot ID and serverId are required': '车厂 ID 与 serverId 必填',
+  'Depot not found': '未找到对应车厂',
+  'Beacon not enabled on server': '服务器未启用 Beacon',
+  'Beacon configuration incomplete': 'Beacon 配置不完整',
+  'Invalid log keyword': '日志关键词无效',
+
+  // Company errors
+  'User session has expired': '用户会话已失效',
+  'No permission to view this company information': '没有权限查看该公司信息',
+  'Legal representative user not found': '未找到法人用户',
+  'Disallowed member role': '不允许的成员角色',
+  'Invalid member user': '无效的成员用户',
+  'This user is already a member': '该用户已经是成员',
+  'Can only join active entities': '只能加入已生效的主体',
+  'You are already a member of this entity': '你已经是该主体的成员',
+  'Invalid owner': '无效的持有人',
+  'Invalid legal representative user': '无效的法人用户',
+  'This company is not yet associated with a process instance':
+    '该公司暂未关联流程实例',
+  'Only company owner or legal representative can edit':
+    '只有公司持有者或法人可以编辑',
+  'Company type not found': '未找到对应的公司类型',
+  'Industry category not found': '未找到对应的行业分类',
+  'Company not found': '找不到对应的公司',
+  'Invalid position code': '无效的职位代码',
+
+  // Workflow errors
+  'Workflow requires at least one state': '工作流至少需要一个状态',
+  'Specified workflow definition does not exist or is unavailable':
+    '指定的工作流定义不存在或不可用',
+  'Workflow definition is missing initial state': '工作流定义缺少初始状态',
+  'Process instance not found': '找不到对应的流程实例',
+  'Current state does not support this operation': '当前状态不支持该操作',
+  'No permission to execute this process action': '没有执行该流程动作的权限',
+  'At least 1 state configuration is required': '至少需要 1 个状态配置',
 }
 
 const PASSWORD_TOO_SHORT_RE = /password[^a-z]*least[^0-9]*8/i

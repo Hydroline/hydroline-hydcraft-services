@@ -175,14 +175,14 @@ function parseRailwayTypeParam(
   value: string | undefined,
 ): TransportationRailwayMod {
   if (!value?.trim()) {
-    throw new BadRequestException('请选择铁路类别');
+    throw new BadRequestException('Please select a railway category');
   }
   const normalized = value.trim().toLowerCase();
   const match = Object.values(TransportationRailwayMod).find(
     (type) => type.toLowerCase() === normalized,
   );
   if (!match) {
-    throw new BadRequestException('未识别的铁路类型');
+    throw new BadRequestException('Unrecognized railway type');
   }
   return match;
 }

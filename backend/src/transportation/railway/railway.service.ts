@@ -155,7 +155,7 @@ export class TransportationRailwayService {
       where: { id },
     });
     if (!existing) {
-      throw new NotFoundException('Banner 不存在');
+      throw new NotFoundException('Banner not found');
     }
     if (dto.attachmentId) {
       await this.ensureAttachmentPublic(dto.attachmentId);
@@ -368,10 +368,12 @@ export class TransportationRailwayService {
       select: { id: true, isPublic: true },
     });
     if (!attachment) {
-      throw new NotFoundException('附件不存在');
+      throw new NotFoundException('Attachment not found');
     }
     if (!attachment.isPublic) {
-      throw new BadRequestException('请先将附件设置为公开可访问');
+      throw new BadRequestException(
+        'Please set the attachment to public access first',
+      );
     }
   }
 }

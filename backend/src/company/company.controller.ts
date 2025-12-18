@@ -33,7 +33,7 @@ export class CompanyController {
   private requireUserId(req: Request) {
     const userId = (req.user as { id?: string } | undefined)?.id;
     if (!userId) {
-      throw new BadRequestException('用户会话已失效');
+      throw new BadRequestException('User session has expired');
     }
     return userId;
   }

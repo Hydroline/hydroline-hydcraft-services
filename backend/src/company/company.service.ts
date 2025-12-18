@@ -493,7 +493,9 @@ export class CompanyService implements OnModuleInit {
   async getCompanyDetail(id: string, viewerId?: string | null) {
     const company = await this.findCompanyOrThrow(id);
     if (!this.canViewCompany(company, viewerId)) {
-      throw new ForbiddenException('没有权限查看该公司信息');
+      throw new ForbiddenException(
+        'No permission to view this company information',
+      );
     }
     return this.serializeCompany(company, viewerId ?? undefined);
   }
@@ -521,7 +523,7 @@ export class CompanyService implements OnModuleInit {
       },
     });
     if (!legalRepresentative) {
-      throw new BadRequestException('未找到法人用户');
+      throw new BadRequestException('Legal representative user not found');
     }
     const slug = await this.generateUniqueSlug(dto.name);
     const workflowCode = type?.defaultWorkflow ?? DEFAULT_COMPANY_WORKFLOW_CODE;
@@ -660,14 +662,14 @@ export class CompanyService implements OnModuleInit {
     await this.assertMember(companyId, actorId);
     const role = dto.role ?? CompanyMemberRole.MEMBER;
     if (!INVITEABLE_MEMBER_ROLES.includes(role)) {
-      throw new BadRequestException('不允许的成员角色');
+      throw new BadRequestException('Disallowed member role');
     }
     await this.findCompanyOrThrow(companyId);
     const targetUser = await this.prisma.user.findUnique({
       where: { id: dto.userId },
     });
     if (!targetUser) {
-      throw new BadRequestException('无效的成员用户');
+      throw new BadRequestException('Invalid member user');
     }
     const existingMember = await this.prisma.companyMember.findFirst({
       where: {
@@ -676,7 +678,7 @@ export class CompanyService implements OnModuleInit {
       },
     });
     if (existingMember) {
-      throw new BadRequestException('该用户已经是成员');
+      throw new BadRequestException('This user is already a member');
     }
     const position = await this.resolvePosition(dto.positionCode ?? 'staff');
     await this.prisma.companyMember.create({
@@ -705,7 +707,7 @@ export class CompanyService implements OnModuleInit {
   ) {
     const company = await this.findCompanyOrThrow(companyId);
     if (company.status !== CompanyStatus.ACTIVE) {
-      throw new BadRequestException('只能加入已生效的主体');
+      throw new BadRequestException('Can only join active entities');
     }
     const existingMember = await this.prisma.companyMember.findFirst({
       where: {
@@ -714,7 +716,7 @@ export class CompanyService implements OnModuleInit {
       },
     });
     if (existingMember) {
-      throw new BadRequestException('你已经是该主体的成员');
+      throw new BadRequestException('You are already a member of this entity');
     }
     const position = await this.resolvePosition(dto.positionCode ?? 'staff');
     await this.prisma.companyMember.create({
@@ -786,7 +788,7 @@ export class CompanyService implements OnModuleInit {
       where: { id: ownerId },
     });
     if (!ownerExists) {
-      throw new BadRequestException('无效的持有人');
+      throw new BadRequestException('Invalid owner');
     }
     const legalRepresentative = await this.prisma.user.findUnique({
       where: { id: legalRepresentativeId },
@@ -797,7 +799,7 @@ export class CompanyService implements OnModuleInit {
       },
     });
     if (!legalRepresentative) {
-      throw new BadRequestException('无效的法人用户');
+      throw new BadRequestException('Invalid legal representative user');
     }
     const slug = await this.generateUniqueSlug(dto.name);
     const workflowCode = DEFAULT_COMPANY_WORKFLOW_CODE;
@@ -1006,7 +1008,9 @@ export class CompanyService implements OnModuleInit {
   ) {
     const company = await this.findCompanyOrThrow(companyId);
     if (!company.workflowInstanceId) {
-      throw new BadRequestException('该公司暂未关联流程实例');
+      throw new BadRequestException(
+        'This company is not yet associated with a process instance',
+      );
     }
     const transition = await this.workflowService.performAction({
       instanceId: company.workflowInstanceId,
@@ -1102,7 +1106,9 @@ export class CompanyService implements OnModuleInit {
       },
     });
     if (!member) {
-      throw new ForbiddenException('只有公司持有者或法人可以编辑');
+      throw new ForbiddenException(
+        'Only company owner or legal representative can edit',
+      );
     }
   }
 
@@ -1123,7 +1129,7 @@ export class CompanyService implements OnModuleInit {
       },
     });
     if (!type && !optional) {
-      throw new BadRequestException('未找到对应的公司类型');
+      throw new BadRequestException('Company type not found');
     }
     return type;
   }
@@ -1145,7 +1151,7 @@ export class CompanyService implements OnModuleInit {
       },
     });
     if (!industry && !optional) {
-      throw new BadRequestException('未找到对应的行业分类');
+      throw new BadRequestException('Industry category not found');
     }
     return industry;
   }
@@ -1156,7 +1162,7 @@ export class CompanyService implements OnModuleInit {
       include: companyInclude,
     });
     if (!company) {
-      throw new NotFoundException('找不到对应的公司');
+      throw new NotFoundException('Company not found');
     }
     return company;
   }
@@ -1374,7 +1380,7 @@ export class CompanyService implements OnModuleInit {
       where: { code },
     });
     if (!position) {
-      throw new BadRequestException('无效的职位代码');
+      throw new BadRequestException('Invalid position code');
     }
     return position;
   }
