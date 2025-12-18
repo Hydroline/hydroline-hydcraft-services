@@ -41,6 +41,8 @@ export const useTransportationRailwayStore = defineStore(
       stationDetails: {} as Record<string, RailwayStationDetail>,
       depotDetails: {} as Record<string, RailwayDepotDetail>,
       routeLogs: {} as Record<string, RailwayRouteLogResult>,
+      stationLogs: {} as Record<string, RailwayRouteLogResult>,
+      depotLogs: {} as Record<string, RailwayRouteLogResult>,
       routeLoading: false,
       adminBanners: [] as RailwayBanner[],
       adminBannersLoading: false,
@@ -173,6 +175,74 @@ export const useTransportationRailwayStore = defineStore(
           `/transportation/railway/routes/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.routeId)}/logs?${query.toString()}`,
         )
         this.routeLogs[cacheKey] = detail
+        return detail
+      },
+
+      async fetchStationLogs(
+        params: EntityCacheParams & {
+          page?: number
+          limit?: number
+          search?: string
+        },
+        force = false,
+      ) {
+        const page = params.page ?? 1
+        const limit = params.limit ?? 10
+        const searchKey = params.search ?? ''
+        const cacheKey = `${this.buildEntityCacheKey(params)}::${page}::${limit}::${searchKey}`
+        if (this.stationLogs[cacheKey] && !force) {
+          return this.stationLogs[cacheKey]
+        }
+        const query = new URLSearchParams({
+          serverId: params.serverId,
+          page: String(page),
+          limit: String(limit),
+        })
+        if (params.dimension) {
+          query.set('dimension', params.dimension)
+        }
+        const searchTerm = params.search ?? params.id ?? ''
+        if (searchTerm) {
+          query.set('search', searchTerm)
+        }
+        const detail = await apiFetch<RailwayRouteLogResult>(
+          `/transportation/railway/stations/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.id)}/logs?${query.toString()}`,
+        )
+        this.stationLogs[cacheKey] = detail
+        return detail
+      },
+
+      async fetchDepotLogs(
+        params: EntityCacheParams & {
+          page?: number
+          limit?: number
+          search?: string
+        },
+        force = false,
+      ) {
+        const page = params.page ?? 1
+        const limit = params.limit ?? 10
+        const searchKey = params.search ?? ''
+        const cacheKey = `${this.buildEntityCacheKey(params)}::${page}::${limit}::${searchKey}`
+        if (this.depotLogs[cacheKey] && !force) {
+          return this.depotLogs[cacheKey]
+        }
+        const query = new URLSearchParams({
+          serverId: params.serverId,
+          page: String(page),
+          limit: String(limit),
+        })
+        if (params.dimension) {
+          query.set('dimension', params.dimension)
+        }
+        const searchTerm = params.search ?? params.id ?? ''
+        if (searchTerm) {
+          query.set('search', searchTerm)
+        }
+        const detail = await apiFetch<RailwayRouteLogResult>(
+          `/transportation/railway/depots/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.id)}/logs?${query.toString()}`,
+        )
+        this.depotLogs[cacheKey] = detail
         return detail
       },
 

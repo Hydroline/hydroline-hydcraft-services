@@ -126,6 +126,32 @@ export class TransportationRailwayController {
     const railwayType = parseRailwayTypeParam(railwayTypeParam);
     return this.routeDetailService.getRouteLogs(routeId, railwayType, query);
   }
+
+  @Get('stations/:railwayType/:stationId/logs')
+  @ApiOperation({ summary: '查看车站变更日志' })
+  async getStationLogs(
+    @Param('railwayType') railwayTypeParam: string,
+    @Param('stationId') stationId: string,
+    @Query() query: RailwayRouteLogQueryDto,
+  ) {
+    const railwayType = parseRailwayTypeParam(railwayTypeParam);
+    return this.routeDetailService.getStationLogs(
+      stationId,
+      railwayType,
+      query,
+    );
+  }
+
+  @Get('depots/:railwayType/:depotId/logs')
+  @ApiOperation({ summary: '查看车厂变更日志' })
+  async getDepotLogs(
+    @Param('railwayType') railwayTypeParam: string,
+    @Param('depotId') depotId: string,
+    @Query() query: RailwayRouteLogQueryDto,
+  ) {
+    const railwayType = parseRailwayTypeParam(railwayTypeParam);
+    return this.routeDetailService.getDepotLogs(depotId, railwayType, query);
+  }
 }
 
 function parseRailwayTypeParam(

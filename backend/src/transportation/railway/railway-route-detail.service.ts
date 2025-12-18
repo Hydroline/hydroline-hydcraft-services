@@ -2047,4 +2047,92 @@ export class TransportationRailwayRouteDetailService {
       entries,
     };
   }
+
+  async getStationLogs(
+    stationId: string,
+    railwayMod: TransportationRailwayMod,
+    query: RailwayRouteLogQueryDto,
+  ): Promise<RailwayRouteLogResult> {
+    if (!stationId || !query?.serverId) {
+      throw new BadRequestException('车站 ID 与 serverId 必填');
+    }
+    const server = await this.getBeaconServerById(query.serverId);
+    if (server.railwayMod !== railwayMod) {
+      throw new BadRequestException('指定的铁路类型与服务器配置不匹配');
+    }
+    const normalizedStationId = stationId.trim();
+    const stationRow = await this.fetchStoredEntityRow(
+      server,
+      'STATION',
+      normalizedStationId,
+      query.dimension ?? null,
+    );
+    if (!stationRow) {
+      throw new NotFoundException('未找到对应车站');
+    }
+    const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 50);
+    const page = Math.max(Number(query.page) || 1, 1);
+    const explicitContext = query.dimension
+      ? buildDimensionContextFromDimension(query.dimension, server.railwayMod)
+      : null;
+    const dimensionContext =
+      explicitContext ?? stationRow.dimensionContext ?? null;
+    const rawSearch = query.search;
+    const searchKeyword =
+      typeof rawSearch === 'string' && rawSearch.trim().length > 0
+        ? rawSearch.trim()
+        : undefined;
+    const effectiveSearch = searchKeyword ?? stationId;
+    return this.searchRouteLogsByKeyword(
+      server,
+      dimensionContext,
+      effectiveSearch,
+      page,
+      limit,
+    );
+  }
+
+  async getDepotLogs(
+    depotId: string,
+    railwayMod: TransportationRailwayMod,
+    query: RailwayRouteLogQueryDto,
+  ): Promise<RailwayRouteLogResult> {
+    if (!depotId || !query?.serverId) {
+      throw new BadRequestException('车厂 ID 与 serverId 必填');
+    }
+    const server = await this.getBeaconServerById(query.serverId);
+    if (server.railwayMod !== railwayMod) {
+      throw new BadRequestException('指定的铁路类型与服务器配置不匹配');
+    }
+    const normalizedDepotId = depotId.trim();
+    const depotRow = await this.fetchStoredEntityRow(
+      server,
+      'DEPOT',
+      normalizedDepotId,
+      query.dimension ?? null,
+    );
+    if (!depotRow) {
+      throw new NotFoundException('未找到对应车厂');
+    }
+    const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 50);
+    const page = Math.max(Number(query.page) || 1, 1);
+    const explicitContext = query.dimension
+      ? buildDimensionContextFromDimension(query.dimension, server.railwayMod)
+      : null;
+    const dimensionContext =
+      explicitContext ?? depotRow.dimensionContext ?? null;
+    const rawSearch = query.search;
+    const searchKeyword =
+      typeof rawSearch === 'string' && rawSearch.trim().length > 0
+        ? rawSearch.trim()
+        : undefined;
+    const effectiveSearch = searchKeyword ?? depotId;
+    return this.searchRouteLogsByKeyword(
+      server,
+      dimensionContext,
+      effectiveSearch,
+      page,
+      limit,
+    );
+  }
 }
