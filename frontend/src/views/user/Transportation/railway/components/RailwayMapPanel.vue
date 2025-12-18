@@ -1,14 +1,7 @@
 <script setup lang="ts">
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-  watchEffect,
-} from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import 'leaflet/dist/leaflet.css'
-import type { LeafletEvent, LeafletMouseEvent } from 'leaflet'
+import type { LeafletMouseEvent } from 'leaflet'
 import { RailwayMap } from '@/views/user/Transportation/railway/maps/routeMap'
 import type {
   RailwayCurveParameters,
@@ -158,7 +151,7 @@ const geometrySignature = computed(() => {
   return `${ids}:${lengths}:${secondaryHash.value}:${props.combinePaths}`
 })
 
-let combinedCacheState = {
+const combinedCacheState = {
   signature: '',
   value: [] as RailwayGeometryPoint[][],
 }

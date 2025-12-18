@@ -131,7 +131,6 @@ export type RouteDetailResult = {
   dimension: string | null;
   route: NormalizedRoute & { payload: Record<string, unknown> | null };
   metadata: {
-    lastDeployed: number | null;
     lastUpdated: number | null;
     snapshotLength: number | null;
     lengthKm: number | null;

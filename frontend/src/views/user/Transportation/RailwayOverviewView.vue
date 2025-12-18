@@ -40,8 +40,6 @@ const latest = computed(
 const recommendations = computed(() => overview.value?.recommendations ?? [])
 const warnings = computed(() => overview.value?.warnings ?? [])
 
-const overviewLoading = computed(() => transportationStore.overviewLoading)
-
 const activeBannerIndex = ref(0)
 const bannerCycleTimer = ref<number | null>(null)
 const activeBanner = computed<RailwayBanner | null>(
@@ -157,6 +155,34 @@ function buildRouteDetailLink(item: RailwayRoute) {
     name: 'transportation.railway.route',
     params: {
       routeId: item.id,
+      railwayType: item.railwayType.toLowerCase(),
+    },
+    query: {
+      serverId: item.server.id,
+      dimension: item.dimension ?? undefined,
+    },
+  }
+}
+
+function buildStationDetailLink(item: RailwayEntity) {
+  return {
+    name: 'transportation.railway.station',
+    params: {
+      stationId: item.id,
+      railwayType: item.railwayType.toLowerCase(),
+    },
+    query: {
+      serverId: item.server.id,
+      dimension: item.dimension ?? undefined,
+    },
+  }
+}
+
+function buildDepotDetailLink(item: RailwayEntity) {
+  return {
+    name: 'transportation.railway.depot',
+    params: {
+      depotId: item.id,
       railwayType: item.railwayType.toLowerCase(),
     },
     query: {
@@ -292,7 +318,7 @@ onBeforeUnmount(() => {
     <section
       class="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-slate-950/90 shadow-lg dark:border-slate-800/60"
     >
-      <div class="relative h-[320px] w-full">
+      <div class="relative h-80 w-full">
         <Transition name="fade" mode="out-in">
           <div
             v-if="activeBanner"
@@ -306,7 +332,7 @@ onBeforeUnmount(() => {
               class="h-full w-full object-cover opacity-70"
             />
             <div
-              class="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-900/70 to-transparent"
+              class="absolute inset-0 bg-linear-to-r from-slate-950/90 via-slate-900/70 to-transparent"
             ></div>
           </div>
           <div v-else class="absolute inset-0 bg-slate-900"></div>
@@ -418,9 +444,32 @@ onBeforeUnmount(() => {
             <p class="text-sm font-medium text-slate-700 dark:text-slate-200">
               {{ section.label }}
             </p>
-            <UBadge color="neutral" variant="soft" size="xs">
-              {{ section.items.length }} 条
-            </UBadge>
+            <div class="flex items-center gap-2">
+              <RouterLink
+                v-if="section.key === 'routes'"
+                class="text-xs text-primary hover:underline"
+                :to="{ name: 'transportation.railway.routes' }"
+              >
+                查看全部 →
+              </RouterLink>
+              <RouterLink
+                v-else-if="section.key === 'stations'"
+                class="text-xs text-primary hover:underline"
+                :to="{ name: 'transportation.railway.stations' }"
+              >
+                查看全部 →
+              </RouterLink>
+              <RouterLink
+                v-else-if="section.key === 'depots'"
+                class="text-xs text-primary hover:underline"
+                :to="{ name: 'transportation.railway.depots' }"
+              >
+                查看全部 →
+              </RouterLink>
+              <UBadge color="neutral" variant="soft" size="xs">
+                {{ section.items.length }} 条
+              </UBadge>
+            </div>
           </div>
           <div class="space-y-3">
             <p v-if="section.items.length === 0" class="text-sm text-slate-500">
@@ -453,6 +502,22 @@ onBeforeUnmount(() => {
                   :to="buildRouteDetailLink(item as RailwayRoute)"
                 >
                   查看线路详情 →
+                </RouterLink>
+              </template>
+              <template v-else-if="section.key === 'stations'">
+                <RouterLink
+                  class="mt-2 inline-flex text-xs text-primary hover:underline"
+                  :to="buildStationDetailLink(item as RailwayEntity)"
+                >
+                  查看车站详情 →
+                </RouterLink>
+              </template>
+              <template v-else-if="section.key === 'depots'">
+                <RouterLink
+                  class="mt-2 inline-flex text-xs text-primary hover:underline"
+                  :to="buildDepotDetailLink(item as RailwayEntity)"
+                >
+                  查看车厂详情 →
                 </RouterLink>
               </template>
             </div>
@@ -571,7 +636,10 @@ onBeforeUnmount(() => {
             </div>
             <div class="mt-3 space-y-3">
               <p v-if="adminBannersLoading" class="text-sm text-slate-500">
-                加载中…
+                <UIcon
+                  name="i-lucide-loader-2"
+                  class="inline-block h-5 w-5 animate-spin text-slate-400"
+                />
               </p>
               <p
                 v-else-if="adminBanners.length === 0"

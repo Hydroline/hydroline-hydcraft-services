@@ -106,6 +106,12 @@ export const userRoutes: RouteRecordRaw[] = [
               import('@/views/user/Transportation/RailwayOverviewView.vue'),
           },
           {
+            path: 'railway/routes',
+            name: 'transportation.railway.routes',
+            component: () =>
+              import('@/views/user/Transportation/RailwayRouteListView.vue'),
+          },
+          {
             path: 'railway/routes/:railwayType/:routeId',
             name: 'transportation.railway.route',
             component: () =>
@@ -126,10 +132,22 @@ export const userRoutes: RouteRecordRaw[] = [
               ),
           },
           {
+            path: 'railway/stations',
+            name: 'transportation.railway.stations',
+            component: () =>
+              import('@/views/user/Transportation/RailwayStationListView.vue'),
+          },
+          {
             path: 'railway/depots/:railwayType/:depotId',
             name: 'transportation.railway.depot',
             component: () =>
               import('@/views/user/Transportation/RailwayDepotDetailView.vue'),
+          },
+          {
+            path: 'railway/depots',
+            name: 'transportation.railway.depots',
+            component: () =>
+              import('@/views/user/Transportation/RailwayDepotListView.vue'),
           },
           {
             path: 'aviation',

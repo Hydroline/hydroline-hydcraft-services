@@ -2,10 +2,12 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
+  IsIn,
   IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
+import { TransportationRailwayMod } from '@prisma/client';
 
 export class CreateRailwayBannerDto {
   @IsString()
@@ -112,4 +114,38 @@ export class RailwayRouteLogQueryDto extends RailwayRouteDetailQueryDto {
   @IsString()
   @MaxLength(128)
   search?: string | null;
+}
+
+export class RailwayEntityListQueryDto {
+  @IsOptional()
+  @IsString()
+  serverId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  dimension?: string | null;
+
+  @IsOptional()
+  @IsString()
+  transportMode?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  search?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(Object.values(TransportationRailwayMod))
+  railwayType?: TransportationRailwayMod;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  pageSize?: number;
 }

@@ -262,9 +262,6 @@ export class TransportationRailwayRouteDetailService {
         this.extractDimensionFromContext(dimensionContextForGeometry),
       route: normalizedRoute,
       metadata: {
-        lastDeployed: this.extractRouteLastDeployed(
-          normalizedRoute.payload ?? null,
-        ),
         lastUpdated:
           normalizedRoute.lastUpdated ??
           routeEntity.lastBeaconUpdatedAt?.getTime() ??
@@ -760,15 +757,6 @@ export class TransportationRailwayRouteDetailService {
     return rows
       .map((row) => this.normalizeStoredRoute(row, server))
       .filter((route): route is NormalizedRoute => Boolean(route));
-  }
-
-  private extractRouteLastDeployed(
-    payload: Record<string, unknown> | null,
-  ): number | null {
-    if (!payload) return null;
-    const direct = toNumber(payload['last_deployed']);
-    if (direct != null) return direct;
-    return toNumber(payload['lastDeployed']);
   }
 
   private extractBounds(payload: Record<string, unknown> | null) {

@@ -37,6 +37,16 @@ const dimensionName = computed(() =>
 const associatedRoutes = computed(() => detail.value?.routes ?? [])
 const platforms = computed(() => detail.value?.platforms ?? [])
 
+function formatSecondsFromTicks(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return null
+  const seconds = value / 20
+  const rounded = Math.round(seconds * 100) / 100
+  return rounded
+    .toFixed(2)
+    .replace(/\.0+$/, '')
+    .replace(/\.(\d*[1-9])0+$/, '.$1')
+}
+
 async function fetchDetail() {
   const { stationId, railwayType, serverId, dimension } = params.value
   if (!stationId || !railwayType || !serverId) {
@@ -141,7 +151,12 @@ onMounted(() => {
       height="460px"
     />
 
-    <div v-if="loading" class="text-sm text-slate-500">加载中…</div>
+    <div v-if="loading" class="text-sm text-slate-500">
+      <UIcon
+        name="i-lucide-loader-2"
+        class="inline-block h-5 w-5 animate-spin text-slate-400"
+      />
+    </div>
     <div v-else-if="detail" class="space-y-6">
       <section class="grid gap-4 lg:grid-cols-2">
         <div
@@ -253,7 +268,15 @@ onMounted(() => {
                   </div>
                 </td>
                 <td class="py-2">
-                  {{ platform.dwellTime ?? '—' }}
+                  <span v-if="platform.dwellTime == null">—</span>
+                  <UTooltip
+                    v-else
+                    :text="`真实停留：${platform.dwellTime} tick`"
+                  >
+                    <span
+                      >{{ formatSecondsFromTicks(platform.dwellTime) }} s</span
+                    >
+                  </UTooltip>
                 </td>
               </tr>
             </tbody>

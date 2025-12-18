@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import RailwayMapPanel from '@/views/user/Transportation/railway/components/RailwayMapPanel.vue'
+import RailwayRouteBasicInfoPanel from '@/views/user/Transportation/railway/components/RailwayRouteBasicInfoPanel.vue'
+import RailwayRouteDataStatusPanel from '@/views/user/Transportation/railway/components/RailwayRouteDataStatusPanel.vue'
 import { useTransportationRailwayStore } from '@/stores/transportation/railway'
 import type {
   RailwayGeometryPoint,
@@ -108,31 +110,6 @@ watch(hasDirectionalPaths, (value) => {
   }
 })
 
-const metadataList = computed(() => {
-  const payload = detail.value?.route.payload ?? {}
-  const lastDeployedOffset = detail.value?.metadata.lastDeployed ?? null
-  const lastUpdated = detail.value?.metadata.lastUpdated ?? null
-  const lastDeployed = formatLastDeployed(lastDeployedOffset, lastUpdated)
-  return [
-    { label: '运输模式', value: detail.value?.route.transportMode || '—' },
-    { label: '线路类型', value: (payload.route_type as string) || '—' },
-    { label: '环线属性', value: (payload.circular_state as string) || '—' },
-    {
-      label: '轻轨编号',
-      value: (payload.light_rail_route_number as string) || '—',
-    },
-    {
-      label: '最后部署',
-      value: lastDeployed.display,
-      tooltip: lastDeployed.tooltip,
-    },
-    {
-      label: '数据更新',
-      value: formatTimestamp(lastUpdated),
-    },
-  ]
-})
-
 const routeName = computed(() => parseRouteName(detail.value?.route.name))
 
 const stations = computed(() => detail.value?.stations ?? [])
@@ -159,15 +136,6 @@ const platformMap = computed(() => {
   for (const platform of platforms.value) {
     if (platform.id) {
       map.set(platform.id, platform)
-    }
-  }
-  return map
-})
-const stopMapByPlatformId = computed(() => {
-  const map = new Map<string, RailwayRouteDetail['stops'][number]>()
-  for (const stop of detail.value?.stops ?? []) {
-    if (stop.platformId) {
-      map.set(stop.platformId, stop)
     }
   }
   return map
@@ -204,7 +172,7 @@ function getStopAnchor(
 }
 
 function getPathStartPoint(
-  path: RailwayRouteDetail['geometry']['paths'][number],
+  path: NonNullable<RailwayRouteDetail['geometry']['paths']>[number],
 ) {
   if (!path) return null
   if (path.points?.length) {
@@ -313,64 +281,30 @@ const geometryForView = computed(() => {
 })
 const stopDisplayItems = computed(() =>
   displayedStops.value.map((stop) => {
-    const displayName = resolveStopStationName(stop)
+    const platformStationId = stop.platformId
+      ? (platformMap.value.get(stop.platformId)?.stationId ?? null)
+      : null
+    const resolvedStationId = stop.stationId ?? platformStationId
+
+    const displayName = resolveStopStationName({
+      ...stop,
+      stationId: resolvedStationId,
+    })
     const nameParts = formatStationNameParts(displayName)
-    const station =
-      stop.stationId != null
-        ? stations.value.find((item) => item.id === stop.stationId)
-        : null
+    const station = resolvedStationId
+      ? stations.value.find((item) => item.id === resolvedStationId)
+      : null
     return {
       stop,
       title: nameParts.title,
       subtitle: nameParts.subtitle,
       platformLabel: getStopPlatformLabel(stop),
-      stationId: stop.stationId,
-      stationColor: station?.color ?? null,
+      stationId: resolvedStationId,
+      stationColorHex: colorToHex(station?.color ?? null),
       dwellTime: stop.dwellTime ?? null,
     }
   }),
 )
-
-function formatTimestamp(value: number | null | undefined) {
-  if (!value) return '—'
-  const d = dayjs(value)
-  if (!d.isValid()) return '—'
-  return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`
-}
-
-function formatLastDeployed(
-  offset: number | null | undefined,
-  reference: number | null | undefined,
-) {
-  if (offset == null || offset < 0) {
-    return { display: '—', tooltip: null as string | null }
-  }
-  const secondsLabel = formatOffsetSeconds(offset)
-  const baseTooltip = `距当日零点 ${secondsLabel} 秒`
-  const reason = '当天 00:00 后的毫秒偏移'
-  const display = dayjs()
-    .startOf('day')
-    .add(offset, 'millisecond')
-    .format('HH:mm:ss')
-  if (!reference) {
-    return { display, tooltip: `${baseTooltip}（${reason}）` }
-  }
-  const base = dayjs(reference)
-  if (!base.isValid()) {
-    return { display, tooltip: `${baseTooltip}（${reason}）` }
-  }
-  const deployedMoment = base.startOf('day').add(offset, 'millisecond')
-  return {
-    display,
-    tooltip: `${deployedMoment.format('YYYY-MM-DD HH:mm:ss')} ${baseTooltip}（${reason}）`,
-  }
-}
-
-function formatOffsetSeconds(offset: number) {
-  const seconds = offset / 1000
-  const precision = seconds >= 10 ? 1 : seconds >= 1 ? 2 : 3
-  return Number(seconds.toFixed(precision)).toString()
-}
 
 function formatStationNameParts(value: string | null | undefined) {
   if (!value) {
@@ -403,15 +337,6 @@ function resolveStopStationName(stop: RailwayRouteDetail['stops'][number]) {
   return null
 }
 
-function getStationName(stationId: string | null | undefined) {
-  if (!stationId) return '未知'
-  const station = stations.value.find((item) => item.id === stationId)
-  const nameParts = station?.name
-    ? formatStationNameParts(station.name).title
-    : null
-  return nameParts || `站点 ${stationId}`
-}
-
 function getStopPlatformLabel(stop: RailwayRouteDetail['stops'][number]) {
   const platformId = stop.platformId
   if (!platformId) {
@@ -430,38 +355,20 @@ function getStopPlatformLabel(stop: RailwayRouteDetail['stops'][number]) {
   return `${platformName}`
 }
 
-function getPlatformDisplayName(
-  platform: RailwayRouteDetail['platforms'][number],
-) {
-  return (
-    splitFirstSegment(platform.name) ??
-    splitFirstSegment(platform.id) ??
-    platform.name ??
-    platform.id ??
-    '站台'
-  )
-}
-
-function getPlatformListingStation(
-  platform: RailwayRouteDetail['platforms'][number],
-) {
-  const platformId = platform.id
-  if (platformId) {
-    const stop = stopMapByPlatformId.value.get(platformId)
-    if (stop) {
-      const stopName =
-        splitFirstSegment(stop.stationName) ??
-        splitFirstSegment(resolveStopStationName(stop))
-      if (stopName) return stopName
-    }
-  }
-  return getStationName(platform.stationId)
-}
-
 function colorToHex(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) return null
   const sanitized = Math.max(0, Math.floor(value))
   return `#${sanitized.toString(16).padStart(6, '0').slice(-6)}`
+}
+
+function formatSecondsFromTicks(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return null
+  const seconds = value / 20
+  const rounded = Math.round(seconds * 100) / 100
+  return rounded
+    .toFixed(2)
+    .replace(/\.0+$/, '')
+    .replace(/\.(\d*[1-9])0+$/, '.$1')
 }
 
 function getPlayerAvatar(playerName: string | null | undefined) {
@@ -613,22 +520,22 @@ onMounted(() => {
                     class="h-5 w-6 object-cover"
                   />
                 </UTooltip>
-
-                <UTooltip :text="`线路色 ${routeColorHex}`">
-                  <span
-                    class="block h-3.5 w-3.5 rounded-full border border-slate-100 dark:border-slate-800 shadow"
-                    :style="
-                      routeColorHex
-                        ? { backgroundColor: routeColorHex }
-                        : undefined
-                    "
-                  ></span>
-                </UTooltip>
               </span>
             </div>
             <div
-              class="flex items-center gap-1.5 text-lg font-semibold text-slate-600 dark:text-slate-300"
+              class="-mt-1 flex items-center gap-1.5 text-lg font-semibold text-slate-600 dark:text-slate-300"
             >
+              <UTooltip :text="`线路色 ${routeColorHex}`">
+                <span
+                  class="block h-3 w-3 rounded-full"
+                  :style="
+                    routeColorHex
+                      ? { backgroundColor: routeColorHex }
+                      : undefined
+                  "
+                ></span>
+              </UTooltip>
+
               <span v-if="routeName.subtitle">
                 {{ routeName.subtitle }}
               </span>
@@ -696,12 +603,15 @@ onMounted(() => {
     </div>
 
     <div>
-      <div v-if="loading" class="text-sm text-slate-500">加载中…</div>
+      <div v-if="loading" class="text-sm text-slate-500">
+        <UIcon
+          name="i-lucide-loader-2"
+          class="inline-block h-5 w-5 animate-spin text-slate-400"
+        />
+      </div>
       <div v-else-if="detail" class="space-y-6">
         <section class="flex flex-col">
-          <div
-            class="mb-2 flex flex-col gap-2 items-start justify-between sm:flex-row"
-          >
+          <div class="mb-2 flex gap-2 items-start justify-between">
             <h3 class="text-lg text-slate-600 dark:text-slate-300">所经站点</h3>
             <USelect
               v-model="pathViewMode"
@@ -744,7 +654,8 @@ onMounted(() => {
                     class="flex flex-col justify-end pb-3 h-12 w-full max-w-60"
                   >
                     <p
-                      class="text-base font-semibold text-slate-900 dark:text-white line-clamp-1 truncate"
+                      class="text-base font-semibold text-slate-900 dark:text-white line-clamp-1 truncate hover:underline underline-offset-2 cursor-pointer"
+                      @click="goStationDetail(item.stationId)"
                     >
                       {{ item.title }}
                     </p>
@@ -786,278 +697,196 @@ onMounted(() => {
           </div>
         </section>
 
-        <section class="grid gap-4 lg:grid-cols-2">
-          <div class="space-y-3">
-            <h3 class="text-lg text-slate-600 dark:text-slate-300">基本信息</h3>
-            <div
-              class="grid gap-3 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
-            >
-              <div
-                class="grid gap-2 text-sm text-slate-600 dark:text-slate-300"
-              >
-                <div class="flex justify-between">
-                  <span>线路 ID</span>
-                  <span class="font-mono text-slate-900 dark:text-white">
-                    {{ detail.route.id }}
-                  </span>
-                </div>
-                <div class="flex justify-between">
-                  <span>线路长度</span>
-                  <span class="text-slate-900 dark:text-white">
-                    {{
-                      detail.metadata.lengthKm != null
-                        ? `${detail.metadata.lengthKm} km`
-                        : '—'
-                    }}
-                  </span>
-                </div>
-                <div class="flex justify-between">
-                  <span>运输模式</span>
-                  <span class="text-slate-900 dark:text-white">
-                    {{ detail.route.transportMode || '—' }}
-                  </span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span>线路颜色</span>
-                  <div class="flex items-center gap-2">
-                    <span class="font-mono text-slate-900 dark:text-white">
-                      {{ routeColorHex }}
-                    </span>
-                    <span
-                      class="h-3.5 w-3.5 rounded-full border border-slate-200 dark:border-slate-700"
-                      :style="
-                        routeColorHex
-                          ? { backgroundColor: routeColorHex }
-                          : undefined
-                      "
-                    ></span>
+        <div class="grid gap-6 lg:grid-cols-2">
+          <div class="space-y-6">
+            <section class="space-y-3">
+              <RailwayRouteBasicInfoPanel
+                :detail="detail"
+                :route-color-hex="routeColorHex"
+                :modpack-label="modpackInfo.label"
+                :modpack-image="modpackInfo.image"
+              />
+            </section>
+
+            <section class="space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="text-lg text-slate-600 dark:text-slate-300">
+                  线路修改日志
+                </h3>
+                <UButton
+                  size="xs"
+                  variant="ghost"
+                  icon="i-lucide-refresh-cw"
+                  @click="fetchLogs(true)"
+                >
+                  刷新
+                </UButton>
+              </div>
+              <div>
+                <p v-if="logLoading" class="text-sm text-slate-500">
+                  <UIcon
+                    name="i-lucide-loader-2"
+                    class="inline-block h-5 w-5 animate-spin text-slate-400"
+                  />
+                </p>
+                <p v-else-if="logError" class="text-sm text-red-500">
+                  {{ logError }}
+                </p>
+                <p
+                  v-else-if="!logs || logs.entries.length === 0"
+                  class="text-sm text-slate-500"
+                >
+                  暂无日志记录。
+                </p>
+                <div v-else class="space-y-3">
+                  <div
+                    v-for="entry in logs.entries"
+                    :key="entry.id"
+                    class="flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250 outline-2 outline-transparent hover:outline-primary"
+                    @click="goPlayerProfile(entry.playerName)"
+                  >
+                    <div class="flex items-center gap-3">
+                      <button
+                        type="button"
+                        class="shrink-0"
+                        @click="goPlayerProfile(entry.playerName)"
+                      >
+                        <img
+                          v-if="getPlayerAvatar(entry.playerName)"
+                          :src="getPlayerAvatar(entry.playerName) || undefined"
+                          class="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700"
+                          alt="player avatar"
+                        />
+                        <div
+                          v-else
+                          class="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400"
+                        >
+                          无
+                        </div>
+                      </button>
+                      <div>
+                        <p
+                          class="text-sm font-semibold text-slate-900 dark:text-white"
+                        >
+                          {{ entry.playerName || '未知玩家' }}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                          {{ entry.changeType || '—' }} ·
+                          {{
+                            entry.entryName || entry.className || entry.entryId
+                          }}
+                        </p>
+                        <p class="text-xs text-slate-400">
+                          {{ formatLogTimestamp(entry.timestamp) }}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span>Mod 类型</span>
-                  <div class="flex items-center gap-2">
-                    <span class="text-slate-900 dark:text-white -mr-1">
-                      {{ modpackInfo.label }}
-                    </span>
-                    <img
-                      v-if="modpackInfo.image"
-                      :src="modpackInfo.image"
-                      :alt="modpackInfo.label"
-                      class="h-5 w-6 object-cover"
-                    />
-                  </div>
-                </div>
-                <div class="flex justify-between">
-                  <span>站点数量</span>
-                  <span class="text-slate-900 dark:text-white">
-                    {{ detail.platforms.length }} 站
-                  </span>
-                </div>
-                <div class="flex justify-between">
-                  <span>几何点数</span>
-                  <span class="text-slate-900 dark:text-white">
-                    {{ detail.geometry.points.length }}
-                  </span>
                 </div>
               </div>
-            </div>
+            </section>
           </div>
 
-          <div class="space-y-3">
-            <h3 class="text-lg text-slate-600 dark:text-slate-300">数据状态</h3>
-            <div
-              class="grid gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
-            >
-              <div
-                v-for="item in metadataList"
-                :key="item.label"
-                class="flex justify-between text-sm text-slate-600 dark:text-slate-300"
-              >
-                <span>{{ item.label }}</span>
-                <span
-                  v-if="!item.tooltip"
-                  class="text-slate-900 dark:text-white"
-                >
-                  {{ item.value }}
-                </span>
+          <div class="space-y-6">
+            <section class="space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 class="text-lg text-slate-600 dark:text-slate-300">
+                  途径站点
+                </h3>
                 <div
-                  v-else
-                  class="flex items-center gap-1 text-slate-900 dark:text-white"
-                >
-                  <span>{{ item.value }}</span>
-                  <UTooltip :text="item.tooltip">
-                    <UIcon
-                      name="i-lucide-info"
-                      class="h-4 w-4 text-slate-400"
-                    />
-                  </UTooltip>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="space-y-3">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <h3 class="text-lg text-slate-600 dark:text-slate-300">站点</h3>
-            <div
-              class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mr-2"
-            >
-              <span>
-                列车由
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 underline-offset-2 hover:underline font-semibold text-slate-600 dark:text-slate-300"
-                  @click="goDepotDetail(primaryDepot?.id)"
+                  class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mr-2"
                 >
                   <span>
-                    {{ depotLabel.split('|')[0] }}
+                    列车由
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 underline-offset-2 hover:underline font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"
+                      @click="goDepotDetail(primaryDepot?.id)"
+                    >
+                      <span>
+                        {{ depotLabel.split('|')[0] }}
+                      </span>
+                      <UBadge
+                        v-if="depotLabel.split('|')[1]"
+                        size="xs"
+                        class="text-xs py-0 border border-slate-300/70 dark:border-slate-700/70"
+                        color="neutral"
+                        variant="soft"
+                      >
+                        {{ depotLabel.split('|')[1] }}
+                      </UBadge>
+                    </button>
+                    发出
                   </span>
-                  <UBadge
-                    v-if="depotLabel.split('|')[1]"
-                    size="xs"
-                    class="text-xs py-0 border border-slate-300/70 dark:border-slate-700/70"
-                    color="neutral"
-                    variant="soft"
-                  >
-                    {{ depotLabel.split('|')[1] }}
-                  </UBadge>
-                </button>
-                发出
-              </span>
-              <UIcon name="i-lucide-corner-down-left" class="h-4 w-4" />
-            </div>
-          </div>
-          <div
-            class="rounded-xl border border-slate-200/60 bg-white/90 p-4 dark:border-slate-800/60 dark:bg-slate-900/70"
-          >
-            <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
-              <div
-                v-for="item in stopDisplayItems"
-                :key="`station-card-${item.stop.platformId ?? item.stop.stationId ?? item.stop.order}`"
-                class="py-3 first:pt-0 last:pb-0"
-              >
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                  <button
-                    type="button"
-                    class="text-left"
-                    @click="goStationDetail(item.stationId)"
-                  >
-                    <p
-                      class="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white"
-                    >
-                      <span
-                        class="inline-flex h-3 w-3 rounded-full border border-slate-200 dark:border-slate-700"
-                        :style="
-                          item.stationColor
-                            ? { backgroundColor: colorToHex(item.stationColor) }
-                            : undefined
-                        "
-                      ></span>
-                      {{ item.title }}
-                    </p>
-                    <p class="text-xs text-slate-500">
-                      {{ item.subtitle || '—' }}
-                    </p>
-                  </button>
-                  <div class="text-right text-xs text-slate-500">
-                    <p>停留 {{ item.dwellTime ?? '—' }} tick</p>
-                    <div
-                      class="mt-1 inline-flex items-center rounded border border-slate-200 px-2 py-0.5 font-mono text-[10px] text-slate-600 dark:border-slate-700 dark:text-slate-300"
-                    >
-                      {{ item.platformLabel }}
-                    </div>
-                  </div>
+                  <UIcon name="i-lucide-corner-down-left" class="h-4 w-4" />
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
+              <div
+                class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
+              >
+                <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                  <div
+                    v-for="item in stopDisplayItems"
+                    :key="`station-card-${item.stop.platformId ?? item.stop.stationId ?? item.stop.order}`"
+                    class="py-3 first:pt-0 last:pb-0"
+                  >
+                    <div
+                      class="flex flex-wrap items-center justify-between gap-3"
+                    >
+                      <button type="button" class="flex items-center gap-3">
+                        <div
+                          class="rounded border border-slate-200 px-2 py-0.5 text-xl text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                        >
+                          {{ item.platformLabel }}
+                        </div>
 
-        <section class="space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg text-slate-600 dark:text-slate-300">
-              线路修改日志
-            </h3>
-            <UButton
-              size="xs"
-              variant="ghost"
-              icon="i-lucide-refresh-cw"
-              @click="fetchLogs(true)"
-            >
-              刷新
-            </UButton>
-          </div>
-          <div
-            class="rounded-xl border border-slate-200/60 bg-white/90 p-4 dark:border-slate-800/60 dark:bg-slate-900/70"
-          >
-            <p v-if="logLoading" class="text-sm text-slate-500">日志加载中…</p>
-            <p v-else-if="logError" class="text-sm text-red-500">
-              {{ logError }}
-            </p>
-            <p
-              v-else-if="!logs || logs.entries.length === 0"
-              class="text-sm text-slate-500"
-            >
-              暂无日志记录。
-            </p>
-            <div v-else class="space-y-3">
-              <div
-                v-for="entry in logs.entries"
-                :key="entry.id"
-                class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100/70 px-3 py-2 dark:border-slate-800/60"
-              >
-                <div class="flex items-center gap-3">
-                  <button
-                    type="button"
-                    class="flex-shrink-0"
-                    @click="goPlayerProfile(entry.playerName)"
-                  >
-                    <img
-                      v-if="getPlayerAvatar(entry.playerName)"
-                      :src="getPlayerAvatar(entry.playerName) || undefined"
-                      class="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700"
-                      alt="player avatar"
-                    />
-                    <div
-                      v-else
-                      class="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400"
-                    >
-                      无
+                        <div class="flex flex-col items-start">
+                          <div
+                            class="flex items-center gap-1 text-base font-semibold text-slate-900 dark:text-white hover:underline underline-offset-2 cursor-pointer"
+                            @click="goStationDetail(item.stationId)"
+                          >
+                            {{ item.title }}
+
+                            <span
+                              class="inline-flex h-2.5 w-2.5 rounded-full"
+                              :style="
+                                item.stationColorHex
+                                  ? { backgroundColor: item.stationColorHex }
+                                  : undefined
+                              "
+                            ></span>
+                          </div>
+                          <div class="text-xs text-slate-500">
+                            {{ item.subtitle || '—' }}
+                          </div>
+                        </div>
+                      </button>
+                      <div
+                        class="text-right text-lg font-semibold text-slate-600 dark:text-slate-300"
+                      >
+                        <div>
+                          <span class="text-xs font-normal mr-1">停站时间</span>
+                          <span v-if="item.dwellTime == null">—</span>
+                          <UTooltip v-else :text="`${item.dwellTime} tick`">
+                            <span
+                              >{{
+                                formatSecondsFromTicks(item.dwellTime)
+                              }}s</span
+                            >
+                          </UTooltip>
+                        </div>
+                      </div>
                     </div>
-                  </button>
-                  <div>
-                    <p
-                      class="text-sm font-semibold text-slate-900 dark:text-white"
-                    >
-                      {{ entry.playerName || '未知玩家' }}
-                    </p>
-                    <p class="text-xs text-slate-500">
-                      {{ entry.changeType || '—' }} ·
-                      {{ entry.entryName || entry.className || entry.entryId }}
-                    </p>
-                    <p class="text-xs text-slate-400">
-                      {{ formatLogTimestamp(entry.timestamp) }}
-                    </p>
                   </div>
                 </div>
-                <div class="flex items-center gap-2 text-xs text-slate-500">
-                  <UBadge size="xs" variant="soft">
-                    {{ entry.entryId || '—' }}
-                  </UBadge>
-                  <UButton
-                    size="xs"
-                    variant="ghost"
-                    icon="i-lucide-user-round"
-                    @click="goPlayerProfile(entry.playerName)"
-                  >
-                    玩家
-                  </UButton>
-                </div>
               </div>
-            </div>
+            </section>
+
+            <section class="space-y-3">
+              <RailwayRouteDataStatusPanel :detail="detail" />
+            </section>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   </div>

@@ -105,7 +105,6 @@ export interface RailwayRouteDetail {
   railwayType: string
   route: RailwayRoute
   metadata: {
-    lastDeployed: number | null
     lastUpdated: number | null
     snapshotLength: number | null
     lengthKm: number | null
@@ -227,4 +226,27 @@ export interface RailwayRouteLogResult {
   page: number
   pageSize: number
   entries: RailwayRouteLogEntry[]
+}
+
+export interface RailwayListPagination {
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
+}
+
+export interface RailwayRouteListResponse {
+  items: RailwayRoute[]
+  pagination: RailwayListPagination
+}
+
+export interface RailwayEntityListResponse {
+  items: RailwayEntity[]
+  pagination: RailwayListPagination
+}
+
+export interface RailwayServerOption {
+  id: string
+  name: string
+  railwayType: string
 }

@@ -146,7 +146,12 @@ onMounted(() => {
       height="460px"
     />
 
-    <div v-if="loading" class="text-sm text-slate-500">加载中…</div>
+    <div v-if="loading" class="text-sm text-slate-500">
+      <UIcon
+        name="i-lucide-loader-2"
+        class="inline-block h-5 w-5 animate-spin text-slate-400"
+      />
+    </div>
     <div v-else-if="detail" class="space-y-6">
       <section class="grid gap-4 lg:grid-cols-2">
         <div

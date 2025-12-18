@@ -9,7 +9,9 @@ import { TransportationRailwayMod } from '@prisma/client';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TransportationRailwayService } from './railway.service';
 import { TransportationRailwayRouteDetailService } from './railway-route-detail.service';
+import { TransportationRailwayListService } from './railway-list.service';
 import {
+  RailwayEntityListQueryDto,
   RailwayRouteDetailQueryDto,
   RailwayRouteLogQueryDto,
 } from '../dto/railway.dto';
@@ -20,12 +22,61 @@ export class TransportationRailwayController {
   constructor(
     private readonly transportationRailwayService: TransportationRailwayService,
     private readonly routeDetailService: TransportationRailwayRouteDetailService,
+    private readonly listService: TransportationRailwayListService,
   ) {}
 
   @Get('overview')
   @ApiOperation({ summary: '获取铁路概览数据（轮播、统计、最新动态等）' })
   async getOverview() {
     return this.transportationRailwayService.getOverview();
+  }
+
+  @Get('servers')
+  @ApiOperation({ summary: '获取可用铁路服务端列表（用于筛选）' })
+  async listServers() {
+    return this.listService.listServers();
+  }
+
+  @Get('routes')
+  @ApiOperation({ summary: '铁路线路列表（分页/筛选）' })
+  async listRoutes(@Query() query: RailwayEntityListQueryDto) {
+    return this.listService.listRoutes({
+      serverId: query.serverId ?? null,
+      railwayType: query.railwayType ?? null,
+      dimension: query.dimension ?? null,
+      transportMode: query.transportMode ?? null,
+      search: query.search ?? null,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+  }
+
+  @Get('stations')
+  @ApiOperation({ summary: '铁路车站列表（分页/筛选）' })
+  async listStations(@Query() query: RailwayEntityListQueryDto) {
+    return this.listService.listStations({
+      serverId: query.serverId ?? null,
+      railwayType: query.railwayType ?? null,
+      dimension: query.dimension ?? null,
+      transportMode: query.transportMode ?? null,
+      search: query.search ?? null,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+  }
+
+  @Get('depots')
+  @ApiOperation({ summary: '铁路车厂列表（分页/筛选）' })
+  async listDepots(@Query() query: RailwayEntityListQueryDto) {
+    return this.listService.listDepots({
+      serverId: query.serverId ?? null,
+      railwayType: query.railwayType ?? null,
+      dimension: query.dimension ?? null,
+      transportMode: query.transportMode ?? null,
+      search: query.search ?? null,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
   }
 
   @Get('routes/:railwayType/:routeId')
