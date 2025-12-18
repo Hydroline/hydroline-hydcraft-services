@@ -557,7 +557,10 @@ onMounted(() => {
                         {{ route.name?.split('|')[0] || '未命名' }}
                       </span>
 
-                      <span class="text-xs text-slate-700 dark:text-slate-500" v-if="route.name?.split('|')[1]">
+                      <span
+                        class="text-xs text-slate-700 dark:text-slate-500"
+                        v-if="route.name?.split('|')[1]"
+                      >
                         {{ route.name?.split('|')[1] }}
                       </span>
                     </p>
@@ -617,7 +620,7 @@ onMounted(() => {
                     class="border-t border-slate-100 text-slate-700 dark:border-slate-800 dark:text-slate-200"
                   >
                     <td class="py-2 font-medium">
-                      {{ platform.name || platform.id }}
+                      {{ platform.name.split('|')[0] || platform.id }}
                     </td>
                     <td class="py-2">
                       <div class="flex flex-wrap gap-1">

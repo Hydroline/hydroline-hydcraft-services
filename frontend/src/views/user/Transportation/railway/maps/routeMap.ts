@@ -127,7 +127,13 @@ export class RailwayMap {
       labelClassName:
         options?.stopLabelClassName?.trim() || 'railway-station-label',
     }
-    this.polylineEndpoints = this.getPolylineEndpoints(paths)
+    // When rendering filled polygons (e.g. station/depot bounds), the "path" is a closed shape.
+    // The terminal-stop endpoint adjustment (designed for route polylines) would incorrectly
+    // snap the first/last stop to the polygon's first vertex (often top-left corner).
+    // For fill geometry, keep stops at their own positions.
+    this.polylineEndpoints = options?.fill
+      ? []
+      : this.getPolylineEndpoints(paths)
     const focusZoom = options?.focusZoom ?? 4
     if (!paths.length && !this.secondaryPaths.length) {
       this.syncSecondaryPolylines()
