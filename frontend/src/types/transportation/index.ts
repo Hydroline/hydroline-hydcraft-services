@@ -181,6 +181,33 @@ export interface RailwayStationDetail {
   }
 }
 
+export interface RailwayStationRouteMapGroup {
+  key: string
+  displayName: string
+  color: number | null
+  routeIds: string[]
+  paths: RailwayGeometryPoint[][]
+  stops: Array<{
+    stationId: string | null
+    x: number
+    z: number
+    label: string
+  }>
+}
+
+export interface RailwayStationRouteMapPayload {
+  stationId: string
+  serverId: string
+  railwayType: string
+  dimension: string | null
+  generatedAt: number
+  groups: RailwayStationRouteMapGroup[]
+}
+
+export type RailwayStationRouteMapResponse =
+  | { status: 'pending' }
+  | { status: 'ready'; data: RailwayStationRouteMapPayload }
+
 export interface RailwayDepotDetail {
   server: { id: string; name: string }
   railwayType: string

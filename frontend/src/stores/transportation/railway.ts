@@ -13,6 +13,7 @@ import type {
   RailwayRouteLogResult,
   RailwayServerOption,
   RailwayStationDetail,
+  RailwayStationRouteMapResponse,
 } from '@/types/transportation'
 
 interface RouteCacheParams {
@@ -210,6 +211,22 @@ export const useTransportationRailwayStore = defineStore(
         )
         this.stationLogs[cacheKey] = detail
         return detail
+      },
+
+      async fetchStationRouteMap(
+        params: EntityCacheParams,
+        force = false,
+      ): Promise<RailwayStationRouteMapResponse> {
+        const query = new URLSearchParams({ serverId: params.serverId })
+        if (params.dimension) {
+          query.set('dimension', params.dimension)
+        }
+        // Note: this endpoint is async/poll-based; we intentionally do not cache 'pending'.
+        // Use noDedupe on force to avoid in-flight request sharing during polling.
+        return await apiFetch<RailwayStationRouteMapResponse>(
+          `/transportation/railway/stations/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.id)}/map?${query.toString()}`,
+          force ? { noDedupe: true } : {},
+        )
       },
 
       async fetchDepotLogs(

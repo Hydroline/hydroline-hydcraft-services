@@ -10,6 +10,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TransportationRailwayService } from './railway.service';
 import { TransportationRailwayRouteDetailService } from './railway-route-detail.service';
 import { TransportationRailwayListService } from './railway-list.service';
+import { TransportationRailwayStationMapService } from './railway-station-map.service';
 import {
   RailwayEntityListQueryDto,
   RailwayRouteDetailQueryDto,
@@ -23,6 +24,7 @@ export class TransportationRailwayController {
     private readonly transportationRailwayService: TransportationRailwayService,
     private readonly routeDetailService: TransportationRailwayRouteDetailService,
     private readonly listService: TransportationRailwayListService,
+    private readonly stationMapService: TransportationRailwayStationMapService,
   ) {}
 
   @Get('overview')
@@ -136,6 +138,21 @@ export class TransportationRailwayController {
   ) {
     const railwayType = parseRailwayTypeParam(railwayTypeParam);
     return this.routeDetailService.getStationLogs(
+      stationId,
+      railwayType,
+      query,
+    );
+  }
+
+  @Get('stations/:railwayType/:stationId/map')
+  @ApiOperation({ summary: '获取车站途经线路地图（异步生成）' })
+  async getStationRouteMap(
+    @Param('railwayType') railwayTypeParam: string,
+    @Param('stationId') stationId: string,
+    @Query() query: RailwayRouteDetailQueryDto,
+  ) {
+    const railwayType = parseRailwayTypeParam(railwayTypeParam);
+    return this.stationMapService.getStationRouteMap(
       stationId,
       railwayType,
       query,

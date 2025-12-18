@@ -540,7 +540,10 @@ onMounted(() => {
                       {{ route.name?.split('|')[0] }}
                     </span>
 
-                    <span class="text-xs text-slate-700 dark:text-slate-500" v-if="route.name?.split('|')[1]">
+                    <span
+                      class="text-xs text-slate-700 dark:text-slate-500"
+                      v-if="route.name?.split('|')[1]"
+                    >
                       {{ route.name?.split('|')[1] }}
                     </span>
                   </p>

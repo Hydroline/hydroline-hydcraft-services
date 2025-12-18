@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import RailwayStationMapPanel from '@/views/user/Transportation/railway/components/RailwayStationMapPanel.vue'
 import type { RailwayStationDetail } from '@/types/transportation'
+import type { RailwayStationRouteMapPayload } from '@/types/transportation'
+import RailwayStationRoutesMapPanel from '@/views/user/Transportation/railway/components/RailwayStationRoutesMapPanel.vue'
+
+type RouteGroupSelectItem = {
+  value: string
+  displayLabel: string
+  baseLabel: string
+  suffixLabel: string
+  colorHex: string | null
+}
 
 const props = withDefaults(
   defineProps<{
@@ -13,6 +22,11 @@ const props = withDefaults(
     platforms?: RailwayStationDetail['platforms'] | null
     color?: number | null
     loading?: boolean
+    mapLoading?: boolean
+    routeMap?: RailwayStationRouteMapPayload | null
+
+    routeGroupItems?: RouteGroupSelectItem[]
+    selectedRouteGroupKeys?: string[]
   }>(),
   {
     stationLabel: null,
@@ -21,14 +35,27 @@ const props = withDefaults(
     platforms: () => [] as RailwayStationDetail['platforms'],
     color: null,
     loading: false,
+    mapLoading: false,
+    routeMap: null,
+
+    routeGroupItems: () => [] as RouteGroupSelectItem[],
+    selectedRouteGroupKeys: () => [] as string[],
   },
 )
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
+  (event: 'update:selectedRouteGroupKeys', value: string[]): void
 }>()
 
 const open = computed(() => props.modelValue)
+
+const selectedRouteGroupKeysModel = computed({
+  get: () => props.selectedRouteGroupKeys ?? [],
+  set: (value: string[]) => {
+    emit('update:selectedRouteGroupKeys', value)
+  },
+})
 
 const close = () => {
   emit('update:modelValue', false)
@@ -162,11 +189,15 @@ onBeforeUnmount(() => {
         ></div>
 
         <div class="relative h-full w-full">
-          <RailwayStationMapPanel
+          <RailwayStationRoutesMapPanel
             :bounds="props.bounds"
             :platforms="props.platforms ?? []"
-            :color="props.color"
+            :station-fill-color="props.color"
+            :route-map="props.routeMap"
             :loading="props.loading"
+            :map-loading="props.mapLoading"
+            :auto-focus="true"
+            :rounded="false"
             :height="mapHeight"
           />
 
@@ -184,6 +215,44 @@ onBeforeUnmount(() => {
                   <span>站台 {{ platformCountLabel }}</span>
                 </div>
               </div>
+
+              <USelect
+                v-model="selectedRouteGroupKeysModel"
+                :items="props.routeGroupItems"
+                multiple
+                value-key="value"
+                label-key="displayLabel"
+                placeholder="选择显示线路"
+                selected-icon="i-lucide-check"
+                size="sm"
+                class="w-72"
+              >
+                <template #default="{ modelValue }">
+                  <span class="truncate text-xs">
+                    已选 {{ Array.isArray(modelValue) ? modelValue.length : 0 }}
+                  </span>
+                </template>
+
+                <template #item-leading="{ item }">
+                  <span
+                    class="block h-3 w-3 rounded-full"
+                    :style="
+                      item.colorHex
+                        ? { backgroundColor: item.colorHex }
+                        : undefined
+                    "
+                  ></span>
+                </template>
+                <template #item-label="{ item }">
+                  <span class="truncate text-xs">{{ item.baseLabel }}</span>
+                  <span
+                    v-if="item.suffixLabel"
+                    class="ml-1 truncate text-xs text-slate-400/80 dark:text-slate-200/80"
+                  >
+                    {{ item.suffixLabel }}
+                  </span>
+                </template>
+              </USelect>
             </div>
           </div>
 

@@ -168,7 +168,7 @@ export class RailwayMap {
             stroke: false,
             fill: true,
             fillColor: color,
-            fillOpacity: options?.fillOpacity ?? 0.18,
+            fillOpacity: options?.fillOpacity ?? 0.7,
             className: ROUTE_POLYLINE_CLASS,
           }).addTo(map)
         : L.polyline(latlngs, {

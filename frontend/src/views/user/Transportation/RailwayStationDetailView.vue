@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
-import RailwayStationMapPanel from '@/views/user/Transportation/railway/components/RailwayStationMapPanel.vue'
 import RailwayStationMapFullscreenOverlay from '@/views/user/Transportation/railway/components/RailwayStationMapFullscreenOverlay.vue'
+import RailwayStationRoutesMapPanel from '@/views/user/Transportation/railway/components/RailwayStationRoutesMapPanel.vue'
 import { useTransportationRailwayStore } from '@/stores/transportation/railway'
 import type { RailwayStationDetail } from '@/types/transportation'
+import type {
+  RailwayStationRouteMapPayload,
+  RailwayStationRouteMapResponse,
+} from '@/types/transportation'
 import { getDimensionName } from '@/utils/minecraft/dimension-names'
 import modpackCreateImg from '@/assets/resources/modpacks/Create.jpg'
 import modpackMtrImg from '@/assets/resources/modpacks/MTR.png'
+import { translateAuthErrorMessage } from '@/utils/errors/auth-errors'
 
 import type { RailwayRouteLogResult } from '@/types/transportation'
 
@@ -31,6 +36,21 @@ const logContentRef = ref<HTMLElement | null>(null)
 let lastLogContentHeight: number | null = null
 
 const fullscreenMapOpen = ref(false)
+
+const stationRouteMap = ref<RailwayStationRouteMapPayload | null>(null)
+const stationRouteMapLoading = ref(false)
+const stationRouteMapError = ref<string | null>(null)
+let stationRouteMapPollToken = 0
+
+type RouteGroupSelectItem = {
+  value: string
+  displayLabel: string
+  baseLabel: string
+  suffixLabel: string
+  colorHex: string | null
+}
+
+const selectedRouteGroupKeys = ref<string[]>([])
 
 const logPageSize = 8
 const logPage = ref(1)
@@ -93,6 +113,13 @@ const routeIndex = computed(() => {
   return map
 })
 
+function extractRouteSuffixLabel(value: string | null | undefined) {
+  if (!value) return ''
+  const secondary = value.split('||')[1] ?? ''
+  const first = secondary.split('|')[0] ?? ''
+  return first.trim()
+}
+
 function getRouteLabel(routeId: string) {
   const route = routeIndex.value.get(routeId)
   const name = route?.name?.trim()
@@ -102,6 +129,78 @@ function getRouteLabel(routeId: string) {
   // Avoid showing raw IDs directly in UI; keep them in tooltip for debugging.
   return { label: '未知线路', tooltip: routeId }
 }
+
+const routeGroupSelectItems = computed<RouteGroupSelectItem[]>(() => {
+  const groups = stationRouteMap.value?.groups ?? []
+  if (!groups.length) return []
+
+  const items: RouteGroupSelectItem[] = []
+
+  for (const group of groups) {
+    const firstRouteId = group.routeIds?.[0] ?? null
+    const match = firstRouteId ? routeIndex.value.get(firstRouteId) : null
+
+    const baseLabel = group.displayName || group.key
+    const suffixLabel = extractRouteSuffixLabel(match?.name ?? null)
+    const displayLabel = suffixLabel ? `${baseLabel} ${suffixLabel}` : baseLabel
+
+    const colorHex = colorToHex(group.color ?? match?.color ?? null)
+
+    items.push({
+      value: group.key,
+      displayLabel,
+      baseLabel,
+      suffixLabel,
+      colorHex,
+    })
+  }
+
+  items.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel))
+  return items
+})
+
+const filteredStationRouteMap = computed<RailwayStationRouteMapPayload | null>(
+  () => {
+    const map = stationRouteMap.value
+    if (!map) return null
+    const keys = selectedRouteGroupKeys.value
+    if (!keys.length) {
+      return {
+        ...map,
+        groups: [],
+      }
+    }
+    const set = new Set(keys)
+    return {
+      ...map,
+      groups: (map.groups ?? []).filter((g) => set.has(g.key)),
+    }
+  },
+)
+
+watch(
+  () => stationRouteMap.value?.groups,
+  (groups) => {
+    if (!groups) return
+    const nextKeys = (groups ?? []).map((g) => g.key)
+    if (!nextKeys.length) {
+      selectedRouteGroupKeys.value = []
+      return
+    }
+
+    // 初次加载时默认全选，后续仅做“剔除不存在的 key”同步
+    if (!selectedRouteGroupKeys.value.length) {
+      selectedRouteGroupKeys.value = nextKeys
+      return
+    }
+
+    const keySet = new Set(nextKeys)
+    selectedRouteGroupKeys.value = selectedRouteGroupKeys.value.filter((k) =>
+      keySet.has(k),
+    )
+  },
+  { immediate: true },
+)
 
 const modpackInfo = computed(() => {
   const modRaw = detail.value?.railwayType ?? params.value.railwayType
@@ -211,6 +310,56 @@ async function fetchLogs(force = true) {
   }
 }
 
+async function fetchStationRouteMap(forceStart = false) {
+  const { stationId, railwayType, serverId, dimension } = params.value
+  if (!stationId || !serverId || !railwayType) {
+    stationRouteMap.value = null
+    stationRouteMapError.value = null
+    stationRouteMapLoading.value = false
+    return
+  }
+
+  const token = ++stationRouteMapPollToken
+  stationRouteMapLoading.value = true
+  stationRouteMapError.value = null
+
+  try {
+    const res: RailwayStationRouteMapResponse =
+      await transportationStore.fetchStationRouteMap(
+        {
+          id: stationId,
+          railwayType,
+          serverId,
+          dimension,
+        },
+        forceStart,
+      )
+
+    if (token !== stationRouteMapPollToken) return
+
+    if (res.status === 'ready') {
+      stationRouteMap.value = res.data
+      stationRouteMapLoading.value = false
+      return
+    }
+
+    // pending
+    stationRouteMap.value = null
+    stationRouteMapLoading.value = true
+    window.setTimeout(() => {
+      if (token !== stationRouteMapPollToken) return
+      void fetchStationRouteMap(false)
+    }, 900)
+  } catch (error) {
+    if (token !== stationRouteMapPollToken) return
+    const raw = error instanceof Error ? error.message : 'Request failed'
+    const msg = translateAuthErrorMessage(raw) ?? raw
+    stationRouteMapError.value = msg
+    stationRouteMapLoading.value = false
+    toast.add({ title: msg, color: 'error' })
+  }
+}
+
 function goBack() {
   router.push({ name: 'transportation.railway' })
 }
@@ -290,15 +439,26 @@ function goLogNext() {
 watch(
   () => route.fullPath,
   () => {
+    stationRouteMapPollToken += 1
+    stationRouteMap.value = null
+    stationRouteMapError.value = null
+    stationRouteMapLoading.value = false
+
     logPage.value = 1
     void fetchDetail()
     void fetchLogs()
+    void fetchStationRouteMap(true)
   },
 )
 
 onMounted(() => {
   void fetchDetail()
   void fetchLogs()
+  void fetchStationRouteMap(true)
+})
+
+onUnmounted(() => {
+  stationRouteMapPollToken += 1
 })
 </script>
 
@@ -312,6 +472,10 @@ onMounted(() => {
     :platforms="platforms"
     :color="detail?.station.color ?? detail?.routes[0]?.color ?? null"
     :loading="loading"
+    :map-loading="stationRouteMapLoading"
+    :route-map="filteredStationRouteMap"
+    :route-group-items="routeGroupSelectItems"
+    v-model:selected-route-group-keys="selectedRouteGroupKeys"
   />
 
   <div v-show="!fullscreenMapOpen" class="space-y-6">
@@ -374,13 +538,60 @@ onMounted(() => {
     <div
       class="mt-3 relative rounded-3xl border border-slate-200/70 dark:border-slate-800"
     >
-      <RailwayStationMapPanel
+      <RailwayStationRoutesMapPanel
         :bounds="detail?.station.bounds ?? null"
         :platforms="platforms"
-        :color="detail?.station.color ?? detail?.routes[0]?.color ?? null"
+        :station-fill-color="
+          detail?.station.color ?? detail?.routes[0]?.color ?? null
+        "
+        :route-map="filteredStationRouteMap"
         :loading="loading"
+        :map-loading="stationRouteMapLoading"
         height="460px"
       />
+
+      <div class="pointer-events-none absolute bottom-4 left-4 z-999">
+        <div
+          class="pointer-events-auto"
+          style="text-shadow: 0 0 5px rgba(0, 0, 0, 0.7)"
+        >
+          <USelect
+            v-model="selectedRouteGroupKeys"
+            :items="routeGroupSelectItems"
+            multiple
+            value-key="value"
+            label-key="displayLabel"
+            placeholder="选择显示线路"
+            selected-icon="i-lucide-check"
+            size="sm"
+            class="w-48"
+          >
+            <template #default="{ modelValue }">
+              <span class="truncate text-xs">
+                已选 {{ Array.isArray(modelValue) ? modelValue.length : 0 }}
+              </span>
+            </template>
+
+            <template #item-leading="{ item }">
+              <span
+                class="block h-3 w-3 rounded-full"
+                :style="
+                  item.colorHex ? { backgroundColor: item.colorHex } : undefined
+                "
+              ></span>
+            </template>
+            <template #item-label="{ item }">
+              <span class="truncate text-xs">{{ item.baseLabel }}</span>
+              <span
+                v-if="item.suffixLabel"
+                class="ml-1 truncate text-xs text-slate-400/80 dark:text-slate-200/80"
+              >
+                {{ item.suffixLabel }}
+              </span>
+            </template>
+          </USelect>
+        </div>
+      </div>
 
       <div
         class="pointer-events-none absolute inset-x-4 top-4 flex justify-end z-999"
@@ -582,7 +793,7 @@ onMounted(() => {
             <h3
               class="flex items-center justify-between text-lg text-slate-600 dark:text-slate-300"
             >
-              途径线路
+              途经线路
 
               <span class="ml-2 text-xs text-slate-400 dark:text-slate-500">
                 共 {{ associatedRoutes.length }} 条
@@ -607,6 +818,14 @@ onMounted(() => {
                     <p
                       class="flex items-baseline gap-1 font-medium text-slate-900 dark:text-white"
                     >
+                      <span
+                        class="block h-3 w-3 rounded-full"
+                        :style="
+                          colorToHex(route.color)
+                            ? { backgroundColor: colorToHex(route.color) }
+                            : undefined
+                        "
+                      ></span>
                       <span>
                         {{ route.name?.split('|')[0] || '未命名' }}
                       </span>
