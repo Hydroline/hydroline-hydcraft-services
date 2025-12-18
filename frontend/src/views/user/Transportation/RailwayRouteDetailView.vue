@@ -381,7 +381,7 @@ function colorToHex(value: number | null | undefined) {
 
 function formatSecondsFromTicks(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return null
-  const seconds = value / 20
+  const seconds = value / 2
   const rounded = Math.round(seconds * 100) / 100
   return rounded
     .toFixed(2)
