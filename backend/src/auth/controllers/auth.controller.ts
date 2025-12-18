@@ -819,7 +819,7 @@ export class AuthController {
 
     const attachment = await this.attachmentsService.uploadAttachment(
       userId,
-      file as any,
+      file,
       {
         name: file.originalname,
         folderId: avatarFolder?.id ?? null,
@@ -852,7 +852,7 @@ export class AuthController {
 
     const enrichedUser = await enrichUserAvatar(
       this.attachmentsService,
-      updated as any,
+      updated,
       attachment,
     );
     return { user: enrichedUser };

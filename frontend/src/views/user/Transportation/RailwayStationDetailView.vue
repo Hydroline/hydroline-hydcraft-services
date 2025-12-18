@@ -64,6 +64,25 @@ const dimensionName = computed(() =>
 const associatedRoutes = computed(() => detail.value?.routes ?? [])
 const platforms = computed(() => detail.value?.platforms ?? [])
 
+const routeIndex = computed(() => {
+  const map = new Map<string, RailwayStationDetail['routes'][number]>()
+  for (const route of associatedRoutes.value) {
+    if (!route?.id) continue
+    map.set(route.id, route)
+  }
+  return map
+})
+
+function getRouteLabel(routeId: string) {
+  const route = routeIndex.value.get(routeId)
+  const name = route?.name?.trim()
+  if (name) {
+    return { label: name, tooltip: null as string | null }
+  }
+  // Avoid showing raw IDs directly in UI; keep them in tooltip for debugging.
+  return { label: '未知线路', tooltip: routeId }
+}
+
 const modpackInfo = computed(() => {
   const modRaw = detail.value?.railwayType ?? params.value.railwayType
   const mod = typeof modRaw === 'string' ? modRaw.toUpperCase() : null
@@ -506,7 +525,7 @@ onMounted(() => {
 
         <div class="space-y-6">
           <div>
-            <h3 class="text-lg text-slate-600 dark:text-slate-300">服务线路</h3>
+            <h3 class="text-lg text-slate-600 dark:text-slate-300">途径线路</h3>
             <div
               class="mt-3 space-y-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
             >
@@ -561,14 +580,31 @@ onMounted(() => {
                     </td>
                     <td class="py-2">
                       <div class="flex flex-wrap gap-1">
-                        <UBadge
-                          v-for="routeId in platform.routeIds"
+                        <template
+                          v-for="routeId in platform.routeIds ?? []"
                           :key="routeId"
-                          size="xs"
-                          variant="soft"
                         >
-                          {{ routeId }}
-                        </UBadge>
+                          <UTooltip
+                            v-if="getRouteLabel(routeId).tooltip"
+                            :text="getRouteLabel(routeId).tooltip || ''"
+                          >
+                            <UButton
+                              size="xs"
+                              variant="soft"
+                              @click="goRoute(routeId)"
+                            >
+                              {{ getRouteLabel(routeId).label }}
+                            </UButton>
+                          </UTooltip>
+                          <UButton
+                            v-else
+                            size="xs"
+                            variant="soft"
+                            @click="goRoute(routeId)"
+                          >
+                            {{ getRouteLabel(routeId).label }}
+                          </UButton>
+                        </template>
                       </div>
                     </td>
                     <td class="py-2">

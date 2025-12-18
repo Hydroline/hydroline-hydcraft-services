@@ -64,7 +64,7 @@ export class WorkflowService {
     if (normalized.states.length === 0) {
       throw new BadRequestException('工作流至少需要一个状态');
     }
-    const initialState = normalized.states[0]!.key;
+    const initialState = normalized.states[0].key;
     const roleSet = new Set<string>();
     normalized.states.forEach((state) => {
       state.actions?.forEach((action) => {

@@ -1380,6 +1380,6 @@ export class CompanyService implements OnModuleInit {
   }
 
   private toJsonValue(value: unknown) {
-    return value as unknown as Prisma.InputJsonValue;
+    return value as Prisma.InputJsonValue;
   }
 }

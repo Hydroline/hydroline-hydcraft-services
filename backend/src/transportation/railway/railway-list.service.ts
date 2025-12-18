@@ -58,9 +58,16 @@ function buildQueryRowFromStoredEntity(row: {
 function extractPlatformCount(payload: Prisma.JsonValue): number | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload))
     return null;
-  const raw = (payload as Record<string, unknown>)['platform_ids'];
-  if (!Array.isArray(raw)) return null;
-  return raw.length;
+  const record = payload as Record<string, unknown>;
+  const raw = record['platform_ids'];
+  const rawCamel = record['platformIds'];
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray(rawCamel)
+      ? rawCamel
+      : null;
+  if (!list) return null;
+  return list.length;
 }
 
 @Injectable()

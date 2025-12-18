@@ -451,7 +451,7 @@ export class PlayerAutomationService {
       select: { metadata: true },
     });
     const current = isRecord(existing?.metadata)
-      ? (existing?.metadata as Prisma.JsonObject)
+      ? existing?.metadata
       : ({} as Prisma.JsonObject);
     const next = { ...current, ...patch } as Prisma.JsonObject;
     await this.prisma.userLifecycleEvent.update({

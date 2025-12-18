@@ -16,14 +16,13 @@ export async function enrichUserAvatar<T extends MaybeUser>(
 ): Promise<
   T & { avatarAttachmentId: string | null; avatarUrl: string | null }
 > {
-  const currentAttachmentId =
-    (user?.avatarAttachmentId as string | null | undefined) ?? null;
+  const currentAttachmentId = user?.avatarAttachmentId ?? null;
   const effectiveAttachmentId =
     latestAttachment?.id ?? currentAttachmentId ?? null;
 
   if (!effectiveAttachmentId) {
     const profile = user?.profile
-      ? { ...(user.profile as Record<string, unknown>), avatarUrl: null }
+      ? { ...user.profile, avatarUrl: null }
       : { avatarUrl: null };
     const enriched = {
       ...(user as Record<string, unknown>),
@@ -55,7 +54,7 @@ export async function enrichUserAvatar<T extends MaybeUser>(
       : null;
 
   const profile = user?.profile
-    ? { ...(user.profile as Record<string, unknown>), avatarUrl }
+    ? { ...user.profile, avatarUrl }
     : { avatarUrl };
 
   const enriched = {

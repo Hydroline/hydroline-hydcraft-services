@@ -195,7 +195,7 @@ export class UsersController {
 
     const attachment = await this.attachmentsService.uploadAttachment(
       userId,
-      file as any,
+      file,
       {
         name: file.originalname,
         folderId: avatarFolder?.id ?? null,

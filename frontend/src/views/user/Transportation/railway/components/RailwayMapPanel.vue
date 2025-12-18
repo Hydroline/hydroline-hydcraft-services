@@ -15,6 +15,12 @@ const props = withDefaults(
   defineProps<{
     geometry: RailwayRouteDetail['geometry'] | null
     stops?: RailwayRouteDetail['stops'] | null
+    secondaryPaths?: RailwayGeometryPoint[][] | null
+    secondaryZoomThreshold?: number
+    forceShowSecondary?: boolean
+    secondaryColor?: number | null
+    secondaryWeight?: number
+    secondaryOpacity?: number
     color?: number | null
     zoom?: number
     showZoomControl?: boolean
@@ -30,6 +36,7 @@ const props = withDefaults(
     height: '360px',
     loading: false,
     stops: () => [] as RailwayRouteDetail['stops'],
+    secondaryPaths: null,
     autoFocus: true,
     combinePaths: true,
     rounded: true,
@@ -167,6 +174,29 @@ const geometrySignature = computed(() => {
   return `${ids}:${lengths}:${secondaryHash.value}:${props.combinePaths}`
 })
 
+const secondaryPathsSignature = computed(() => {
+  const paths = props.secondaryPaths ?? []
+  let hash = 0
+  let count = 0
+  for (const path of paths) {
+    for (const point of path ?? []) {
+      const x = Math.trunc(point.x)
+      const z = Math.trunc(point.z)
+      hash = Math.imul(x, 73856093) ^ Math.imul(z, 19349663) ^ hash
+      count += 1
+    }
+  }
+  const threshold =
+    typeof props.secondaryZoomThreshold === 'number'
+      ? props.secondaryZoomThreshold
+      : 'auto'
+  const force =
+    typeof props.forceShowSecondary === 'boolean'
+      ? props.forceShowSecondary
+      : 'auto'
+  return `${paths.length}:${count}:${hash}:${threshold}:${force}`
+})
+
 const combinedCacheState = {
   signature: '',
   value: [] as RailwayGeometryPoint[][],
@@ -262,18 +292,26 @@ function drawGeometry() {
     : useMidline
       ? combinedPrimaryPolylines.value
       : primaryPolylines.value
-  const secondaryPaths = directionalMode
+  const computedSecondaryPaths = directionalMode
     ? []
     : useMidline
       ? []
       : secondaryPolylines.value
-  const secondaryZoomThreshold = directionalMode
+  const secondaryPaths = props.secondaryPaths?.length
+    ? props.secondaryPaths
+    : computedSecondaryPaths
+
+  const computedSecondaryZoomThreshold = directionalMode
     ? Number.POSITIVE_INFINITY
     : useMidline
       ? Number.POSITIVE_INFINITY
       : SECONDARY_ZOOM_THRESHOLD
+  const secondaryZoomThreshold =
+    typeof props.secondaryZoomThreshold === 'number'
+      ? props.secondaryZoomThreshold
+      : computedSecondaryZoomThreshold
   const autoFocus = skipAutoFocus.value ? false : (props.autoFocus ?? true)
-  const drawSignature = `${geometrySignature.value}:${showSplitLines.value}`
+  const drawSignature = `${geometrySignature.value}:${showSplitLines.value}:${secondaryPathsSignature.value}`
   if (drawSignature === lastDrawSignature) {
     skipAutoFocus.value = false
     return
@@ -282,14 +320,28 @@ function drawGeometry() {
   railwayMap.value.drawGeometry(primaryPaths, {
     color: props.color ?? null,
     weight: isBoundsGeometry ? 0 : 4,
-    opacity: isBoundsGeometry ? 0 : 0.9,
+    // For bounds fill polygon, opacity doesn't affect rendering (stroke is disabled),
+    // but it DOES impact secondary line opacity calculation inside RailwayMap.
+    // Keep it non-zero so platform segments remain visible.
+    opacity: 0.9,
     fill: isBoundsGeometry,
     fillOpacity: 0.7,
     focusZoom: props.zoom,
     secondaryPaths,
     secondaryZoomThreshold,
+    secondaryColor: props.secondaryColor ?? null,
+    secondaryWeight:
+      typeof props.secondaryWeight === 'number'
+        ? props.secondaryWeight
+        : undefined,
+    secondaryOpacity:
+      typeof props.secondaryOpacity === 'number'
+        ? props.secondaryOpacity
+        : undefined,
     forceShowSecondary:
-      !directionalMode && !useMidline && shouldForceSeparate.value,
+      typeof props.forceShowSecondary === 'boolean'
+        ? props.forceShowSecondary
+        : !directionalMode && !useMidline && shouldForceSeparate.value,
     autoFocus,
   })
   skipAutoFocus.value = false
@@ -432,6 +484,19 @@ watch(
   () => {
     scheduleDraw()
   },
+)
+
+watch(
+  () =>
+    [
+      props.secondaryPaths,
+      props.secondaryZoomThreshold,
+      props.forceShowSecondary,
+    ] as const,
+  () => {
+    scheduleDraw()
+  },
+  { deep: true },
 )
 
 watch(
@@ -709,7 +774,7 @@ function computeCentroid(paths: RailwayGeometryPoint[][]) {
   border: none;
   box-shadow: none;
   color: #fff;
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 600;
   padding: 0;
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
@@ -736,8 +801,16 @@ function computeCentroid(paths: RailwayGeometryPoint[][]) {
   filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.5));
 }
 
+.railway-map-container .railway-secondary-polyline {
+  filter: drop-shadow(0 6px 12px rgba(2, 6, 23, 0.75));
+}
+
 .dark .railway-map-container .railway-route-polyline {
   filter: drop-shadow(0 4px 10px rgba(2, 6, 23, 0.7));
+}
+
+.dark .railway-map-container .railway-secondary-polyline {
+  filter: drop-shadow(0 6px 14px rgba(2, 6, 23, 0.9));
 }
 
 .railway-map-container .leaflet-control-container {

@@ -658,7 +658,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
     return {
       id: job.id,
       serverId: job.serverId,
-      status: job.status as TransportationRailwaySyncStatus,
+      status: job.status,
       message: job.message ?? null,
       createdAt: job.createdAt.toISOString(),
       startedAt: job.startedAt ? job.startedAt.toISOString() : null,

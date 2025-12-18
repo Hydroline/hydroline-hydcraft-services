@@ -408,8 +408,8 @@ export class RankSyncService implements OnModuleInit {
           useWandCount: normalized.useWandCount,
           logoutCount: normalized.logoutCount,
           mtrBalance: balanceMap.get(balanceKey) ?? 0,
-          metrics: statsEntry as Record<string, unknown>,
-          stats: statsEntry as Record<string, unknown>,
+          metrics: statsEntry,
+          stats: statsEntry,
         };
         await this.snapshotService.upsert(snapshot);
       }

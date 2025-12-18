@@ -17,7 +17,16 @@ export function normalizePayloadRecord(value: Record<string, unknown>) {
       normalized[key] = ensureStringId(normalized[key]);
     }
   }
-  const arrayKeys = ['platform_ids', 'route_ids', 'station_ids', 'depot_ids'];
+  const arrayKeys = [
+    'platform_ids',
+    'platformIds',
+    'route_ids',
+    'routeIds',
+    'station_ids',
+    'stationIds',
+    'depot_ids',
+    'depotIds',
+  ];
   for (const key of arrayKeys) {
     const entry = normalized[key];
     if (Array.isArray(entry)) {
@@ -277,13 +286,26 @@ export function normalizeRouteRow(
   const entity = normalizeEntity(row, server);
   if (!entity) return null;
   const payload = toCleanPayload(row.payload);
-  const payloadPlatformIds = (payload as { platform_ids?: unknown[] } | null)
-    ?.platform_ids;
+  const payloadPlatformIds = (
+    payload as {
+      platform_ids?: unknown[];
+      platformIds?: unknown[];
+    } | null
+  )?.platform_ids;
+  const payloadPlatformIdsCamel = (
+    payload as {
+      platform_ids?: unknown[];
+      platformIds?: unknown[];
+    } | null
+  )?.platformIds;
+  const platformList = Array.isArray(payloadPlatformIds)
+    ? payloadPlatformIds
+    : Array.isArray(payloadPlatformIdsCamel)
+      ? payloadPlatformIdsCamel
+      : null;
   return {
     ...entity,
-    platformCount: Array.isArray(payloadPlatformIds)
-      ? payloadPlatformIds.length
-      : null,
+    platformCount: platformList ? platformList.length : null,
     payload,
   };
 }

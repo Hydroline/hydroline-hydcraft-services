@@ -73,6 +73,20 @@ const stops = computed<RailwayRouteDetail['stops']>(() =>
     ),
 )
 
+const platformSegments = computed(() => {
+  return props.platforms
+    .map((platform) => {
+      const pos1 = platform.pos1
+      const pos2 = platform.pos2
+      if (!pos1 || !pos2) return null
+      return [
+        { x: pos1.x, z: pos1.z },
+        { x: pos2.x, z: pos2.z },
+      ]
+    })
+    .filter((path): path is Array<{ x: number; z: number }> => Boolean(path))
+})
+
 function computePlatformCenter(
   platform: RailwayStationDetail['platforms'][number],
 ) {
@@ -90,6 +104,11 @@ function computePlatformCenter(
   <RailwayMapPanel
     :geometry="geometry"
     :stops="stops"
+    :secondary-paths="platformSegments"
+    :secondary-zoom-threshold="3"
+    :secondary-color="0xffffff"
+    :secondary-weight="4"
+    :secondary-opacity="0.98"
     :color="color"
     :height="height"
     :loading="loading"
