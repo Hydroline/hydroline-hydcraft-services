@@ -231,9 +231,10 @@ export class RailwayMap {
         const bounds = this.toBounds(stop.bounds)
         if (!bounds) continue
         const rectangle = L.rectangle(bounds, {
-          color: '#14b8a6',
-          weight: 1,
-          fillOpacity: 0.15,
+          stroke: false,
+          fill: true,
+          fillColor: this.routeColor,
+          fillOpacity: 0.7,
         })
         const stopLabel = this.getStopLabel(stop)
         if (stopLabel) {
