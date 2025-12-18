@@ -535,23 +535,46 @@ onMounted(() => {
               >
                 暂无线路数据
               </p>
-              <div
-                v-for="route in associatedRoutes"
-                :key="route.id"
-                class="flex items-center justify-between rounded-xl border border-slate-100/70 px-3 py-2 text-sm transition hover:border-primary-200 dark:border-slate-800/60 dark:hover:border-primary-400/60"
-              >
-                <div>
-                  <p class="font-medium text-slate-900 dark:text-white">
-                    {{ route.name || route.id }}
-                  </p>
-                  <p class="text-xs text-slate-500">
-                    {{ route.server.name }} ·
-                    {{ getDimensionName(route.dimension) || '未知维度' }}
-                  </p>
+              <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                <div
+                  v-for="route in associatedRoutes"
+                  :key="route.id"
+                  class="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                >
+                  <div>
+                    <p
+                      class="flex items-center gap-1 font-medium text-slate-900 dark:text-white"
+                    >
+                      <span>
+                        {{ route.name?.split('|')[0] || '未命名' }}
+                      </span>
+
+                      <span v-if="route.name?.split('|')[1]">
+                        {{ route.name?.split('|')[1] }}
+                      </span>
+                    </p>
+                    <div class="flex items-center gap-1">
+                      <UBadge
+                        variant="soft"
+                        size="sm"
+                        v-if="route.name?.split('||').length > 1"
+                      >
+                        {{ route.name?.split('||')[1].split('|')[0] }}
+                      </UBadge>
+
+                      <UBadge variant="soft" color="neutral" size="sm">
+                        {{ route.server.name }}
+                      </UBadge>
+
+                      <UBadge variant="soft" color="neutral" size="sm">
+                        {{ getDimensionName(route.dimension) || '未知维度' }}
+                      </UBadge>
+                    </div>
+                  </div>
+                  <UButton size="xs" variant="soft" @click="goRoute(route.id)">
+                    查看
+                  </UButton>
                 </div>
-                <UButton size="xs" variant="soft" @click="goRoute(route.id)">
-                  查看
-                </UButton>
               </div>
             </div>
           </div>
@@ -563,10 +586,10 @@ onMounted(() => {
             >
               <table class="w-full text-left text-sm">
                 <thead>
-                  <tr class="text-slate-500">
-                    <th class="py-2">站台</th>
-                    <th class="py-2">停靠线路</th>
-                    <th class="py-2">停留时间</th>
+                  <tr class="text-slate-500 text-xs">
+                    <th class="pb-2 font-normal">站台</th>
+                    <th class="pb-2 font-normal">停靠线路</th>
+                    <th class="pb-2 font-normal">停留时间</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -593,7 +616,7 @@ onMounted(() => {
                               variant="soft"
                               @click="goRoute(routeId)"
                             >
-                              {{ getRouteLabel(routeId).label }}
+                              {{ getRouteLabel(routeId).label.split('|')[0] }}
                             </UButton>
                           </UTooltip>
                           <UButton
@@ -602,23 +625,17 @@ onMounted(() => {
                             variant="soft"
                             @click="goRoute(routeId)"
                           >
-                            {{ getRouteLabel(routeId).label }}
+                            {{ getRouteLabel(routeId).label.split('|')[0] }}
                           </UButton>
                         </template>
                       </div>
                     </td>
                     <td class="py-2">
                       <span v-if="platform.dwellTime == null">—</span>
-                      <UTooltip
-                        v-else
-                        :text="`真实停留：${platform.dwellTime} tick`"
-                      >
-                        <span
-                          >{{
-                            formatSecondsFromTicks(platform.dwellTime)
-                          }}
-                          s</span
-                        >
+                      <UTooltip v-else :text="`${platform.dwellTime} tick`">
+                        <span>
+                          {{ formatSecondsFromTicks(platform.dwellTime) }}s
+                        </span>
                       </UTooltip>
                     </td>
                   </tr>
