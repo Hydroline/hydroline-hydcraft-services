@@ -6,7 +6,11 @@ import {
   normalizeEntity,
   normalizeRouteRow,
 } from './railway-normalizer';
-import type { NormalizedEntity, NormalizedRoute, QueryMtrEntityRow } from './railway-types';
+import type {
+  NormalizedEntity,
+  NormalizedRoute,
+  QueryMtrEntityRow,
+} from './railway-types';
 
 type RailwayListPagination = {
   total: number;
@@ -43,14 +47,17 @@ function buildQueryRowFromStoredEntity(row: {
     file_path: row.filePath,
     last_updated: row.lastBeaconUpdatedAt?.getTime() ?? row.updatedAt.getTime(),
     payload:
-      row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+      row.payload &&
+      typeof row.payload === 'object' &&
+      !Array.isArray(row.payload)
         ? (row.payload as Record<string, unknown>)
         : null,
   };
 }
 
 function extractPlatformCount(payload: Prisma.JsonValue): number | null {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+    return null;
   const raw = (payload as Record<string, unknown>)['platform_ids'];
   if (!Array.isArray(raw)) return null;
   return raw.length;
@@ -108,7 +115,12 @@ export class TransportationRailwayListService {
       ...(params.serverId ? { serverId: params.serverId } : {}),
       ...(params.railwayType ? { railwayMod: params.railwayType } : {}),
       ...(params.transportMode
-        ? { transportMode: { contains: params.transportMode, mode: 'insensitive' } }
+        ? {
+            transportMode: {
+              contains: params.transportMode,
+              mode: 'insensitive',
+            },
+          }
         : {}),
       ...(params.dimension
         ? {
@@ -199,7 +211,12 @@ export class TransportationRailwayListService {
       ...(params.serverId ? { serverId: params.serverId } : {}),
       ...(params.railwayType ? { railwayMod: params.railwayType } : {}),
       ...(params.transportMode
-        ? { transportMode: { contains: params.transportMode, mode: 'insensitive' } }
+        ? {
+            transportMode: {
+              contains: params.transportMode,
+              mode: 'insensitive',
+            },
+          }
         : {}),
       ...(params.dimension
         ? {
@@ -287,7 +304,12 @@ export class TransportationRailwayListService {
       ...(params.serverId ? { serverId: params.serverId } : {}),
       ...(params.railwayType ? { railwayMod: params.railwayType } : {}),
       ...(params.transportMode
-        ? { transportMode: { contains: params.transportMode, mode: 'insensitive' } }
+        ? {
+            transportMode: {
+              contains: params.transportMode,
+              mode: 'insensitive',
+            },
+          }
         : {}),
       ...(params.dimension
         ? {

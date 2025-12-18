@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import 'leaflet/dist/leaflet.css'
 import type { LeafletMouseEvent } from 'leaflet'
 import { RailwayMap } from '@/views/user/Transportation/railway/maps/routeMap'
@@ -143,7 +143,21 @@ const secondaryHash = computed(() => {
 
 const geometrySignature = computed(() => {
   const geometry = props.geometry
-  const paths = geometry?.paths ?? []
+  if (!geometry) {
+    return `null:0:${secondaryHash.value}:${props.combinePaths}`
+  }
+  const paths = geometry.paths?.length
+    ? geometry.paths
+    : [
+        {
+          id: 'legacy',
+          label: null,
+          isPrimary: true,
+          source: geometry.source,
+          points: geometry.points ?? [],
+          segments: geometry.segments,
+        },
+      ]
   const ids = paths.map((path) => path.id ?? path.source ?? '').join('|')
   const lengths = paths
     .map((path) => path.points?.length ?? path.segments?.length ?? 0)
@@ -194,6 +208,9 @@ const shouldForceSeparate = computed(() => {
 const showSplitLines = ref(false)
 const skipAutoFocus = ref(false)
 let lastDrawSignature = ''
+let hasInvalidatedSize = false
+let resizeObserver: ResizeObserver | null = null
+let scheduledResizeRaf: number | null = null
 
 const handleSplitZoom = () => {
   const controller = railwayMap.value?.getController()
@@ -217,6 +234,12 @@ watch(
 )
 
 function destroyMap() {
+  if (scheduledResizeRaf != null) {
+    cancelAnimationFrame(scheduledResizeRaf)
+    scheduledResizeRaf = null
+  }
+  resizeObserver?.disconnect()
+  resizeObserver = null
   mapCursorCleanup.value?.()
   mapCursorCleanup.value = null
   pointerBlockCoord.value = null
@@ -274,8 +297,33 @@ function initMap() {
   })
   railwayMap.value = map
   attachMapCursorTracking()
+
+  // 刷新首屏时，路由/布局可能先渲染但容器尺寸仍为 0，Leaflet 会出现“空白直到热更新/重排”。
+  // 用 ResizeObserver 监听容器尺寸，首次变为非零后强制 invalidateSize + 重绘。
+  resizeObserver?.disconnect()
+  resizeObserver = new ResizeObserver((entries) => {
+    const entry = entries[0]
+    const rect = entry?.contentRect
+    if (!rect) return
+    if (rect.width <= 0 || rect.height <= 0) return
+    if (scheduledResizeRaf != null) return
+    scheduledResizeRaf = requestAnimationFrame(() => {
+      scheduledResizeRaf = null
+      invalidateMapSize()
+      scheduleDraw()
+    })
+  })
+  resizeObserver.observe(containerRef.value)
+
   drawGeometry()
   syncStops()
+}
+
+function invalidateMapSize() {
+  const map = railwayMap.value?.getController()?.getLeafletInstance()
+  if (!map) return
+  map.invalidateSize({ pan: false })
+  hasInvalidatedSize = true
 }
 
 function attachMapCursorTracking() {
@@ -353,10 +401,22 @@ function syncStops() {
 
 watch(
   () => props.geometry,
-  () => {
+  async () => {
+    await nextTick()
+    // 刷新/首屏时 Leaflet 可能在容器尺寸未稳定就计算 bounds，导致不聚焦。
+    invalidateMapSize()
     scheduleDraw()
   },
   { immediate: true },
+)
+
+watch(
+  () => containerHeight.value,
+  async () => {
+    await nextTick()
+    invalidateMapSize()
+    scheduleDraw()
+  },
 )
 
 watch(
@@ -386,7 +446,12 @@ watch(
 
 onMounted(() => {
   initMap()
-  drawGeometry()
+  void nextTick().then(() => {
+    if (!hasInvalidatedSize) {
+      invalidateMapSize()
+    }
+    drawGeometry()
+  })
 })
 
 onBeforeUnmount(() => {

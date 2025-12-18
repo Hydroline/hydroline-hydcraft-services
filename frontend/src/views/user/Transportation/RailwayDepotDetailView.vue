@@ -108,32 +108,28 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center gap-3">
-      <UButton
-        size="sm"
-        variant="ghost"
-        icon="i-lucide-arrow-left"
-        @click="goBack"
-      >
-        返回概览
-      </UButton>
-      <h1 class="text-3xl font-semibold text-slate-900 dark:text-white">
-        车厂详情
-      </h1>
-    </div>
-
-    <div
-      class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm dark:border-slate-800/70 dark:bg-slate-900/70"
+    <UButton
+      size="sm"
+      class="absolute left-4 top-6 md:top-10"
+      variant="ghost"
+      icon="i-lucide-arrow-left"
+      @click="goBack"
     >
+      返回概览
+    </UButton>
+
+    <div>
       <div class="flex flex-col gap-2">
-        <p class="text-sm uppercase text-slate-500">调度信息</p>
+        <p class="text-sm uppercase text-slate-500">铁路车厂信息</p>
         <div>
           <p class="text-3xl font-semibold text-slate-900 dark:text-white">
             {{ depotName }}
           </p>
           <div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <UBadge variant="soft">{{ serverBadge }}</UBadge>
-            <UBadge variant="soft">{{ dimensionName || '未知维度' }}</UBadge>
+            <UBadge variant="soft" size="sm">{{ serverBadge }}</UBadge>
+            <UBadge variant="soft" size="sm">{{
+              dimensionName || '未知维度'
+            }}</UBadge>
           </div>
         </div>
       </div>
@@ -154,13 +150,11 @@ onMounted(() => {
     </div>
     <div v-else-if="detail" class="space-y-6">
       <section class="grid gap-4 lg:grid-cols-2">
-        <div
-          class="rounded-xl border border-slate-200/70 bg-white/90 p-5 dark:border-slate-800/70 dark:bg-slate-900/70"
-        >
-          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
-            基本信息
-          </h3>
-          <dl class="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+        <div>
+          <h3 class="text-lg text-slate-600 dark:text-slate-300">基本信息</h3>
+          <dl
+            class="mt-4 space-y-2 text-sm rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
+          >
             <div class="flex justify-between gap-4">
               <dt>车厂 ID</dt>
               <dd class="font-mono text-slate-900 dark:text-white">
@@ -199,36 +193,58 @@ onMounted(() => {
             </div>
           </dl>
         </div>
-        <div
-          class="rounded-xl border border-slate-200/70 bg-white/90 p-5 dark:border-slate-800/70 dark:bg-slate-900/70"
-        >
-          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
-            服务线路
-          </h3>
-          <div class="mt-3 space-y-2">
+
+        <div>
+          <h3 class="text-lg text-slate-600 dark:text-slate-300">服务线路</h3>
+          <div
+            class="mt-3 space-y-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
+          >
             <p
               v-if="associatedRoutes.length === 0"
               class="text-sm text-slate-500"
             >
               暂无线路数据
             </p>
-            <div
-              v-for="route in associatedRoutes"
-              :key="route.id"
-              class="flex items-center justify-between rounded-xl border border-slate-100/70 px-3 py-2 text-sm transition hover:border-primary-200 dark:border-slate-800/60 dark:hover:border-primary-400/60"
-            >
-              <div>
-                <p class="font-medium text-slate-900 dark:text-white">
-                  {{ route.name || route.id }}
-                </p>
-                <p class="text-xs text-slate-500">
-                  {{ route.server.name }} ·
-                  {{ getDimensionName(route.dimension) || '未知维度' }}
-                </p>
+            <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <div
+                v-for="route in associatedRoutes"
+                :key="route.id"
+                class="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+              >
+                <div>
+                  <p
+                    class="flex items-center gap-1 font-medium text-slate-900 dark:text-white"
+                  >
+                    <span>
+                      {{ route.name?.split('|')[0] }}
+                    </span>
+
+                    <span>
+                      {{ route.name?.split('|')[1] }}
+                    </span>
+                  </p>
+                  <p class="text-xs text-slate-500 flex items-center gap-1">
+                    <UBadge
+                      variant="soft"
+                      size="sm"
+                      v-if="(route.name?.split('||').length ?? 0) > 1"
+                    >
+                      {{ route.name?.split('||')[1] }}
+                    </UBadge>
+
+                    <UBadge variant="soft" color="neutral" size="sm">
+                      {{ route.server.name }}
+                    </UBadge>
+
+                    <UBadge variant="soft" color="neutral" size="sm">
+                      {{ getDimensionName(route.dimension) || '未知维度' }}
+                    </UBadge>
+                  </p>
+                </div>
+                <UButton size="xs" variant="soft" @click="goRoute(route.id)">
+                  查看
+                </UButton>
               </div>
-              <UButton size="xs" variant="soft" @click="goRoute(route.id)">
-                查看
-              </UButton>
             </div>
           </div>
         </div>

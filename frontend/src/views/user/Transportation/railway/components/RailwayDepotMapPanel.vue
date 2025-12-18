@@ -46,7 +46,9 @@ const geometry = computed(() => {
 <template>
   <RailwayMapPanel
     :geometry="geometry"
+    :stops="[]"
     :color="color"
+    :zoom="6"
     :height="height"
     :loading="loading"
     :auto-focus="true"

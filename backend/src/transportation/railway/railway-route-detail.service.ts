@@ -1680,6 +1680,21 @@ export class TransportationRailwayRouteDetailService {
     return single ? [single] : [];
   }
 
+  private extractStationIds(payload: Record<string, unknown> | null) {
+    if (!payload) {
+      return [];
+    }
+    const raw = payload['station_ids'] ?? payload['stationIds'];
+    if (!raw) {
+      return [];
+    }
+    if (Array.isArray(raw)) {
+      return normalizeIdList(raw);
+    }
+    const single = normalizeId(raw);
+    return single ? [single] : [];
+  }
+
   private buildStationRecordFromEntity(
     entityId: string,
     payload: Record<string, unknown>,
