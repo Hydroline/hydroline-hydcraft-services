@@ -1925,8 +1925,15 @@ export class TransportationRailwayRouteDetailService {
         true,
       ),
     );
-    const mainPlatformIdSet = new Set(
-      normalizeIdList(mainRoute.platform_ids ?? []),
+    const mainPlatformIds = normalizeIdList(mainRoute.platform_ids ?? []);
+    const mainPlatformIdSet = new Set(mainPlatformIds);
+    const mainStationIdSet = new Set(
+      mainPlatformIds
+        .map((platformId) => {
+          const platform = platformMap.get(platformId) ?? null;
+          return platform ? normalizeId(platform.station_id) : null;
+        })
+        .filter((stationId): stationId is string => Boolean(stationId)),
     );
     const candidates = this.findRelatedRoutes(
       mainRoute,
@@ -1934,12 +1941,57 @@ export class TransportationRailwayRouteDetailService {
       normalizedRouteId,
     ).filter((route) => {
       const candidateIds = normalizeIdList(route.platform_ids ?? []);
-      if (!candidateIds.length || !mainPlatformIdSet.size) {
+      if (!candidateIds.length) {
         return false;
       }
-      return candidateIds.some((platformId) =>
-        mainPlatformIdSet.has(platformId),
-      );
+
+      // Primary matching: identical platform ID set.
+      // Rationale: some players model up/down as separate routes (possibly different stops/platforms).
+      // In that case, merging them causes the UI to reuse the primary stop sequence, producing
+      // missing/incorrect stops for the other direction. Only merge when the stop/platform set is
+      // effectively the same and can be safely reversed.
+      if (mainPlatformIdSet.size) {
+        const candidateSet = new Set(candidateIds);
+        if (candidateSet.size === mainPlatformIdSet.size) {
+          let equal = true;
+          for (const platformId of candidateSet) {
+            if (!mainPlatformIdSet.has(platformId)) {
+              equal = false;
+              break;
+            }
+          }
+          if (equal) {
+            return true;
+          }
+        }
+      }
+
+      // Fallback matching: same station set (common for MTR where up/down use different platform IDs).
+      if (!mainStationIdSet.size) {
+        return false;
+      }
+      const candidateStationIds = candidateIds
+        .map((platformId) => {
+          const platform = platformMap.get(platformId) ?? null;
+          return platform ? normalizeId(platform.station_id) : null;
+        })
+        .filter((stationId): stationId is string => Boolean(stationId));
+      if (!candidateStationIds.length) {
+        return false;
+      }
+      const candidateStationIdSet = new Set(candidateStationIds);
+      if (candidateStationIdSet.size < 2 || mainStationIdSet.size < 2) {
+        return false;
+      }
+      if (candidateStationIdSet.size !== mainStationIdSet.size) {
+        return false;
+      }
+      for (const stationId of candidateStationIdSet) {
+        if (!mainStationIdSet.has(stationId)) {
+          return false;
+        }
+      }
+      return true;
     });
     let altIndex = 0;
     for (const candidate of candidates) {

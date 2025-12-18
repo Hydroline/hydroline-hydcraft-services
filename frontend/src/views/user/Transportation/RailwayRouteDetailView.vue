@@ -318,6 +318,12 @@ const stopDisplayItems = computed(() =>
   }),
 )
 
+const rightmostStopTitle = computed(() => {
+  const items = stopDisplayItems.value
+  if (!items.length) return null
+  return items[items.length - 1].title
+})
+
 function formatStationNameParts(value: string | null | undefined) {
   if (!value) {
     return { title: '未知', subtitle: null }
@@ -693,7 +699,19 @@ onMounted(() => {
       <div v-else-if="detail" class="space-y-6">
         <section class="flex flex-col">
           <div class="mb-2 flex gap-2 items-start justify-between">
-            <h3 class="text-lg text-slate-600 dark:text-slate-300">所经站点</h3>
+            <h3
+              class="flex items-center gap-3 text-lg text-slate-600 dark:text-slate-300"
+            >
+              <span>所经站点</span>
+
+              <span
+                v-if="!isCircularRoute && rightmostStopTitle"
+                class="inline-flex items-center gap-1 text-sm font-medium text-slate-500 dark:text-slate-400"
+              >
+                <UIcon name="i-lucide-play" class="h-3" />
+                <span>往 {{ rightmostStopTitle }}</span>
+              </span>
+            </h3>
             <USelect
               v-model="pathViewMode"
               :items="pathViewModeItems"
