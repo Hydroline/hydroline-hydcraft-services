@@ -129,12 +129,17 @@ export const useTransportationRailwayStore = defineStore(
         return detail
       },
       async fetchRouteLogs(
-        params: RouteCacheParams & { page?: number; limit?: number },
+        params: RouteCacheParams & {
+          page?: number
+          limit?: number
+          search?: string
+        },
         force = false,
       ) {
         const page = params.page ?? 1
         const limit = params.limit ?? 10
-        const cacheKey = `${this.buildRouteCacheKey(params)}::${page}::${limit}`
+        const searchKey = params.search ?? ''
+        const cacheKey = `${this.buildRouteCacheKey(params)}::${page}::${limit}::${searchKey}`
         if (this.routeLogs[cacheKey] && !force) {
           return this.routeLogs[cacheKey]
         }
@@ -145,6 +150,10 @@ export const useTransportationRailwayStore = defineStore(
         })
         if (params.dimension) {
           query.set('dimension', params.dimension)
+        }
+        const searchTerm = params.search ?? params.routeId ?? ''
+        if (searchTerm) {
+          query.set('search', searchTerm)
         }
         const detail = await apiFetch<RailwayRouteLogResult>(
           `/transportation/railway/routes/${encodeURIComponent(params.railwayType)}/${encodeURIComponent(params.routeId)}/logs?${query.toString()}`,

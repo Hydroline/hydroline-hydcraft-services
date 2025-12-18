@@ -837,22 +837,29 @@ export class TransportationRailwayRouteDetailService {
     }
     const likePattern = `%${sanitized}%`;
     const searchColumns = [
-      'entry_id',
-      'entry_name',
-      'class_name',
-      'player_name',
-      'player_uuid',
-      'source_file_path',
-      'old_data',
-      'new_data',
+      'CAST(id AS TEXT)',
+      "COALESCE(timestamp, '')",
+      "COALESCE(player_name, '')",
+      "COALESCE(player_uuid, '')",
+      "COALESCE(class_name, '')",
+      "COALESCE(entry_id, '')",
+      "COALESCE(entry_name, '')",
+      "COALESCE(position, '')",
+      "COALESCE(change_type, '')",
+      "COALESCE(old_data, '')",
+      "COALESCE(new_data, '')",
+      "COALESCE(source_file_path, '')",
+      'CAST(source_line AS TEXT)',
+      "COALESCE(dimension_context, '')",
     ];
     const searchClause = searchColumns
       .map((column) => `${column} LIKE '${likePattern}'`)
       .join(' OR ');
     const conditions: string[] = [];
     if (dimensionContext) {
+      const escaped = this.escapeSqlLiteral(dimensionContext);
       conditions.push(
-        `dimension_context = '${this.escapeSqlLiteral(dimensionContext)}'`,
+        `(dimension_context = '${escaped}' OR dimension_context LIKE '${escaped}/%')`,
       );
     }
     conditions.push(`(${searchClause})`);
@@ -1992,11 +1999,12 @@ export class TransportationRailwayRouteDetailService {
       typeof rawSearch === 'string' && rawSearch.trim().length > 0
         ? rawSearch.trim()
         : undefined;
-    if (searchKeyword) {
+    const effectiveSearch = searchKeyword ?? routeId;
+    if (effectiveSearch) {
       return this.searchRouteLogsByKeyword(
         server,
         dimensionContext,
-        searchKeyword,
+        effectiveSearch,
         page,
         limit,
       );
