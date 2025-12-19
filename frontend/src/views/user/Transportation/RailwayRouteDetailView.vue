@@ -67,10 +67,13 @@ const params = computed(() => {
 const mapAutoFocus = ref(true)
 const fullscreenMapOpen = ref(false)
 const variantModeItems = computed(() => {
+  const list = variantRouteItems.value
+  if (list.length <= 1) {
+    return [{ label: '默认', value: DEFAULT_VARIANT_MODE }]
+  }
   const items: Array<{ label: string; value: string }> = [
     { label: '默认', value: DEFAULT_VARIANT_MODE },
   ]
-  const list = variantRouteItems.value
   for (const entry of list) {
     if (!entry?.routeId) continue
     items.push({
@@ -109,6 +112,15 @@ const variantRouteItems = computed(() => {
   }
   return []
 })
+
+watch(
+  () => variantRouteItems.value.length,
+  (count) => {
+    if (count <= 1 && variantMode.value !== DEFAULT_VARIANT_MODE) {
+      variantMode.value = DEFAULT_VARIANT_MODE
+    }
+  },
+)
 
 const activeDetail = computed(() => {
   if (variantMode.value === DEFAULT_VARIANT_MODE) {
@@ -322,10 +334,26 @@ const geometryForView = computed(() => {
 })
 
 const mapStopsForView = computed(() => {
-  if (variantMode.value === DEFAULT_VARIANT_MODE) {
-    return maxStopsDetail.value?.stops ?? []
+  const sortStops = (stops: RailwayRouteDetail['stops'] | null | undefined) => {
+    const list = (stops ?? []).filter(Boolean)
+    if (list.length <= 1) return list
+    return [...list]
+      .map((stop, index) => ({ stop, index }))
+      .sort((a, b) => {
+        const ao = typeof a.stop.order === 'number' ? a.stop.order : Infinity
+        const bo = typeof b.stop.order === 'number' ? b.stop.order : Infinity
+        if (ao !== bo) return ao - bo
+        return a.index - b.index
+      })
+      .map((entry) => entry.stop)
   }
-  return activeDetail.value?.stops ?? []
+
+  if (variantMode.value === DEFAULT_VARIANT_MODE) {
+    return sortStops(maxStopsDetail.value?.stops)
+  }
+
+  const sorted = sortStops(activeDetail.value?.stops)
+  return shouldReverseStopOrder.value ? [...sorted].reverse() : sorted
 })
 const activeStopStationIdMap = computed(() => {
   const active = activeDetail.value
@@ -814,12 +842,13 @@ onMounted(() => {
               </span>
             </h3>
             <USelect
+              v-if="variantModeItems.length > 1"
               v-model="variantMode"
               :items="variantModeItems"
               value-key="value"
               label-key="label"
               class="w-36"
-              :disabled="variantsLoading || variantModeItems.length <= 1"
+              :disabled="variantsLoading"
             />
           </div>
           <div
@@ -1059,9 +1088,9 @@ onMounted(() => {
                 <div
                   class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mr-2"
                 >
-                  <span>
-                    列车由
-                    <template v-if="depots.length">
+                  <template v-if="depots.length">
+                    <span>
+                      列车由
                       <template
                         v-for="(depot, index) in depots"
                         :key="depot.id"
@@ -1088,11 +1117,11 @@ onMounted(() => {
                           </UBadge>
                         </button>
                       </template>
-                    </template>
-                    <span v-else class="font-semibold">暂无车厂信息</span>
-                    发出
-                  </span>
-                  <UIcon name="i-lucide-corner-down-left" class="h-4 w-4" />
+                      发出
+                    </span>
+                    <UIcon name="i-lucide-corner-down-left" class="h-4 w-4" />
+                  </template>
+                  <span v-else>暂无车厂信息</span>
                 </div>
               </div>
               <div

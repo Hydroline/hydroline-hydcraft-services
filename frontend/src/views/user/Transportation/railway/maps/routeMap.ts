@@ -152,9 +152,12 @@ export class RailwayMap {
     // The terminal-stop endpoint adjustment (designed for route polylines) would incorrectly
     // snap the first/last stop to the polygon's first vertex (often top-left corner).
     // For fill geometry, keep stops at their own positions.
+    const endpointCandidatePaths = options?.fill
+      ? []
+      : [...paths, ...(options?.secondaryPaths ?? [])]
     this.polylineEndpoints = options?.fill
       ? []
-      : this.getPolylineEndpoints(paths)
+      : this.getPolylineEndpoints(endpointCandidatePaths)
     const focusZoom = options?.focusZoom ?? 4
     if (!paths.length && !this.secondaryPaths.length) {
       this.syncSecondaryPolylines()
@@ -284,6 +287,7 @@ export class RailwayMap {
     const zoom = map.getZoom()
     const showArea = zoom >= STATION_AREA_ZOOM
     const layer = L.layerGroup()
+    const terminalIndices = this.getTerminalStopIndicesWithPosition()
     for (let index = 0; index < this.stops.length; index += 1) {
       const stop = this.stops[index]
       if (showArea && stop.bounds) {
@@ -345,9 +349,11 @@ export class RailwayMap {
       }
 
       // Default: circle marker (routes/depots) + optional label.
-      const isTerminal = index === 0 || index === this.stops.length - 1
+      const isTerminal =
+        terminalIndices != null &&
+        (index === terminalIndices.first || index === terminalIndices.last)
       const marker = L.circleMarker(latlng, {
-        radius: isTerminal ? 7 : 6,
+        radius: 7,
         color: this.routeColor,
         weight: 3,
         fillOpacity: 1,
@@ -368,6 +374,29 @@ export class RailwayMap {
       layer.addTo(map)
       this.stopLayer = layer
     }
+  }
+
+  private getTerminalStopIndicesWithPosition(): {
+    first: number
+    last: number
+  } | null {
+    if (!this.stops.length) return null
+    let first = -1
+    let last = -1
+    for (let i = 0; i < this.stops.length; i += 1) {
+      if (this.stops[i]?.position) {
+        first = i
+        break
+      }
+    }
+    for (let i = this.stops.length - 1; i >= 0; i -= 1) {
+      if (this.stops[i]?.position) {
+        last = i
+        break
+      }
+    }
+    if (first < 0 || last < 0) return null
+    return { first, last }
   }
 
   private clearPolylines() {
@@ -499,6 +528,54 @@ export class RailwayMap {
     return best
   }
 
+  private pickNearestDirectionalEndpoint(
+    target: RailwayGeometryPoint,
+    direction: RailwayGeometryPoint,
+    endpoints: RailwayGeometryPoint[],
+    options?: {
+      maxSnapDistance?: number
+      minAlignment?: number
+    },
+  ) {
+    if (!endpoints.length) return null
+    const len = Math.hypot(direction.x, direction.z)
+    if (!Number.isFinite(len) || len < 1e-6) {
+      return this.pickNearestEndpoint(target, endpoints)
+    }
+
+    const vx = direction.x / len
+    const vz = direction.z / len
+    const maxSnapDistance = options?.maxSnapDistance ?? 2000
+    const maxDist2 = maxSnapDistance * maxSnapDistance
+    // Allow some bending: terminal endpoints are often not perfectly collinear
+    // with the station-center direction.
+    const minAlignment = options?.minAlignment ?? 0.2
+
+    let best: RailwayGeometryPoint | null = null
+    let bestDist2 = Number.POSITIVE_INFINITY
+
+    for (const point of endpoints) {
+      const dx = point.x - target.x
+      const dz = point.z - target.z
+      const dist2 = dx * dx + dz * dz
+      if (dist2 > maxDist2) continue
+
+      const dist = Math.sqrt(dist2)
+      const forward = dx * vx + dz * vz
+      if (forward <= 0) continue
+
+      const alignment = forward / (dist + 1e-6)
+      if (alignment < minAlignment) continue
+
+      if (dist2 < bestDist2) {
+        best = point
+        bestDist2 = dist2
+      }
+    }
+
+    return best
+  }
+
   private pickDirectionalEndpoint(
     target: RailwayGeometryPoint,
     direction: RailwayGeometryPoint,
@@ -513,25 +590,40 @@ export class RailwayMap {
     const vz = direction.z / len
 
     let best: RailwayGeometryPoint | null = null
-    let bestScore = -Infinity
-    let bestDist = Number.POSITIVE_INFINITY
+    let bestForward = -Infinity
+    let bestAlignment = -Infinity
+    let bestDist2 = Number.POSITIVE_INFINITY
+
+    // Key rule: only snap to *nearby* endpoints in the intended direction.
+    // Otherwise a terminal stop could incorrectly snap to the far end of the route
+    // if the overall polyline bends back into the same general direction.
+    const MIN_ALIGNMENT = 0.35
+    const MAX_SNAP_DISTANCE = 800
+    const maxDist2 = MAX_SNAP_DISTANCE * MAX_SNAP_DISTANCE
 
     for (const point of endpoints) {
       const dx = point.x - target.x
       const dz = point.z - target.z
       const dist2 = dx * dx + dz * dz
+      if (dist2 > maxDist2) continue
       const dist = Math.sqrt(dist2)
       const forward = dx * vx + dz * vz
       if (forward <= 0) continue
 
-      // Prefer endpoints that are (1) in front of the stop, (2) closer, (3) better aligned.
       const alignment = forward / (dist + 1e-6)
-      const score = alignment * 2 - dist * 0.001
+      if (alignment < MIN_ALIGNMENT) continue
 
-      if (score > bestScore || (score === bestScore && dist2 < bestDist)) {
+      if (
+        forward > bestForward ||
+        (forward === bestForward && alignment > bestAlignment) ||
+        (forward === bestForward &&
+          alignment === bestAlignment &&
+          dist2 < bestDist2)
+      ) {
         best = point
-        bestScore = score
-        bestDist = dist2
+        bestForward = forward
+        bestAlignment = alignment
+        bestDist2 = dist2
       }
     }
 
@@ -550,37 +642,79 @@ export class RailwayMap {
     index: number,
     stop: RailwayRouteDetail['stops'][number],
   ): RailwayGeometryPoint | null {
-    const isFirst = index === 0
-    const isLast = index === this.stops.length - 1
+    const terminals = this.getTerminalStopIndicesWithPosition()
+    const isFirst = terminals != null && index === terminals.first
+    const isLast = terminals != null && index === terminals.last
+    const endpoints = this.polylineEndpoints
     if (isFirst) {
       if (stop.position) {
-        const neighbor = this.getNearestNeighborPosition(index, 1)
-        const direction = neighbor
-          ? { x: stop.position.x - neighbor.x, z: stop.position.z - neighbor.z }
-          : { x: 0, z: 0 }
-        return (
-          this.pickDirectionalEndpoint(
+        if (endpoints.length) {
+          const neighbor = this.getNearestNeighborPosition(index, 1)
+          const direction = neighbor
+            ? {
+                x: stop.position.x - neighbor.x,
+                z: stop.position.z - neighbor.z,
+              }
+            : { x: 0, z: 0 }
+
+          const directional = this.pickNearestDirectionalEndpoint(
             stop.position,
             direction,
-            this.polylineEndpoints,
-          ) ?? stop.position
-        )
+            endpoints,
+          )
+          if (directional) return directional
+
+          const nearest = this.pickNearestEndpoint(stop.position, endpoints)
+          if (nearest) {
+            const dx = nearest.x - stop.position.x
+            const dz = nearest.z - stop.position.z
+            const dist2 = dx * dx + dz * dz
+            const MAX_TERMINAL_SNAP_DISTANCE = 2000
+            if (
+              dist2 <=
+              MAX_TERMINAL_SNAP_DISTANCE * MAX_TERMINAL_SNAP_DISTANCE
+            ) {
+              return nearest
+            }
+          }
+        }
+        return stop.position
       }
       return null
     }
     if (isLast) {
       if (stop.position) {
-        const neighbor = this.getNearestNeighborPosition(index, -1)
-        const direction = neighbor
-          ? { x: stop.position.x - neighbor.x, z: stop.position.z - neighbor.z }
-          : { x: 0, z: 0 }
-        return (
-          this.pickDirectionalEndpoint(
+        if (endpoints.length) {
+          const neighbor = this.getNearestNeighborPosition(index, -1)
+          const direction = neighbor
+            ? {
+                x: stop.position.x - neighbor.x,
+                z: stop.position.z - neighbor.z,
+              }
+            : { x: 0, z: 0 }
+
+          const directional = this.pickNearestDirectionalEndpoint(
             stop.position,
             direction,
-            this.polylineEndpoints,
-          ) ?? stop.position
-        )
+            endpoints,
+          )
+          if (directional) return directional
+
+          const nearest = this.pickNearestEndpoint(stop.position, endpoints)
+          if (nearest) {
+            const dx = nearest.x - stop.position.x
+            const dz = nearest.z - stop.position.z
+            const dist2 = dx * dx + dz * dz
+            const MAX_TERMINAL_SNAP_DISTANCE = 2000
+            if (
+              dist2 <=
+              MAX_TERMINAL_SNAP_DISTANCE * MAX_TERMINAL_SNAP_DISTANCE
+            ) {
+              return nearest
+            }
+          }
+        }
+        return stop.position
       }
       return null
     }

@@ -210,11 +210,12 @@ onBeforeUnmount(() => {
               </div>
 
               <USelect
+                v-if="props.variantItems.length > 1"
                 v-model="variantModeModel"
                 :items="props.variantItems"
                 value-key="value"
                 label-key="label"
-                class="w-20"
+                class="w-48"
                 :disabled="Boolean(props.variantDisabled)"
                 :ui="{ content: 'z-[35000]' }"
               />

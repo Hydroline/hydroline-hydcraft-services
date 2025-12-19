@@ -412,7 +412,7 @@ function drawGeometry() {
   const computedSecondaryPaths = directionalMode
     ? []
     : useMidline
-      ? []
+      ? secondaryPolylines.value
       : secondaryPolylinesWithVariantOffsets.value
   const secondaryPaths = props.secondaryPaths?.length
     ? props.secondaryPaths
