@@ -216,9 +216,10 @@ export class TransportationRailwayRouteDetailService {
         routeEntity.dimensionContext ?? dimensionContextForGeometry;
     }
 
-    const mainGeometry = await this.buildRouteGeometry(
+    const mainGeometry = await this.buildRouteGeometryPreferSnapshot(
       server,
       dimensionContextForGeometry,
+      normalizeId(routeRecord.id) ?? normalizedRouteId,
       selectedPlatforms,
       [],
     );
@@ -835,9 +836,10 @@ export class TransportationRailwayRouteDetailService {
       .map((platformId) => platformMap.get(platformId) ?? null)
       .filter((item): item is RailwayPlatformRecord => Boolean(item));
 
-    const mainGeometry = await this.buildRouteGeometry(
+    const mainGeometry = await this.buildRouteGeometryPreferSnapshot(
       server,
       dimensionContextForGeometry,
+      normalizeId(routeRecord.id) ?? normalizedRouteId,
       selectedPlatforms,
       [],
     );
@@ -1330,7 +1332,7 @@ export class TransportationRailwayRouteDetailService {
       const message =
         typeof countResponse?.error === 'string'
           ? countResponse.error
-          : '无法获取线路日志';
+          : 'Failed to fetch route logs';
       throw new BadRequestException(message);
     }
     const total =
@@ -1350,7 +1352,7 @@ export class TransportationRailwayRouteDetailService {
       const message =
         typeof dataResponse?.error === 'string'
           ? dataResponse.error
-          : '无法获取线路日志';
+          : 'Failed to fetch route logs';
       throw new BadRequestException(message);
     }
     const entries = (dataResponse.rows ?? []).map((record) =>
@@ -1431,6 +1433,97 @@ export class TransportationRailwayRouteDetailService {
       }
     }
     return this.buildFallbackGeometry(platforms, stations);
+  }
+
+  private async buildRouteGeometryPreferSnapshot(
+    server: BeaconServerRecord,
+    dimensionContext: string | null,
+    routeId: string,
+    platforms: RailwayPlatformRecord[],
+    stations: RailwayStationRecord[],
+  ) {
+    const normalizedRouteId = routeId?.trim();
+    if (dimensionContext && normalizedRouteId) {
+      const snapshot =
+        await this.prisma.transportationRailwayRouteGeometrySnapshot.findUnique(
+          {
+            where: {
+              serverId_railwayMod_dimensionContext_routeEntityId: {
+                serverId: server.id,
+                railwayMod: server.railwayMod,
+                dimensionContext,
+                routeEntityId: normalizedRouteId,
+              },
+            },
+            select: {
+              status: true,
+              geometry2d: true,
+              pathNodes3d: true,
+              pathEdges: true,
+            },
+          },
+        );
+      if (snapshot?.status === 'READY') {
+        const nodes = Array.isArray(snapshot.pathNodes3d)
+          ? (snapshot.pathNodes3d as Array<{
+              x?: unknown;
+              y?: unknown;
+              z?: unknown;
+            }>)
+          : [];
+        if (nodes.length >= 2) {
+          const points = nodes
+            .map((node) => ({
+              x: Number(node.x),
+              z: Number(node.z),
+            }))
+            .filter(
+              (point): point is { x: number; z: number } =>
+                Number.isFinite(point.x) && Number.isFinite(point.z),
+            );
+          const segments = Array.isArray(snapshot.pathEdges)
+            ? (snapshot.pathEdges as RouteDetailResult['geometry']['segments'])
+            : undefined;
+          return {
+            source: 'rails' as const,
+            points,
+            ...(segments?.length ? { segments } : {}),
+          };
+        }
+
+        const rawPaths = (snapshot.geometry2d as Record<string, unknown>)?.[
+          'paths'
+        ];
+        if (Array.isArray(rawPaths) && rawPaths.length) {
+          const first = rawPaths[0];
+          if (Array.isArray(first)) {
+            const points = first
+              .map((entry) => ({
+                x: Number((entry as any)?.x),
+                z: Number((entry as any)?.z),
+              }))
+              .filter(
+                (point): point is { x: number; z: number } =>
+                  Number.isFinite(point.x) && Number.isFinite(point.z),
+              );
+            if (points.length >= 2) {
+              return {
+                source: 'rails' as const,
+                points,
+              };
+            }
+          }
+        }
+
+        return this.buildFallbackGeometry(platforms, stations);
+      }
+    }
+    return await this.buildRouteGeometry(
+      server,
+      dimensionContext,
+      platforms,
+      stations,
+    );
   }
 
   private async buildGeometryFromRails(
@@ -2392,9 +2485,12 @@ export class TransportationRailwayRouteDetailService {
       if (!candidatePlatforms.length) {
         continue;
       }
-      const geometry = await this.buildRouteGeometry(
+      const candidateId =
+        normalizeId(candidate.id) ?? `${normalizedRouteId}-alt-${altIndex}`;
+      const geometry = await this.buildRouteGeometryPreferSnapshot(
         server,
         dimensionContext,
+        candidateId,
         candidatePlatforms,
         [],
       );
@@ -2402,8 +2498,6 @@ export class TransportationRailwayRouteDetailService {
       if (pointCount < 2) {
         continue;
       }
-      const candidateId =
-        normalizeId(candidate.id) ?? `${normalizedRouteId}-alt-${altIndex}`;
       altIndex += 1;
       paths.push(
         this.buildGeometryPathEntry(candidateId, candidate, geometry, false),
@@ -2617,7 +2711,7 @@ export class TransportationRailwayRouteDetailService {
       const message =
         typeof response?.['error'] === 'string'
           ? response['error']
-          : '无法获取线路日志';
+          : 'Failed to fetch route logs';
       throw new BadRequestException(message);
     }
     const entries = (response.records ?? []).map((record) =>

@@ -370,6 +370,63 @@ model TransportationRailwaySyncJob {
   @@map("transportation_railway_sync_jobs")
 }
 
+model TransportationRailwayRouteGeometrySnapshot {
+  id               String                   @id @default(uuid())
+  serverId         String
+  railwayMod       TransportationRailwayMod @default(MTR)
+  dimensionContext String
+  routeEntityId    String
+  sourceFingerprint String
+  status           String
+  errorMessage     String?
+  geometry2d       Json
+  bounds           Json?
+  stops            Json?
+  pathNodes3d      Json?
+  pathEdges        Json?
+  generatedAt      DateTime
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@unique([serverId, railwayMod, dimensionContext, routeEntityId], map: "uq_transportation_railway_route_geometry_snapshot")
+  @@index([serverId, railwayMod, dimensionContext], map: "idx_transportation_railway_route_geometry_scope")
+  @@map("transportation_railway_route_geometry_snapshots")
+}
+
+model TransportationRailwayStationMapSnapshot {
+  id               String                   @id @default(uuid())
+  serverId         String
+  railwayMod       TransportationRailwayMod @default(MTR)
+  dimensionContext String
+  stationEntityId  String
+  sourceFingerprint String
+  payload          Json
+  generatedAt      DateTime
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@unique([serverId, railwayMod, dimensionContext, stationEntityId], map: "uq_transportation_railway_station_map_snapshot")
+  @@index([serverId, railwayMod, dimensionContext], map: "idx_transportation_railway_station_map_scope")
+  @@map("transportation_railway_station_map_snapshots")
+}
+
+model TransportationRailwayComputeScope {
+  id               String                   @id @default(uuid())
+  serverId         String
+  railwayMod       TransportationRailwayMod @default(MTR)
+  dimensionContext String
+  fingerprint      String
+  status           String
+  message          String?
+  computedAt       DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@unique([serverId, railwayMod, dimensionContext], map: "uq_transportation_railway_compute_scope")
+  @@index([serverId, railwayMod, fingerprint], map: "idx_transportation_railway_compute_scope_fingerprint")
+  @@map("transportation_railway_compute_scopes")
+}
+
 model UserPiicHistory {
   id            String     @id @default(uuid())
   userId        String

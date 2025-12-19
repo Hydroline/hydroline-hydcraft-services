@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { HydrolineBeaconPoolService } from '../../lib/hydroline-beacon';
 import { HydrolineBeaconEvent } from '../../lib/hydroline-beacon/beacon.client';
+import { TransportationRailwaySnapshotService } from './railway-snapshot.service';
 import {
   DEFAULT_RAILWAY_TYPE,
   RAILWAY_TYPE_CONFIG,
@@ -90,6 +91,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly beaconPool: HydrolineBeaconPoolService,
+    private readonly snapshotService: TransportationRailwaySnapshotService,
   ) {}
 
   onModuleInit() {
@@ -138,6 +140,10 @@ export class TransportationRailwaySyncService implements OnModuleInit {
     for (const category of CATEGORY_MAP) {
       await this.syncCategory(server, category.key, category.type, syncMarker);
     }
+    await this.snapshotService.computeAndPersistAllSnapshotsForServer({
+      serverId: server.id,
+      railwayMod: server.railwayMod,
+    });
   }
 
   async syncServerById(serverId: string) {
@@ -615,7 +621,8 @@ export class TransportationRailwaySyncService implements OnModuleInit {
         data: {
           status: TransportationRailwaySyncStatus.FAILED,
           completedAt: new Date(),
-          message: '另一个同步任务正在运行，请稍后重试',
+          message:
+            'Another sync job is already running for this server. Please try again later.',
         },
       });
       return;
@@ -673,7 +680,7 @@ export class TransportationRailwaySyncService implements OnModuleInit {
     if (typeof error === 'string') {
       return error;
     }
-    return '未知错误';
+    return 'Unknown error';
   }
 
   private async listBeaconServers() {
