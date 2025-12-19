@@ -1438,8 +1438,8 @@ export class TransportationRailwayRouteDetailService {
     dimensionContext: string,
     platforms: RailwayPlatformRecord[],
   ) {
-    const platformNodes = this.extractPlatformNodes(platforms);
-    if (!platformNodes.length) {
+    const rawPlatformNodes = this.extractPlatformNodes(platforms);
+    if (!rawPlatformNodes.length) {
       return null;
     }
     const railRows = await this.prisma.transportationRailwayRail.findMany({
@@ -1460,10 +1460,22 @@ export class TransportationRailwayRouteDetailService {
     if (!graph?.positions.size) {
       return null;
     }
+    const snapped = this.snapPlatformNodesToRailGraph(rawPlatformNodes, graph);
+    const platformNodes = snapped.nodes;
+    if (!platformNodes.length) {
+      return null;
+    }
     const finder = new MtrRouteFinder(graph);
     const pathResult = finder.findRoute(platformNodes);
     const path = pathResult?.points ?? null;
     if (!path?.length) {
+      const failure = finder.getLastFailure();
+      this.logger.warn(
+        `Rail path not found for ${server.displayName} (${dimensionContext}). ` +
+          `platforms=${platforms.length}, platformNodes=${rawPlatformNodes.length}, ` +
+          `missingNodes=${snapped.missingNodes}, snappedNodes=${snapped.snappedNodes}, ` +
+          `reason=${failure?.reason ?? 'unknown'}, segment=${failure?.segmentIndex ?? -1}, visits=${failure?.visits ?? 0}`,
+      );
       return null;
     }
     const segments = this.includePlatformSegments(
@@ -1475,6 +1487,92 @@ export class TransportationRailwayRouteDetailService {
       points: path.map((position) => ({ x: position.x, z: position.z })),
       segments: segments.length ? segments : undefined,
     };
+  }
+
+  private snapPlatformNodesToRailGraph(
+    platformNodes: PlatformNode[],
+    graph: RailGraph,
+  ) {
+    const indexByXZ = new Map<string, Array<{ id: string; y: number }>>();
+    for (const [id, pos] of graph.positions.entries()) {
+      const key = `${pos.x},${pos.z}`;
+      let list = indexByXZ.get(key);
+      if (!list) {
+        list = [];
+        indexByXZ.set(key, list);
+      }
+      list.push({ id, y: pos.y });
+    }
+
+    const maxRadius = 8;
+    let missingNodes = 0;
+    let snappedNodes = 0;
+    const result: PlatformNode[] = [];
+
+    for (const platform of platformNodes) {
+      const snappedPlatformNodes: RailGraphNode[] = [];
+      const used = new Set<string>();
+      for (const node of platform.nodes) {
+        if (graph.positions.has(node.id)) {
+          if (!used.has(node.id)) {
+            used.add(node.id);
+            snappedPlatformNodes.push(node);
+          }
+          continue;
+        }
+        missingNodes += 1;
+
+        const x = node.position.x;
+        const z = node.position.z;
+        const targetY = node.position.y;
+
+        const pickBest = (
+          candidates: Array<{ id: string; y: number }> | undefined,
+        ) => {
+          if (!candidates?.length) return null;
+          let best = candidates[0];
+          let bestDy = Math.abs(candidates[0].y - targetY);
+          for (let i = 1; i < candidates.length; i += 1) {
+            const dy = Math.abs(candidates[i].y - targetY);
+            if (dy < bestDy) {
+              best = candidates[i];
+              bestDy = dy;
+            }
+          }
+          return best;
+        };
+
+        let best = pickBest(indexByXZ.get(`${x},${z}`));
+        if (!best) {
+          for (let r = 1; r <= maxRadius && !best; r += 1) {
+            for (let dx = -r; dx <= r && !best; dx += 1) {
+              for (let dz = -r; dz <= r && !best; dz += 1) {
+                if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
+                best = pickBest(indexByXZ.get(`${x + dx},${z + dz}`));
+              }
+            }
+          }
+        }
+
+        if (best && !used.has(best.id)) {
+          const pos = graph.positions.get(best.id);
+          if (pos) {
+            used.add(best.id);
+            snappedPlatformNodes.push({ id: best.id, position: pos });
+            snappedNodes += 1;
+          }
+        }
+      }
+
+      if (snappedPlatformNodes.length) {
+        result.push({
+          platformId: platform.platformId,
+          nodes: snappedPlatformNodes,
+        });
+      }
+    }
+
+    return { nodes: result, missingNodes, snappedNodes };
   }
 
   private buildFallbackGeometry(

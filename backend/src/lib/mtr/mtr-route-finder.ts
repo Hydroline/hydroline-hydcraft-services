@@ -8,7 +8,77 @@ import type {
   RailGraphNode,
 } from '../../transportation/railway/railway-graph.types';
 
-const MAX_SEARCH_VISITS = 20000;
+// Large routes can span thousands of rail nodes.
+// If the search is capped too low, route detail will fall back to
+// platform-centers and look like a straight line between stops.
+const MAX_SEARCH_VISITS = 120000;
+
+class MinHeap<T> {
+  private items: T[] = [];
+
+  constructor(private readonly compare: (a: T, b: T) => number) {}
+
+  get size() {
+    return this.items.length;
+  }
+
+  push(value: T) {
+    this.items.push(value);
+    this.bubbleUp(this.items.length - 1);
+  }
+
+  pop(): T | undefined {
+    if (!this.items.length) return undefined;
+    const top = this.items[0];
+    const last = this.items.pop()!;
+    if (this.items.length) {
+      this.items[0] = last;
+      this.bubbleDown(0);
+    }
+    return top;
+  }
+
+  private bubbleUp(index: number) {
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (this.compare(this.items[index], this.items[parent]) >= 0) {
+        return;
+      }
+      const tmp = this.items[parent];
+      this.items[parent] = this.items[index];
+      this.items[index] = tmp;
+      index = parent;
+    }
+  }
+
+  private bubbleDown(index: number) {
+    const length = this.items.length;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let smallest = index;
+      if (
+        left < length &&
+        this.compare(this.items[left], this.items[smallest]) < 0
+      ) {
+        smallest = left;
+      }
+      if (
+        right < length &&
+        this.compare(this.items[right], this.items[smallest]) < 0
+      ) {
+        smallest = right;
+      }
+      if (smallest === index) {
+        return;
+      }
+      const tmp = this.items[smallest];
+      this.items[smallest] = this.items[index];
+      this.items[index] = tmp;
+      index = smallest;
+    }
+  }
+}
 
 type PathResult = {
   points: BlockPosition[];
@@ -22,12 +92,26 @@ type Candidate = {
 
 export class MtrRouteFinder {
   private readonly connectionDensity = new Map<string, number>();
+  private lastFailure: {
+    segmentIndex: number;
+    reason:
+      | 'start-nodes-not-in-graph'
+      | 'target-nodes-not-in-graph'
+      | 'no-path'
+      | 'visit-cap-exceeded';
+    visits: number;
+  } | null = null;
 
   constructor(private readonly graph: RailGraph) {
     this.initializeDensity();
   }
 
+  getLastFailure() {
+    return this.lastFailure;
+  }
+
   findRoute(platformNodes: PlatformNode[]): PathResult | null {
+    this.lastFailure = null;
     if (!platformNodes.length) return null;
     if (platformNodes.length === 1) {
       const points = platformNodes[0].nodes.map((node) => node.position);
@@ -38,7 +122,7 @@ export class MtrRouteFinder {
     for (let index = 0; index < platformNodes.length - 1; index += 1) {
       const current = platformNodes[index];
       const next = platformNodes[index + 1];
-      const result = this.findPathBetween(current.nodes, next.nodes);
+      const result = this.findPathBetween(current.nodes, next.nodes, index);
       if (!result?.points?.length) {
         return null;
       }
@@ -77,6 +161,7 @@ export class MtrRouteFinder {
   private findPathBetween(
     startNodes: RailGraphNode[],
     targetNodes: RailGraphNode[],
+    segmentIndex: number,
   ): PathResult | null {
     const startIds = startNodes
       .map((node) => node.id)
@@ -90,28 +175,50 @@ export class MtrRouteFinder {
           Boolean(id && this.graph.positions.has(id)),
         ),
     );
-    if (!startIds.length || !targetSet.size) {
+    if (!startIds.length) {
+      this.lastFailure = {
+        segmentIndex,
+        reason: 'start-nodes-not-in-graph',
+        visits: 0,
+      };
       return null;
     }
-    const openSet: Candidate[] = [];
+    if (!targetSet.size) {
+      this.lastFailure = {
+        segmentIndex,
+        reason: 'target-nodes-not-in-graph',
+        visits: 0,
+      };
+      return null;
+    }
+    const openSet = new MinHeap<Candidate>((a, b) => a.cost - b.cost);
     const distances = new Map<string, number>();
     const previous = new Map<string, string | null>();
+    const visited = new Set<string>();
     for (const id of startIds) {
       distances.set(id, 0);
       previous.set(id, null);
       openSet.push({ id, cost: 0 });
     }
     let visits = 0;
-    while (openSet.length) {
-      openSet.sort((a, b) => a.cost - b.cost);
-      const current = openSet.shift()!;
+    while (openSet.size) {
+      const current = openSet.pop()!;
       const knownCost = distances.get(current.id) ?? Number.POSITIVE_INFINITY;
       if (current.cost > knownCost) {
         continue;
       }
+      if (visited.has(current.id)) {
+        continue;
+      }
+      visited.add(current.id);
       visits += 1;
       if (visits > MAX_SEARCH_VISITS) {
-        break;
+        this.lastFailure = {
+          segmentIndex,
+          reason: 'visit-cap-exceeded',
+          visits,
+        };
+        return null;
       }
       if (targetSet.has(current.id)) {
         return this.reconstructPath(current.id, previous);
@@ -146,6 +253,11 @@ export class MtrRouteFinder {
         }
       }
     }
+    this.lastFailure = {
+      segmentIndex,
+      reason: 'no-path',
+      visits,
+    };
     return null;
   }
 
