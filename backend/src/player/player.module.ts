@@ -9,11 +9,13 @@ import { AuthmeModule } from '../authme/authme.module';
 import { MinecraftModule } from '../minecraft/minecraft.module';
 import { PlayerAutomationService } from './player-automation.service';
 import { RedisModule } from '../lib/redis/redis.module';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [
     PrismaModule,
     forwardRef(() => AuthModule),
+    CacheModule,
     Ip2RegionModule,
     AttachmentsModule,
     AuthmeModule,

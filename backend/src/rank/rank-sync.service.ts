@@ -16,6 +16,7 @@ import {
 } from './rank-snapshot.service';
 import { AuthmeService } from '../authme/authme.service';
 import type { AuthmeUser } from '../authme/authme.interfaces';
+import { ScheduledFetchService } from '../lib/sync/scheduled-fetch.service';
 import { RANK_CHUNK_SIZE, RANK_STAT_KEYS } from './constants';
 
 const IDENTITY_PAGE_SIZE = 1000;
@@ -25,6 +26,8 @@ const ADVANCEMENT_PAGE_SIZE = 1000;
 const ADVANCEMENT_MAX_PAGES = 10;
 const ADVANCEMENT_FETCH_CONCURRENCY = 6;
 const MAX_SYNC_AGE_MS = 24 * 60 * 60 * 1000;
+const RANK_SYNC_FREQUENCY_MS = 30 * 60 * 1000;
+const RANK_SYNC_TASK_ID = 'rank-sync';
 
 type BeaconIdentity = {
   player_uuid?: string | null;
@@ -92,10 +95,24 @@ export class RankSyncService implements OnModuleInit {
     private readonly beaconPool: HydrolineBeaconPoolService,
     private readonly snapshotService: RankSnapshotService,
     private readonly authmeService: AuthmeService,
+    private readonly scheduledFetch: ScheduledFetchService,
   ) {}
 
   onModuleInit() {
     void this.ensureInitialSync();
+    this.scheduledFetch.registerTask({
+      id: RANK_SYNC_TASK_ID,
+      frequencyMs: RANK_SYNC_FREQUENCY_MS,
+      getLastSyncedAt: () => this.getLastRankSyncAt(),
+      handler: async (context) => {
+        this.logger.log(`Scheduled rank sync (${context.reason})`);
+        try {
+          await this.triggerScheduledSync();
+        } catch (error) {
+          this.logger.error('Scheduled rank sync failed', error);
+        }
+      },
+    });
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
@@ -146,6 +163,20 @@ export class RankSyncService implements OnModuleInit {
       this.logger.warn(
         `Failed to ensure initial rank sync: ${this.extractMessage(error)}`,
       );
+    }
+  }
+
+  private async triggerScheduledSync() {
+    try {
+      await this.beginSync(null, null, false);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        this.logger.verbose(
+          'Skipping scheduled rank sync because another job is active',
+        );
+        return;
+      }
+      throw error;
     }
   }
 
@@ -206,6 +237,7 @@ export class RankSyncService implements OnModuleInit {
           job.serverId ?? null,
         );
       }
+      await this.updateRankSyncState(new Date(), null);
     } catch (error) {
       this.logger.error('Rank sync execution failed', error);
       await this.prisma.rankSyncJob.update({
@@ -216,6 +248,7 @@ export class RankSyncService implements OnModuleInit {
           message: this.extractMessage(error),
         },
       });
+      await this.updateRankSyncState(null, this.extractMessage(error));
     } finally {
       this.activeJobId = null;
     }
@@ -239,6 +272,32 @@ export class RankSyncService implements OnModuleInit {
       select: { id: true },
     });
     return servers.map((entry) => entry.id);
+  }
+
+  private async getLastRankSyncAt(): Promise<Date | null> {
+    const entry = await this.prisma.scheduledTaskState.findUnique({
+      where: { taskId: RANK_SYNC_TASK_ID },
+      select: { lastSyncedAt: true },
+    });
+    return entry?.lastSyncedAt ?? null;
+  }
+
+  private async updateRankSyncState(
+    lastSyncedAt: Date | null,
+    lastError?: string | null,
+  ) {
+    await this.prisma.scheduledTaskState.upsert({
+      where: { taskId: RANK_SYNC_TASK_ID },
+      create: {
+        taskId: RANK_SYNC_TASK_ID,
+        lastSyncedAt,
+        lastError: lastError ?? null,
+      },
+      update: {
+        lastSyncedAt,
+        lastError: lastError ?? null,
+      },
+    });
   }
 
   private async syncServer(serverId: string, forceRefresh: boolean) {
@@ -365,12 +424,16 @@ export class RankSyncService implements OnModuleInit {
         const playerUuid = identity.player_uuid;
         if (!playerUuid) continue;
         const binding = bindingMap.get(playerUuid);
-        const account = binding
-          ? (accountMap.get(binding.authmeUsername) ?? null)
-          : this.getCachedAuthmeAccount(
-              identity.player_name,
-              fallbackAccountCache,
-            );
+        const normalizedBindingUsername = binding
+          ? this.normalizeAuthmeCacheKey(binding.authmeUsername)
+          : null;
+        const account =
+          binding && normalizedBindingUsername
+            ? (accountMap.get(normalizedBindingUsername) ?? null)
+            : this.getCachedAuthmeAccount(
+                identity.player_name,
+                fallbackAccountCache,
+              );
         const statsEntry = stats[playerUuid] ?? {};
         const normalized = this.normalizeStats(statsEntry);
         const balanceKey =
@@ -496,26 +559,32 @@ export class RankSyncService implements OnModuleInit {
 
   private async loadAuthmeAccounts(bindings: BindingWithUser[]) {
     const map = new Map<string, AuthmeUser | null>();
-    const queue = [...bindings];
+    const normalizedQueue = Array.from(
+      new Map(
+        bindings
+          .map((binding) => {
+            const key = this.normalizeAuthmeCacheKey(binding.authmeUsername);
+            if (!key) {
+              return null;
+            }
+            return [key, binding.authmeUsername] as const;
+          })
+          .filter((entry): entry is readonly [string, string] =>
+            Boolean(entry),
+          ),
+      ).entries(),
+    );
     const concurrency = 6;
     const workers = Array.from(
-      { length: Math.min(concurrency, queue.length) },
+      { length: Math.min(concurrency, normalizedQueue.length) },
       async () => {
-        while (queue.length) {
-          const binding = queue.shift();
-          if (!binding || !binding.authmeUsername) continue;
-          if (map.has(binding.authmeUsername)) continue;
-          try {
-            const account = await this.authmeService.getAccount(
-              binding.authmeUsername,
-            );
-            map.set(binding.authmeUsername, account);
-          } catch (error) {
-            this.logger.warn(
-              `Failed to load AuthMe account ${binding.authmeUsername}: ${this.extractMessage(error)}`,
-            );
-            map.set(binding.authmeUsername, null);
-          }
+        while (normalizedQueue.length) {
+          const entry = normalizedQueue.shift();
+          if (!entry) continue;
+          const [cacheKey, lookupValue] = entry;
+          if (!cacheKey || map.has(cacheKey)) continue;
+          const account = await this.authmeService.getAccount(lookupValue);
+          map.set(cacheKey, account);
         }
       },
     );
@@ -547,11 +616,19 @@ export class RankSyncService implements OnModuleInit {
 
   private async fetchAuthmeAccountsByNames(names: string[]) {
     const normalized = Array.from(
-      new Set(
+      new Map(
         names
-          .map((name) => this.normalizeAuthmeCacheKey(name))
-          .filter((name): name is string => Boolean(name)),
-      ),
+          .map((name) => {
+            const key = this.normalizeAuthmeCacheKey(name);
+            if (!key) {
+              return null;
+            }
+            return [key, name] as const;
+          })
+          .filter((entry): entry is readonly [string, string] =>
+            Boolean(entry),
+          ),
+      ).entries(),
     );
     const result = new Map<string, AuthmeUser | null>();
     const queue = [...normalized];
@@ -560,18 +637,13 @@ export class RankSyncService implements OnModuleInit {
       { length: Math.min(concurrency, queue.length) },
       async () => {
         while (queue.length) {
-          const key = queue.shift();
+          const entry = queue.shift();
+          if (!entry) continue;
+          const [key, lookupValue] = entry;
           if (!key) continue;
           if (result.has(key)) continue;
-          try {
-            const account = await this.authmeService.getAccount(key);
-            result.set(key, account);
-          } catch (error) {
-            this.logger.warn(
-              `Failed to load AuthMe account ${key}: ${this.extractMessage(error)}`,
-            );
-            result.set(key, null);
-          }
+          const account = await this.authmeService.getAccount(lookupValue);
+          result.set(key, account);
         }
       },
     );

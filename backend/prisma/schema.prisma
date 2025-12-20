@@ -560,6 +560,71 @@ model RankSyncJob {
   @@map("rank_sync_jobs")
 }
 
+model AuthmeAccountCache {
+  id            String   @id @default(uuid())
+  username      String
+  usernameLower String   @unique(map: "uq_authme_cache_username_lower")
+  realname      String?
+  ip            String?
+  regip         String?
+  lastlogin     BigInt?
+  regdate       BigInt?
+  email         String?
+  world         String?
+  isLogged      Int      @default(0)
+  hasSession    Int      @default(0)
+  metadata      Json?
+  syncedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("authme_account_cache")
+}
+
+model LuckpermsPlayerCache {
+  id            String   @id @default(uuid())
+  uuid          String   @unique
+  username      String
+  usernameLower String   @unique(map: "uq_luckperms_cache_username_lower")
+  primaryGroup  String?
+  groups        Json?
+  syncedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("luckperms_player_cache")
+}
+
+model PlayerDataCache {
+  id                    String   @id @default(uuid())
+  serverId              String
+  identityType          String
+  identityKey           String
+  playerUuid            String?
+  playerName            String?
+  playerNameLower       String?
+  stats                 Json?
+  metrics               Json?
+  achievementsTotal     Int?
+  statsFetchedAt        DateTime?
+  advancementsFetchedAt DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([serverId, identityType, identityKey], map: "uq_playerdata_identity")
+  @@index([serverId], map: "idx_playerdata_server")
+  @@map("playerdata_cache")
+}
+
+model ScheduledTaskState {
+  taskId       String   @id
+  lastSyncedAt DateTime?
+  lastError    String?
+  updatedAt    DateTime @updatedAt
+
+  @@map("scheduled_task_state")
+}
+
 enum RankSyncStatus {
   PENDING
   RUNNING

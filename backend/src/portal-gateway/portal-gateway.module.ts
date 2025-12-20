@@ -6,6 +6,7 @@ import { PortalConfigModule } from '../portal-config/portal-config.module';
 import { MinecraftModule } from '../minecraft/minecraft.module';
 import { PlayerModule } from '../player/player.module';
 import { AuthModule } from '../auth/auth.module';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AuthModule } from '../auth/auth.module';
     MinecraftModule,
     PlayerModule,
     AuthModule,
+    CacheModule,
   ],
   controllers: [PortalGatewayController],
   providers: [PortalGatewayService],

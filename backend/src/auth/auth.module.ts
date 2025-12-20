@@ -23,6 +23,7 @@ import { ConfigModule } from '../config/config.module';
 import { OAuthModule } from '../oauth/oauth.module';
 import { VerificationAdminController } from './controllers/verification-admin.controller';
 import { AttachmentsModule } from '../attachments/attachments.module';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AttachmentsModule } from '../attachments/attachments.module';
     forwardRef(() => ConfigModule),
     forwardRef(() => OAuthModule),
     forwardRef(() => AttachmentsModule),
+    CacheModule,
   ],
   controllers: [
     AuthController,

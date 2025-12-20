@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AuthmeService } from '../../../authme/authme.service';
+import { AuthmeLookupService } from '../../../authme/authme-lookup.service';
 import { AuthmeBindingService } from '../../../authme/authme-binding.service';
 import { LuckpermsService } from '../../../luckperms/luckperms.service';
+import { LuckpermsLookupService } from '../../../luckperms/luckperms-lookup.service';
 import { IpLocationService } from '../../../lib/ip2region/ip-location.service';
 import { AdminAuditService } from '../admin-audit.service';
 import { MailService } from '../../../mail/mail.service';
@@ -85,8 +87,10 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authmeService: AuthmeService,
+    private readonly authmeLookupService: AuthmeLookupService,
     private readonly authmeBindingService: AuthmeBindingService,
     private readonly luckpermsService: LuckpermsService,
+    private readonly luckpermsLookupService: LuckpermsLookupService,
     private readonly ipLocationService: IpLocationService,
     private readonly adminAuditService: AdminAuditService,
     private readonly mailService: MailService,
@@ -95,8 +99,10 @@ export class UsersService {
     this.ctx = {
       prisma: this.prisma,
       authmeService: this.authmeService,
+      authmeLookupService: this.authmeLookupService,
       authmeBindingService: this.authmeBindingService,
       luckpermsService: this.luckpermsService,
+      luckpermsLookupService: this.luckpermsLookupService,
       ipLocationService: this.ipLocationService,
       adminAuditService: this.adminAuditService,
       mailService: this.mailService,

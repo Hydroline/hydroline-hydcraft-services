@@ -281,18 +281,17 @@ export async function composeAuthmeBindingSnapshots(
 
       try {
         const [account, luckperms] = await Promise.all([
-          ctx.authmeService
-            .getAccount(binding.authmeUsername)
-            .catch(() => null),
+          ctx.authmeLookupService.getAccount(binding.authmeUsername, {
+            allowFallback: true,
+          }),
           binding.authmeUuid
-            ? ctx.luckpermsService
-                .getPlayerByUuid(binding.authmeUuid)
-                .catch(() => null)
-            : ctx.luckpermsService
-                .getPlayerByUsername(
-                  binding.authmeRealname ?? binding.authmeUsername,
-                )
-                .catch(() => null),
+            ? ctx.luckpermsLookupService.getPlayerByUuid(binding.authmeUuid, {
+                allowFallback: true,
+              })
+            : ctx.luckpermsLookupService.getPlayerByUsername(
+                binding.authmeRealname ?? binding.authmeUsername,
+                { allowFallback: true },
+              ),
         ]);
 
         if (

@@ -13,9 +13,13 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { IpLocationService } from '../lib/ip2region/ip-location.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { AuthmeCacheService } from '../cache/authme-cache.service';
+import { PlayerDataCacheService } from '../cache/playerdata-cache.service';
 import { AuthmeService } from '../authme/authme.service';
+import { AuthmeLookupService } from '../authme/authme-lookup.service';
 import type { AuthmeUser } from '../authme/authme.interfaces';
 import { LuckpermsService } from '../luckperms/luckperms.service';
+import { LuckpermsLookupService } from '../luckperms/luckperms-lookup.service';
 import { buildPublicUrl } from '../lib/shared/url';
 import { buildPagination } from '../lib/shared/pagination';
 import { normalizeIpAddress } from '../lib/ip2region/ip-normalizer';
@@ -39,6 +43,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_LOGIN_MAP_RANGE_DAYS = 30;
 const PLAYER_STATS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const PLAYER_STATS_CACHE_VERSION = 'v2';
+const PLAYER_DATA_CACHE_TTL_MS = 30 * 60 * 1000;
 const PLAYER_GAME_METRIC_KEYS = {
   walkOneCm: 'minecraft:custom:minecraft:walk_one_cm',
   flyOneCm: 'minecraft:custom:minecraft:fly_one_cm',
@@ -148,8 +153,12 @@ export class PlayerService {
     private readonly prisma: PrismaService,
     private readonly ipLocationService: IpLocationService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly authmeCache: AuthmeCacheService,
+    private readonly playerDataCache: PlayerDataCacheService,
     private readonly authmeService: AuthmeService,
+    private readonly authmeLookupService: AuthmeLookupService,
     private readonly luckpermsService: LuckpermsService,
+    private readonly luckpermsLookupService: LuckpermsLookupService,
     private readonly automation: PlayerAutomationService,
     private readonly minecraftServerService: MinecraftServerService,
     private readonly redis: RedisService,
@@ -269,12 +278,15 @@ export class PlayerService {
     if (!normalized) {
       throw new BadRequestException('Username is required');
     }
-    if (!this.authmeService.isEnabled()) {
+    const allowFallback = this.authmeService.isEnabled();
+    if (!allowFallback) {
       throw new BadRequestException('AuthMe integration is unavailable');
     }
     let account: AuthmeUser | null;
     try {
-      account = await this.authmeService.getAccount(normalized);
+      account = await this.authmeLookupService.getAccount(normalized, {
+        allowFallback,
+      });
     } catch (error) {
       this.logger.warn(
         `Failed to load AuthMe account ${normalized}: ${String(error)}`,
@@ -1491,39 +1503,86 @@ export class PlayerService {
       };
     }
 
-    let metrics: PlayerGameServerMetrics | null = null;
+    const now = new Date();
+    const cachedEntry = await this.playerDataCache.getCacheEntry(
+      server.serverId,
+      identity,
+    );
+    const statsFresh = this.isCacheFresh(
+      cachedEntry?.statsFetchedAt ?? null,
+      now,
+      PLAYER_DATA_CACHE_TTL_MS,
+    );
+    const advancementsFresh = this.isCacheFresh(
+      cachedEntry?.advancementsFetchedAt ?? null,
+      now,
+      PLAYER_DATA_CACHE_TTL_MS,
+    );
+
+    let metrics: PlayerGameServerMetrics | null = statsFresh
+      ? this.readCachedMetrics(cachedEntry?.metrics ?? null)
+      : null;
     let error: string | null = null;
     let errorMessage: string | null = null;
-    try {
-      const statsResponse =
-        await this.minecraftServerService.getBeaconPlayerStats(
-          server.serverId,
-          {
-            playerUuid: identity.uuid ?? undefined,
-            playerName: identity.name ?? undefined,
-            keys: PLAYER_GAME_METRIC_KEY_LIST,
-            page: 1,
-            pageSize: PLAYER_GAME_METRIC_KEY_LIST.length,
-          },
-        );
-      metrics = this.extractGameMetrics(statsResponse.result);
-    } catch (err) {
-      error = 'BEACON_STATS_FAILED';
-      errorMessage = err instanceof Error ? err.message : String(err);
+    let statsFetchedAt = statsFresh
+      ? (cachedEntry?.statsFetchedAt ?? null)
+      : null;
+
+    if (!metrics) {
+      try {
+        const statsResponse =
+          await this.minecraftServerService.getBeaconPlayerStats(
+            server.serverId,
+            {
+              playerUuid: identity.uuid ?? undefined,
+              playerName: identity.name ?? undefined,
+              keys: PLAYER_GAME_METRIC_KEY_LIST,
+              page: 1,
+              pageSize: PLAYER_GAME_METRIC_KEY_LIST.length,
+            },
+          );
+        metrics = this.extractGameMetrics(statsResponse.result);
+        statsFetchedAt = now;
+        await this.playerDataCache.upsertStats({
+          serverId: server.serverId,
+          identity,
+          stats: (statsResponse.result as { stats?: unknown })?.stats ?? null,
+          metrics,
+          fetchedAt: now,
+        });
+      } catch (err) {
+        metrics = this.readCachedMetrics(cachedEntry?.metrics ?? null);
+        statsFetchedAt = cachedEntry?.statsFetchedAt ?? null;
+        if (!metrics) {
+          error = 'BEACON_STATS_FAILED';
+          errorMessage = err instanceof Error ? err.message : String(err);
+        }
+      }
     }
 
-    let achievementsTotal: number | null = null;
-    try {
-      achievementsTotal = await this.countPlayerCompletedAdvancements(
-        server.serverId,
-        identity,
-      );
-    } catch (err) {
-      const fallbackMessage =
-        err instanceof Error ? err.message : String(err ?? '未知错误');
-      this.logger.warn(
-        `Failed to fetch player advancements for server ${server.serverName} (${server.serverId}): ${fallbackMessage}`,
-      );
+    let achievementsTotal: number | null = advancementsFresh
+      ? (cachedEntry?.achievementsTotal ?? null)
+      : null;
+    if (achievementsTotal === null) {
+      try {
+        achievementsTotal = await this.countPlayerCompletedAdvancements(
+          server.serverId,
+          identity,
+        );
+        await this.playerDataCache.upsertAdvancements({
+          serverId: server.serverId,
+          identity,
+          achievementsTotal,
+          fetchedAt: now,
+        });
+      } catch (err) {
+        achievementsTotal = cachedEntry?.achievementsTotal ?? null;
+        const fallbackMessage =
+          err instanceof Error ? err.message : String(err ?? 'Unknown error');
+        this.logger.warn(
+          `Failed to fetch player advancements for server ${server.serverName} (${server.serverId}): ${fallbackMessage}`,
+        );
+      }
     }
 
     let lastMtrLog: PlayerMtrLogSummary | null = null;
@@ -1611,7 +1670,7 @@ export class PlayerService {
       mtrBalanceFetchedAt,
       mtrBalanceError,
       mtrBalanceErrorMessage,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: (statsFetchedAt ?? now).toISOString(),
       error,
       errorMessage,
       mtrError,
@@ -1793,6 +1852,20 @@ export class PlayerService {
       }
     }
     return null;
+  }
+
+  private isCacheFresh(date: Date | null, now: Date, ttlMs: number): boolean {
+    if (!date) {
+      return false;
+    }
+    return now.getTime() - date.getTime() <= ttlMs;
+  }
+
+  private readCachedMetrics(value: Prisma.JsonValue | null) {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+    return value as PlayerGameServerMetrics;
   }
 
   private parseMtrTimestamp(raw: string | null | undefined) {
@@ -2075,7 +2148,9 @@ export class PlayerService {
       return null;
     }
     try {
-      return await this.authmeService.getAccount(username);
+      return await this.authmeLookupService.getAccount(username, {
+        allowFallback: true,
+      });
     } catch (error) {
       this.logger.debug(`无法获取 AuthMe 账号 ${username}: ${String(error)}`);
       return null;
@@ -2151,17 +2226,17 @@ export class PlayerService {
   }
 
   private async fetchAuthmeRecommendationEntries(limit: number) {
-    if (limit <= 0 || !this.authmeService.isEnabled()) {
+    if (limit <= 0) {
       return [];
     }
     try {
-      const response = await this.authmeService.listPlayers({
+      const response = await this.authmeCache.listPlayers({
         page: 1,
         pageSize: limit,
         sortField: 'lastlogin',
         sortOrder: 'desc',
       });
-      return response.items.map((account: AuthmeUser) => ({
+      return response.items.map((account) => ({
         id: `authme-${account.username}`,
         targetId: account.username,
         type: 'authme' as const,
@@ -2170,7 +2245,7 @@ export class PlayerService {
       }));
     } catch (error) {
       this.logger.warn(
-        `Failed to load AuthMe recommendations: ${String(error)}`,
+        `Failed to load AuthMe recommendations from cache: ${String(error)}`,
       );
       return [];
     }
@@ -2303,9 +2378,7 @@ export class PlayerService {
     uuidCache: Map<string, LuckpermsPlayer | null>,
     usernameCache: Map<string, LuckpermsPlayer | null>,
   ) {
-    if (!this.luckpermsService.isEnabled()) {
-      return null;
-    }
+    const allowFallback = this.luckpermsService.isEnabled();
     const normalizedUuid = this.normalizeLookupKey(binding.authmeUuid);
     if (normalizedUuid) {
       const uuidKey = normalizedUuid.toLowerCase();
@@ -2313,8 +2386,12 @@ export class PlayerService {
         return uuidCache.get(uuidKey) ?? null;
       }
       try {
-        const player =
-          await this.luckpermsService.getPlayerByUuid(normalizedUuid);
+        const player = await this.luckpermsLookupService.getPlayerByUuid(
+          normalizedUuid,
+          {
+            allowFallback,
+          },
+        );
         uuidCache.set(uuidKey, player);
         return player;
       } catch (error) {
@@ -2331,8 +2408,12 @@ export class PlayerService {
         return usernameCache.get(lookupKey) ?? null;
       }
       try {
-        const player =
-          await this.luckpermsService.getPlayerByUsername(lookupName);
+        const player = await this.luckpermsLookupService.getPlayerByUsername(
+          lookupName,
+          {
+            allowFallback,
+          },
+        );
         usernameCache.set(lookupKey, player);
         return player;
       } catch (error) {

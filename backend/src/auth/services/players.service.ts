@@ -6,6 +6,8 @@ import { CreateAuthmeHistoryEntryDto } from '../../authme/dto/create-authme-hist
 import { AuthmeBindingAction, Prisma } from '@prisma/client';
 import { IpLocationService } from '../../lib/ip2region/ip-location.service';
 import type { AuthmeUser } from '../../authme/authme.interfaces';
+import { AuthmeLookupService } from '../../authme/authme-lookup.service';
+import { AuthmeCacheService } from '../../cache/authme-cache.service';
 
 type SortOrder = 'asc' | 'desc';
 
@@ -29,6 +31,8 @@ type AuthmeUserWithLocation = AuthmeUser & {
   __regipLocation: LocationSummary;
 };
 
+type AuthmeAccountCacheRecord = Prisma.AuthmeAccountCacheGetPayload<{}>;
+
 interface ListPlayersParams {
   keyword?: string;
   page?: number;
@@ -51,6 +55,8 @@ export class PlayersService {
     private readonly prisma: PrismaService,
     private readonly authmeBindingService: AuthmeBindingService,
     private readonly ipLocationService: IpLocationService,
+    private readonly authmeLookupService: AuthmeLookupService,
+    private readonly authmeCache: AuthmeCacheService,
   ) {}
 
   async getPlayerDetail(username: string) {
@@ -63,7 +69,9 @@ export class PlayersService {
     }
 
     try {
-      const authme = await this.authmeService.getAccount(normalized);
+      const authme = await this.authmeLookupService.getAccount(normalized, {
+        allowFallback: true,
+      });
       if (!authme) {
         return {
           player: null,
@@ -162,7 +170,7 @@ export class PlayersService {
       }
 
       const authmeSortField = this.resolveAuthmeSortField(sortField);
-      return await this.listPlayersSortedByDatabase({
+      return await this.listPlayersFromCache({
         keyword: params.keyword,
         page,
         pageSize,
@@ -283,23 +291,39 @@ export class PlayersService {
     }
   }
 
-  private async listPlayersSortedByDatabase(options: {
+  private mapCacheSortField(field: AuthmeSortField) {
+    switch (field) {
+      case 'username':
+        return 'username';
+      case 'regdate':
+        return 'regdate';
+      case 'lastlogin':
+        return 'lastlogin';
+      default:
+        return 'lastlogin';
+    }
+  }
+
+  private async listPlayersFromCache(options: {
     keyword?: string;
     page: number;
     pageSize: number;
     sortField: AuthmeSortField;
     sortOrder: SortOrder;
   }) {
-    const result = await this.authmeService.listPlayers({
+    const response = await this.authmeCache.listPlayers({
       keyword: options.keyword,
       page: options.page,
       pageSize: options.pageSize,
-      sortField: options.sortField,
+      sortField: this.mapCacheSortField(options.sortField),
       sortOrder: options.sortOrder,
     });
-    const enriched = await this.enrichWithLocations(result.items);
+    const cachedUsers = response.items.map((entry) =>
+      this.mapCacheEntryToAuthmeUser(entry),
+    );
+    const enriched = await this.enrichWithLocations(cachedUsers);
     return this.buildPlayersPayload(enriched, {
-      total: result.total,
+      total: response.total,
       page: options.page,
       pageSize: options.pageSize,
     });
@@ -357,14 +381,35 @@ export class PlayersService {
     let page = 1;
     let total = 0;
     while (true) {
-      const result = await this.authmeService.listPlayers({
+      const result = await this.authmeCache.listPlayers({
         keyword,
         page,
         pageSize,
-        sortField: 'id',
+        sortField: 'username',
         sortOrder: 'asc',
       });
-      aggregated.push(...result.items);
+      aggregated.push(
+        ...result.items.map((entry) => ({
+          id: 0,
+          username: entry.username,
+          realname: entry.realname ?? entry.username,
+          password: '',
+          ip: entry.ip ?? null,
+          lastlogin: Number(entry.lastlogin ?? 0),
+          x: 0,
+          y: 0,
+          z: 0,
+          world: entry.world ?? 'world',
+          regdate: Number(entry.regdate ?? 0),
+          regip: entry.regip ?? null,
+          yaw: null,
+          pitch: null,
+          email: entry.email ?? null,
+          isLogged: entry.isLogged,
+          hasSession: entry.hasSession,
+          totp: null,
+        })),
+      );
       total = result.total;
       if (aggregated.length >= total || result.items.length < pageSize) {
         break;
@@ -375,6 +420,31 @@ export class PlayersService {
       }
     }
     return { items: aggregated, total };
+  }
+
+  private mapCacheEntryToAuthmeUser(
+    entry: AuthmeAccountCacheRecord,
+  ): AuthmeUser {
+    return {
+      id: 0,
+      username: entry.username,
+      realname: entry.realname ?? entry.username,
+      password: '',
+      ip: entry.ip ?? null,
+      lastlogin: Number(entry.lastlogin ?? 0),
+      x: 0,
+      y: 0,
+      z: 0,
+      world: entry.world ?? 'world',
+      regdate: Number(entry.regdate ?? 0),
+      regip: entry.regip ?? null,
+      yaw: null,
+      pitch: null,
+      email: entry.email ?? null,
+      isLogged: entry.isLogged,
+      hasSession: entry.hasSession,
+      totp: null,
+    };
   }
 
   private async enrichWithLocations(

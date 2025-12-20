@@ -8,6 +8,8 @@ import { buildPagination } from '../lib/shared/pagination';
 import { PlayerService } from '../player/player.service';
 import { PortalOwnershipOverview } from '../player/player.types';
 import { resolvePlayerPeriodStart } from '../player/player-period.util';
+import { AuthmeCacheService } from '../cache/authme-cache.service';
+import { LuckpermsCacheService } from '../cache/luckperms-cache.service';
 import {
   DEFAULT_PORTAL_HOME_CONFIG,
   PORTAL_CARD_REGISTRY,
@@ -235,6 +237,8 @@ export class PortalGatewayService {
     private readonly minecraftServers: MinecraftServerService,
     private readonly beaconLib: BeaconLibService,
     private readonly playerService: PlayerService,
+    private readonly authmeCache: AuthmeCacheService,
+    private readonly luckpermsCache: LuckpermsCacheService,
   ) {}
 
   /**
@@ -1012,10 +1016,10 @@ export class PortalGatewayService {
         attachmentSizeAggregate,
         authmeTotal,
         authmeActive,
-        lastAuthmeRecord,
+        authmeLastSync,
         rolesTotal,
         roleAssignments,
-        latestRoleAssignment,
+        luckpermsLastSync,
       ] = await Promise.all([
         operatorId
           ? this.prisma.user.findUnique({
@@ -1080,16 +1084,10 @@ export class PortalGatewayService {
         this.prisma.userAuthmeBinding.count({
           where: { status: 'ACTIVE' },
         }),
-        this.prisma.userAuthmeBinding.findFirst({
-          orderBy: [{ lastSyncedAt: 'desc' }, { boundAt: 'desc' }],
-          select: { lastSyncedAt: true, boundAt: true },
-        }),
+        this.authmeCache.getLastSyncedAt(),
         this.prisma.role.count(),
         this.prisma.userRole.count(),
-        this.prisma.userRole.findFirst({
-          orderBy: { assignedAt: 'desc' },
-          select: { assignedAt: true },
-        }),
+        this.luckpermsCache.getLastSyncedAt(),
       ]);
 
       const regCounts = dayKeys.reduce<Record<string, number>>((acc, key) => {
@@ -1137,8 +1135,6 @@ export class PortalGatewayService {
       const todayRegistrations = regCounts[todayKey] ?? 0;
       const attachmentSizeBytes = attachmentSizeAggregate._sum.size ?? 0;
 
-      const authmeLastSync =
-        lastAuthmeRecord?.lastSyncedAt ?? lastAuthmeRecord?.boundAt ?? null;
       const authmeStatus = this.resolveIntegrationStatus(
         authmeLastSync,
         now,
@@ -1146,7 +1142,7 @@ export class PortalGatewayService {
       );
 
       const luckpermsStatus = this.resolveLuckpermsStatus(
-        latestRoleAssignment?.assignedAt ?? null,
+        luckpermsLastSync,
         now,
         roleAssignments,
       );
@@ -1246,7 +1242,7 @@ export class PortalGatewayService {
             id: 'luckperms',
             name: 'LuckPerms',
             status: luckpermsStatus,
-            lastSync: latestRoleAssignment?.assignedAt?.toISOString() ?? '',
+            lastSync: luckpermsLastSync?.toISOString() ?? '',
             metrics: [
               { label: '角色数', value: formatNumber(rolesTotal) },
               { label: '分配总数', value: formatNumber(roleAssignments) },
@@ -1334,15 +1330,14 @@ export class PortalGatewayService {
   }
 
   private resolveLuckpermsStatus(
-    lastAssignment: Date | null,
+    lastSync: Date | null,
     now: Date,
     totalAssignments: number,
   ): AdminHealthStatus {
-    if (!lastAssignment) {
+    if (!lastSync) {
       return totalAssignments > 0 ? 'warning' : 'critical';
     }
-    const hoursDiff =
-      (now.getTime() - lastAssignment.getTime()) / (60 * 60 * 1000);
+    const hoursDiff = (now.getTime() - lastSync.getTime()) / (60 * 60 * 1000);
     if (hoursDiff <= 24) {
       return 'normal';
     }
