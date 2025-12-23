@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import RailwayMapPanel from '@/views/user/Transportation/railway/components/RailwayMapPanel.vue'
@@ -14,6 +14,7 @@ import type {
   RailwayDepotDetail,
   RailwayEntity,
   RailwayFeaturedItem,
+  RailwayRecentUpdateItem,
   RailwayRoute,
   RailwayRouteDetail,
   RailwayStationDetail,
@@ -40,6 +41,7 @@ const stats = computed(
     },
 )
 const recommendations = computed(() => overview.value?.recommendations ?? [])
+const recentUpdates = computed(() => overview.value?.recentUpdates ?? [])
 const warnings = computed(() => overview.value?.warnings ?? [])
 
 const recommendationPage = ref(1)
@@ -52,6 +54,24 @@ const pagedRecommendations = computed(() => {
   const start = (recommendationPage.value - 1) * recommendationPageSize
   return recommendations.value.slice(start, start + recommendationPageSize)
 })
+
+const recentUpdatePage = ref(1)
+const recentUpdatePageSize = 12
+const recentUpdatePageCount = computed(() => {
+  const count = Math.ceil(recentUpdates.value.length / recentUpdatePageSize)
+  return Math.max(1, count)
+})
+const pagedRecentUpdates = computed(() => {
+  const start = (recentUpdatePage.value - 1) * recentUpdatePageSize
+  return recentUpdates.value.slice(start, start + recentUpdatePageSize)
+})
+
+const recommendationLoading = ref(false)
+const recentUpdateLoading = ref(false)
+const recommendationContentRef = ref<HTMLElement | null>(null)
+const recentUpdateContentRef = ref<HTMLElement | null>(null)
+let lastRecommendationHeight = 0
+let lastRecentUpdateHeight = 0
 
 const selectedRecommendationId = ref<string | null>(null)
 const activeRecommendation = computed<RailwayFeaturedItem | null>(() => {
@@ -107,7 +127,7 @@ function formatLastUpdated(timestamp: number | null) {
   if (!timestamp) return '未知'
   const date = dayjs(timestamp)
   if (!date.isValid()) return '未知'
-  return `${date.format('YYYY-MM-DD HH:mm')} · ${date.fromNow()}`
+  return `${date.format('YYYY-MM-DD HH:mm')}`
 }
 
 function ensureToken() {
@@ -165,6 +185,16 @@ function buildDepotDetailLink(item: RailwayEntity) {
 }
 
 function buildDetailLink(item: RailwayFeaturedItem) {
+  if (item.type === 'route') {
+    return buildRouteDetailLink(item.item as RailwayRoute)
+  }
+  if (item.type === 'station') {
+    return buildStationDetailLink(item.item as RailwayEntity)
+  }
+  return buildDepotDetailLink(item.item as RailwayEntity)
+}
+
+function buildRecentDetailLink(item: RailwayRecentUpdateItem) {
   if (item.type === 'route') {
     return buildRouteDetailLink(item.item as RailwayRoute)
   }
@@ -401,10 +431,79 @@ watch(
 )
 
 watch(
-  () => recommendationPage.value,
+  () => recentUpdates.value,
   () => {
-    selectedRecommendationId.value = pagedRecommendations.value[0]?.id ?? null
+    recentUpdatePage.value = 1
   },
+)
+
+watch(
+  () => recommendationPage.value,
+  async () => {
+    recommendationLoading.value = true
+    selectedRecommendationId.value = pagedRecommendations.value[0]?.id ?? null
+
+    const el = recommendationContentRef.value
+    if (el) {
+      const prevHeight = lastRecommendationHeight || el.offsetHeight
+      el.style.height = 'auto'
+      el.style.overflow = 'hidden'
+
+      await nextTick()
+      const nextHeight = el.offsetHeight
+
+      el.style.height = `${prevHeight}px`
+      void el.getBoundingClientRect()
+      el.style.transition = 'height 200ms ease'
+      el.style.height = `${nextHeight}px`
+
+      window.setTimeout(() => {
+        el.style.height = ''
+        el.style.overflow = ''
+      }, 220)
+
+      lastRecommendationHeight = nextHeight
+    }
+
+    window.setTimeout(() => {
+      recommendationLoading.value = false
+    }, 200)
+  },
+  { flush: 'post' },
+)
+
+watch(
+  () => recentUpdatePage.value,
+  async () => {
+    recentUpdateLoading.value = true
+
+    const el = recentUpdateContentRef.value
+    if (el) {
+      const prevHeight = lastRecentUpdateHeight || el.offsetHeight
+      el.style.height = 'auto'
+      el.style.overflow = 'hidden'
+
+      await nextTick()
+      const nextHeight = el.offsetHeight
+
+      el.style.height = `${prevHeight}px`
+      void el.getBoundingClientRect()
+      el.style.transition = 'height 200ms ease'
+      el.style.height = `${nextHeight}px`
+
+      window.setTimeout(() => {
+        el.style.height = ''
+        el.style.overflow = ''
+      }, 220)
+
+      lastRecentUpdateHeight = nextHeight
+    }
+
+    window.setTimeout(() => {
+      recentUpdateLoading.value = false
+    }, 200)
+  },
+  { flush: 'post' },
 )
 
 watch(
@@ -445,7 +544,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-8">
+  <div class="space-y-8">
     <UButton
       v-if="canManageFeatured"
       color="neutral"
@@ -457,126 +556,128 @@ onBeforeUnmount(() => {
       <UIcon name="i-lucide-settings" class="w-4.5 h-4.5" />
     </UButton>
 
-    <section
-      class="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-slate-950 shadow-lg dark:border-slate-800/60 dark:bg-slate-50"
-    >
-      <div
-        class="relative flex flex-col gap-6 px-6 py-8 md:flex-row md:items-center md:justify-between md:px-10 h-64"
+    <section class="space-y-4">
+      <section
+        class="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-slate-950 shadow-lg dark:border-slate-800/60 dark:bg-slate-50"
       >
-        <div class="max-w-2xl relative z-1 h-full flex flex-col">
-          <p
-            class="text-sm font-semibold uppercase tracking-widest text-white/70 dark:text-slate-950/70"
-          >
-            HYDROLINE 铁路系统
-          </p>
-          <h2
-            class="mt-4 text-4xl font-semibold leading-tight text-white dark:text-slate-950"
-          >
-            铁路网络总览
-          </h2>
-          <p
-            class="mt-auto text-base font-medium text-white dark:text-slate-950"
-          >
-            实时拉取各服务端的 MTR
-            和机械动力铁路数据，展示最新上线的线路、车站与车厂。
-          </p>
-        </div>
-
         <div
-          class="absolute inset-0 z-0 h-full w-full overflow-hidden pointer-events-none mask-[linear-gradient(to_bottom,#fff_50%,transparent_125%)] dark:mask-[linear-gradient(to_bottom,#fff_35%,transparent_125%)]"
+          class="relative flex flex-col gap-6 px-6 py-8 md:flex-row md:items-center md:justify-between md:px-10 h-64"
         >
-          <img
-            :src="railwayHeroImage"
-            alt="railway"
-            class="h-full w-full object-cover"
-          />
-        </div>
-      </div>
-    </section>
-
-    <UAlert
-      color="neutral"
-      variant="subtle"
-      title="机械动力铁路数据暂未接入"
-      description="机械动力铁路数据的接入相比 MTR 更加复杂，目前仍在开发中，预计最迟将于 2026 年 1 月底至春节前上线。"
-      icon="i-lucide-info"
-    />
-
-    <section class="grid grid-cols-1 sm:grid-cols-4 md:grid-cols-5 gap-4">
-      <RouterLink :to="{ name: 'transportation.railway.routes' }">
-        <div
-          class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
-        >
-          <div class="text-xs text-slate-500 dark:text-slate-500">
-            全服线路数
+          <div class="max-w-2xl relative z-1 h-full flex flex-col">
+            <p
+              class="text-sm font-semibold uppercase tracking-widest text-white/70 dark:text-slate-950/70"
+            >
+              HYDROLINE 铁路系统
+            </p>
+            <h2
+              class="mt-4 text-4xl font-semibold leading-tight text-white dark:text-slate-950"
+            >
+              铁路网络总览
+            </h2>
+            <p
+              class="mt-auto text-base font-medium text-white dark:text-slate-950"
+            >
+              实时拉取各服务端的 MTR
+              和机械动力铁路数据，展示最新上线的线路、车站与车厂。
+            </p>
           </div>
+
           <div
-            class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            class="absolute inset-0 z-0 h-full w-full overflow-hidden pointer-events-none mask-[linear-gradient(to_bottom,#fff_50%,transparent_125%)] dark:mask-[linear-gradient(to_bottom,#fff_35%,transparent_125%)]"
           >
-            {{ stats.routes }}
+            <img
+              :src="railwayHeroImage"
+              alt="railway"
+              class="h-full w-full object-cover"
+            />
           </div>
         </div>
-      </RouterLink>
+      </section>
 
-      <RouterLink :to="{ name: 'transportation.railway.stations' }">
-        <div
-          class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
-        >
-          <div class="text-xs text-slate-500 dark:text-slate-500">
-            全服车站数
-          </div>
-          <div
-            class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
-          >
-            {{ stats.stations }}
-          </div>
-        </div>
-      </RouterLink>
+      <UAlert
+        color="neutral"
+        variant="subtle"
+        title="机械动力铁路数据暂未接入"
+        description="机械动力铁路数据的接入相比 MTR 更加复杂，目前仍在开发中，预计最迟将于 2026 年 1 月底至春节前上线。"
+        icon="i-lucide-info"
+      />
 
-      <RouterLink :to="{ name: 'transportation.railway.depots' }">
-        <div
-          class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
-        >
-          <div class="text-xs text-slate-500 dark:text-slate-500">
-            全服车厂数
-          </div>
+      <section class="grid grid-cols-1 sm:grid-cols-4 md:grid-cols-5 gap-4">
+        <RouterLink :to="{ name: 'transportation.railway.routes' }">
           <div
-            class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
           >
-            {{ stats.depots }}
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              全服线路数
+            </div>
+            <div
+              class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            >
+              {{ stats.routes }}
+            </div>
           </div>
-        </div>
-      </RouterLink>
+        </RouterLink>
 
-      <RouterLink :to="{ name: 'transportation.railway.depots' }">
-        <div
-          class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
-        >
-          <div class="text-xs text-slate-500 dark:text-slate-500">
-            全服铁路系统数
-          </div>
+        <RouterLink :to="{ name: 'transportation.railway.stations' }">
           <div
-            class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
           >
-            0
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              全服车站数
+            </div>
+            <div
+              class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            >
+              {{ stats.stations }}
+            </div>
           </div>
-        </div>
-      </RouterLink>
+        </RouterLink>
 
-      <RouterLink :to="{ name: 'transportation.railway.depots' }">
-        <div
-          class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
-        >
-          <div class="text-xs text-slate-500 dark:text-slate-500">
-            全服铁路运营单位数
-          </div>
+        <RouterLink :to="{ name: 'transportation.railway.depots' }">
           <div
-            class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
           >
-            0
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              全服车厂数
+            </div>
+            <div
+              class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            >
+              {{ stats.depots }}
+            </div>
           </div>
-        </div>
-      </RouterLink>
+        </RouterLink>
+
+        <RouterLink :to="{ name: 'transportation.railway.depots' }">
+          <div
+            class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
+          >
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              全服铁路系统数
+            </div>
+            <div
+              class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            >
+              0
+            </div>
+          </div>
+        </RouterLink>
+
+        <RouterLink :to="{ name: 'transportation.railway.depots' }">
+          <div
+            class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
+          >
+            <div class="text-xs text-slate-500 dark:text-slate-500">
+              全服铁路运营单位数
+            </div>
+            <div
+              class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
+            >
+              0
+            </div>
+          </div>
+        </RouterLink>
+      </section>
     </section>
 
     <UAlert
@@ -693,46 +794,187 @@ onBeforeUnmount(() => {
           >
             暂无设施推荐
           </p>
-          <label
-            v-for="item in pagedRecommendations"
-            :key="item.id"
-            class="block"
-          >
-            <div
-              class="text-xs text-primary flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 duration-250 outline-2 outline-transparent hover:outline-primary md:flex-row md:items-center md:justify-between md:gap-6 cursor-pointer p-4 transition"
-              @click="selectRecommendation(item.id)"
+          <div ref="recommendationContentRef" class="relative space-y-4">
+            <label
+              v-for="item in pagedRecommendations"
+              :key="item.id"
+              class="block"
             >
-              <div class="space-y-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <p
-                    class="text-lg font-semibold text-slate-900 dark:text-white"
-                  >
-                    {{
-                      item.item.name?.split('||')[0].split('|')[0] ||
-                      '未命名设施'
-                    }}
-                  </p>
-                  <UBadge variant="soft" size="sm">
-                    {{ featuredTypeLabels[item.type] }}
-                  </UBadge>
-                </div>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  {{ item.item.server.name }} ·
-                  {{ getDimensionName(item.item.dimension) || '未知维度' }}
-                </p>
-              </div>
-              <UButton
-                size="sm"
-                color="neutral"
-                variant="ghost"
-                :to="buildDetailLink(item)"
-                @click.stop
+              <div
+                class="text-xs text-primary flex flex-col gap-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 duration-250 outline-2 outline-transparent hover:outline-primary md:flex-row md:items-center md:justify-between md:gap-6 cursor-pointer p-4 transition"
+                @click="selectRecommendation(item.id)"
               >
-                查看
-              </UButton>
-            </div>
-          </label>
+                <div class="space-y-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p
+                      class="text-lg font-semibold text-slate-900 dark:text-white"
+                    >
+                      {{
+                        item.item.name?.split('||')[0].split('|')[0] ||
+                        '未命名设施'
+                      }}
+                    </p>
+                    <UBadge variant="soft" size="sm">
+                      {{ featuredTypeLabels[item.type] }}
+                    </UBadge>
+                  </div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                    {{ item.item.server.name }} ·
+                    {{ getDimensionName(item.item.dimension) || '未知维度' }}
+                  </p>
+                </div>
+                <UButton
+                  size="sm"
+                  color="neutral"
+                  variant="ghost"
+                  :to="buildDetailLink(item)"
+                  @click.stop
+                >
+                  查看
+                </UButton>
+              </div>
+            </label>
+
+            <Transition
+              enter-active-class="transition-opacity duration-200"
+              enter-from-class="opacity-0"
+              enter-to-class="opacity-100"
+              leave-active-class="transition-opacity duration-200"
+              leave-from-class="opacity-100"
+              leave-to-class="opacity-0"
+            >
+              <div
+                v-if="recommendationLoading"
+                class="absolute inset-0 rounded-xl bg-white/60 dark:bg-slate-900/30 backdrop-blur-[1px] flex items-center justify-center z-10"
+              >
+                <UIcon
+                  name="i-lucide-loader-2"
+                  class="h-5 w-5 animate-spin text-slate-400"
+                />
+              </div>
+            </Transition>
+          </div>
         </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div>
+          <h3 class="px-1 text-lg text-slate-600 dark:text-slate-300">
+            最近更新
+          </h3>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-500">
+          <UButton
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :disabled="recentUpdatePage <= 1"
+            @click="recentUpdatePage = Math.max(1, recentUpdatePage - 1)"
+          >
+            上一页
+          </UButton>
+          <span>{{ recentUpdatePage }} / {{ recentUpdatePageCount }}</span>
+          <UButton
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :disabled="recentUpdatePage >= recentUpdatePageCount"
+            @click="
+              recentUpdatePage = Math.min(
+                recentUpdatePageCount,
+                recentUpdatePage + 1,
+              )
+            "
+          >
+            下一页
+          </UButton>
+        </div>
+      </div>
+
+      <div class="relative">
+        <div
+          ref="recentUpdateContentRef"
+          class="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+          style="grid-auto-rows: 1fr"
+        >
+          <div
+            v-if="overviewLoading"
+            class="col-span-full flex h-60 items-center justify-center text-sm text-slate-500"
+          >
+            <UIcon
+              name="i-lucide-loader-2"
+              class="inline-block h-5 w-5 animate-spin text-slate-400"
+            />
+          </div>
+          <div
+            v-else-if="recentUpdates.length === 0"
+            class="col-span-full flex h-60 items-center justify-center text-sm text-slate-500"
+          >
+            暂无最近更新
+          </div>
+          <template v-else>
+            <label
+              v-for="item in pagedRecentUpdates"
+              :key="item.id"
+              class="block"
+            >
+              <RouterLink
+                class="block w-full h-full"
+                :to="buildRecentDetailLink(item)"
+              >
+                <div
+                  class="text-xs text-primary flex h-full rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 duration-250 outline-2 outline-transparent hover:outline-primary cursor-pointer p-4 transition"
+                >
+                  <div class="flex flex-col gap-1">
+                    <div class="flex flex-wrap items-center gap-x-2">
+                      <p
+                        class="text-lg font-semibold text-slate-900 dark:text-white"
+                      >
+                        {{
+                          item.item.name?.split('||')[0].split('|')[0] ||
+                          '未命名设施'
+                        }}
+                      </p>
+                      <UBadge variant="soft" size="sm">
+                        {{ featuredTypeLabels[item.type] }}
+                      </UBadge>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                      {{ item.item.server.name }} ·
+                      {{ getDimensionName(item.item.dimension) || '未知维度' }}
+                    </p>
+                    <p
+                      class="mt-auto text-xs text-slate-500 dark:text-slate-400"
+                    >
+                      {{ formatLastUpdated(item.lastUpdated) }}
+                    </p>
+                  </div>
+                </div>
+              </RouterLink>
+            </label>
+          </template>
+        </div>
+
+        <Transition
+          enter-active-class="transition-opacity duration-200"
+          enter-from-class="opacity-0"
+          enter-to-class="opacity-100"
+          leave-active-class="transition-opacity duration-200"
+          leave-from-class="opacity-100"
+          leave-to-class="opacity-0"
+        >
+          <div
+            v-if="recentUpdateLoading"
+            class="absolute inset-0 rounded-xl bg-white/60 dark:bg-slate-900/30 backdrop-blur-[1px] flex items-center justify-center z-10"
+          >
+            <UIcon
+              name="i-lucide-loader-2"
+              class="h-5 w-5 animate-spin text-slate-400"
+            />
+          </div>
+        </Transition>
       </div>
     </section>
 

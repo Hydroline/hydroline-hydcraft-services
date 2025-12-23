@@ -126,6 +126,13 @@ export type OverviewLatest = {
   routes: NormalizedRoute[];
 };
 
+export type OverviewRecentItem = {
+  id: string;
+  type: 'route' | 'station' | 'depot';
+  item: NormalizedRoute | NormalizedEntity;
+  lastUpdated: number | null;
+};
+
 export type RouteDetailResult = {
   server: { id: string; name: string };
   railwayType: TransportationRailwayMod;

@@ -29,6 +29,13 @@ export interface RailwayFeaturedItem {
   displayOrder: number
 }
 
+export interface RailwayRecentUpdateItem {
+  id: string
+  type: RailwayFeaturedType
+  item: RailwayRoute | RailwayEntity
+  lastUpdated: number | null
+}
+
 export interface RailwayOverviewStats {
   serverCount: number
   routes: number
@@ -43,6 +50,7 @@ export interface RailwayOverview {
     stations: RailwayEntity[]
     routes: RailwayRoute[]
   }
+  recentUpdates: RailwayRecentUpdateItem[]
   recommendations: RailwayFeaturedItem[]
   warnings: Array<{ serverId: string; message: string }>
 }

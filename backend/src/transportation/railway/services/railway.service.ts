@@ -18,6 +18,7 @@ import type {
   NormalizedRoute,
   OverviewStats,
   OverviewLatest,
+  OverviewRecentItem,
   QueryMtrEntityRow,
 } from '../types/railway-types';
 import {
@@ -66,6 +67,7 @@ export class TransportationRailwayService {
       routes: [],
     };
     const warnings: Array<{ serverId: string; message: string }> = [];
+    const recentUpdates: OverviewRecentItem[] = [];
 
     await Promise.all(
       servers.map(async (server) => {
@@ -77,6 +79,26 @@ export class TransportationRailwayService {
           latest.depots.push(...summary.latestDepots);
           latest.stations.push(...summary.latestStations);
           latest.routes.push(...summary.latestRoutes);
+          recentUpdates.push(
+            ...summary.latestRoutes.map((item) => ({
+              id: `route:${item.server.id}:${item.id}`,
+              type: 'route' as const,
+              item,
+              lastUpdated: item.lastUpdated ?? null,
+            })),
+            ...summary.latestStations.map((item) => ({
+              id: `station:${item.server.id}:${item.id}`,
+              type: 'station' as const,
+              item,
+              lastUpdated: item.lastUpdated ?? null,
+            })),
+            ...summary.latestDepots.map((item) => ({
+              id: `depot:${item.server.id}:${item.id}`,
+              type: 'depot' as const,
+              item,
+              lastUpdated: item.lastUpdated ?? null,
+            })),
+          );
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
@@ -95,10 +117,12 @@ export class TransportationRailwayService {
     latest.depots.splice(8);
     latest.stations.splice(8);
     latest.routes.splice(8);
+    recentUpdates.sort((a, b) => (b.lastUpdated ?? 0) - (a.lastUpdated ?? 0));
 
     return {
       stats,
       latest,
+      recentUpdates,
       recommendations: featuredItems,
       warnings,
     };
@@ -163,7 +187,7 @@ export class TransportationRailwayService {
         server.railwayMod,
         'depots',
         {
-          limit: 6,
+          limit: 20,
         },
       ),
       queryRailwayEntities(
@@ -172,7 +196,7 @@ export class TransportationRailwayService {
         server.railwayMod,
         'stations',
         {
-          limit: 6,
+          limit: 20,
         },
       ),
       queryRailwayEntities(
@@ -181,7 +205,7 @@ export class TransportationRailwayService {
         server.railwayMod,
         'routes',
         {
-          limit: 8,
+          limit: 20,
         },
       ),
     ]);
