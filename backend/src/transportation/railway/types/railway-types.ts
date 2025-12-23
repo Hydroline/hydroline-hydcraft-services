@@ -110,6 +110,7 @@ export type NormalizedEntity = {
 
 export type NormalizedRoute = NormalizedEntity & {
   platformCount: number | null;
+  previewSvg?: string | null;
 };
 
 export type OverviewStats = {
@@ -200,6 +201,7 @@ export type RailwayStationDetailResult = {
     }
   >;
   routes: NormalizedRoute[];
+  mergedRoutes?: NormalizedRoute[];
   metadata: {
     lastUpdated: number | null;
   };

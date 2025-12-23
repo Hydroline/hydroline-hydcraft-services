@@ -33,6 +33,7 @@ export interface RailwayEntity {
 
 export interface RailwayRoute extends RailwayEntity {
   platformCount?: number | null
+  previewSvg?: string | null
 }
 
 export interface RailwayOverviewStats {
@@ -178,6 +179,7 @@ export interface RailwayStationDetail {
     }
   >
   routes: RailwayRoute[]
+  mergedRoutes?: RailwayRoute[]
   metadata: {
     lastUpdated: number | null
   }

@@ -160,7 +160,17 @@ const maxStopsDetail = computed(() => {
   return best ?? detail.value
 })
 
-const routeName = computed(() => parseRouteName(activeDetail.value?.route.name))
+const routeName = computed(() => {
+  const raw = activeDetail.value?.route.name
+  const parsed = parseRouteName(raw)
+  const variantCount = variants.value?.routes?.length ?? 0
+  if (variantMode.value === DEFAULT_VARIANT_MODE && variantCount > 1) {
+    const baseRaw = raw?.split('||')[0] ?? raw ?? null
+    const baseParsed = parseRouteName(baseRaw)
+    return { title: baseParsed.title, subtitle: null, badge: null }
+  }
+  return parsed
+})
 
 const stations = computed(() => maxStopsDetail.value?.stations ?? [])
 const platforms = computed(() => activeDetail.value?.platforms ?? [])
@@ -422,6 +432,17 @@ const rightmostStopTitle = computed(() => {
   const items = stopDisplayItems.value
   if (!items.length) return null
   return items[items.length - 1].title
+})
+const showDirectionLabel = computed(() => {
+  if (isCircularRoute.value) return false
+  if (!rightmostStopTitle.value) return false
+  if (
+    variantMode.value === DEFAULT_VARIANT_MODE &&
+    variantModeItems.value.length > 1
+  ) {
+    return false
+  }
+  return true
 })
 
 function formatStationNameParts(value: string | null | undefined) {
@@ -834,7 +855,7 @@ onMounted(() => {
               <span>所经站点</span>
 
               <span
-                v-if="!isCircularRoute && rightmostStopTitle"
+                v-if="showDirectionLabel"
                 class="inline-flex items-center gap-1 text-sm font-medium text-slate-500 dark:text-slate-400"
               >
                 <UIcon name="i-lucide-play" class="h-3" />

@@ -282,6 +282,7 @@ onMounted(async () => {
       <table class="w-full text-left text-sm">
         <thead class="text-slate-500">
           <tr>
+            <th class="px-4 py-3 w-0">预览</th>
             <th class="px-4 py-3">线路</th>
             <th class="px-4 py-3">服务端</th>
             <th class="px-4 py-3">维度</th>
@@ -299,7 +300,7 @@ onMounted(async () => {
             :animate="{ opacity: 1, filter: 'blur(0px)' }"
             :transition="{ duration: 0.3 }"
           >
-            <td colspan="7" class="p-6 text-center text-slate-500">
+            <td colspan="8" class="p-6 text-center text-slate-500">
               {{ loading ? '加载中...' : '暂无数据' }}
             </td>
           </Motion>
@@ -325,6 +326,18 @@ onMounted(async () => {
               :transition="{ duration: 0.3 }"
               class="border-t border-slate-100 text-slate-700 dark:border-slate-800 dark:text-slate-200"
             >
+              <td class="px-4 py-3">
+                <div
+                  class="h-16 w-16 rounded-lg bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-center overflow-hidden"
+                >
+                  <div
+                    v-if="item.previewSvg"
+                    class="h-full w-full"
+                    v-html="item.previewSvg"
+                  ></div>
+                  <span v-else class="text-xs text-slate-400">—</span>
+                </div>
+              </td>
               <td class="px-4 py-3">
                 <p
                   class="flex items-center gap-1 font-medium text-slate-900 dark:text-white"

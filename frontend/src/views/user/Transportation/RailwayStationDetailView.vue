@@ -84,7 +84,9 @@ const dimensionName = computed(() =>
   getDimensionName(detail.value?.station.dimension || params.value.dimension),
 )
 
-const associatedRoutes = computed(() => detail.value?.routes ?? [])
+const associatedRoutes = computed(
+  () => detail.value?.mergedRoutes ?? detail.value?.routes ?? [],
+)
 const platforms = computed(() => detail.value?.platforms ?? [])
 
 function extractRouteGroupName(value: string | null | undefined) {
@@ -106,7 +108,7 @@ const transferCount = computed(() => {
 
 const routeIndex = computed(() => {
   const map = new Map<string, RailwayStationDetail['routes'][number]>()
-  for (const route of associatedRoutes.value) {
+  for (const route of detail.value?.routes ?? []) {
     if (!route?.id) continue
     map.set(route.id, route)
   }

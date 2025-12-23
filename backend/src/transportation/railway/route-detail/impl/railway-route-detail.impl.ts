@@ -122,6 +122,11 @@ import {
   toBoolean,
   toNumber,
 } from '../../utils/railway-normalizer';
+import {
+  extractRouteBaseKey,
+  extractRouteDisplayName,
+  extractRouteVariantLabel,
+} from '../../utils/route-name';
 import { DEFAULT_RAILWAY_TYPE } from '../../config/railway-type.config';
 import {
   BlockPosition,
@@ -508,18 +513,75 @@ export class TransportationRailwayRouteDetailService {
         }
       }
     }
+    const mergedRoutes = this.mergeRoutesForDisplay(routes);
     return {
       server: { id: server.id, name: server.displayName },
       railwayType: server.railwayMod,
       station: normalizedStation,
       platforms: platformDetails,
       routes,
+      mergedRoutes,
       metadata: {
         lastUpdated:
           stationRow.lastBeaconUpdatedAt?.getTime() ??
           stationRow.updatedAt.getTime(),
       },
     };
+  }
+
+  private mergeRoutesForDisplay(routes: NormalizedRoute[]) {
+    if (!routes.length) return [];
+    const grouped = new Map<string, NormalizedRoute[]>();
+    for (const route of routes) {
+      const baseKey = extractRouteBaseKey(route.name) ?? route.id;
+      const key = [
+        route.server.id,
+        route.railwayType,
+        route.dimensionContext ?? '',
+        baseKey,
+      ].join('::');
+      const list = grouped.get(key) ?? [];
+      list.push(route);
+      grouped.set(key, list);
+    }
+    const merged: NormalizedRoute[] = [];
+    for (const list of grouped.values()) {
+      if (list.length <= 1) {
+        merged.push(list[0]);
+        continue;
+      }
+      const primary = this.selectPrimaryRoute(list) ?? list[0];
+      const displayName =
+        extractRouteDisplayName(primary.name) ??
+        extractRouteDisplayName(list[0]?.name) ??
+        primary.name;
+      const lastUpdated = list.reduce((max, route) => {
+        return Math.max(max ?? 0, route.lastUpdated ?? 0);
+      }, primary.lastUpdated ?? 0);
+      merged.push({
+        ...primary,
+        name: displayName ?? primary.name ?? null,
+        lastUpdated: lastUpdated || null,
+      });
+    }
+    merged.sort(
+      (a, b) =>
+        (b.lastUpdated ?? 0) - (a.lastUpdated ?? 0) ||
+        a.name?.localeCompare(b.name ?? '') ||
+        0,
+    );
+    return merged;
+  }
+
+  private selectPrimaryRoute(routes: NormalizedRoute[]) {
+    if (routes.length <= 1) return routes[0] ?? null;
+    const candidates = routes.filter(
+      (route) => !extractRouteVariantLabel(route.name),
+    );
+    const list = candidates.length ? candidates : routes;
+    return [...list].sort(
+      (a, b) => (b.lastUpdated ?? 0) - (a.lastUpdated ?? 0),
+    )[0];
   }
 
   private async fetchPlatformsForStationByBounds(
