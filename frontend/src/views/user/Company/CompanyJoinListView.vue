@@ -79,7 +79,6 @@ async function loadList(page = 1) {
     industryId: filters.industryId,
     search: filters.search.trim() || undefined,
   })
-  pageInput.value = directory.value.page
 }
 
 function applyFilters() {

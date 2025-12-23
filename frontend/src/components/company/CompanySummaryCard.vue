@@ -13,9 +13,9 @@ const company = computed(() => props.company)
 
 <template>
   <UCard
-    class="group h-full border border-slate-200/80 dark:border-slate-800/60"
+    class="group h-full border border-slate-200/80 dark:border-slate-800/60 shadow-none"
     :ui="{
-      base: 'transition-all duration-300 hover:-translate-y-1 hover:border-primary-200 hover:shadow-xl/20',
+      base: 'transition-all duration-300 hover:-translate-y-1 hover:border-primary-200',
       body: 'flex flex-col gap-3 p-4',
     }"
   >
@@ -55,7 +55,6 @@ const company = computed(() => props.company)
         to="/company/dashboard"
       >
         查看详情
-        <UIcon name="i-lucide-arrow-up-right" class="h-4 w-4" />
       </RouterLink>
     </div>
   </UCard>

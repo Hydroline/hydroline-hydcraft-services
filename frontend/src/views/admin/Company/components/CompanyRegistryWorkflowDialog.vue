@@ -50,9 +50,7 @@ function closeDialog() {
         <div class="flex-1 overflow-y-auto px-6 py-4">
           <div class="rounded-2xl border border-slate-200/70 bg-white/80 p-6">
             <div class="mb-4 text-sm text-slate-500">
-              当前流程：{{
-                company?.workflow?.definitionName || '未绑定流程'
-              }}
+              当前流程：{{ company?.workflow?.definitionName || '未绑定流程' }}
               ·
               {{ company?.workflow?.state || '—' }}
             </div>

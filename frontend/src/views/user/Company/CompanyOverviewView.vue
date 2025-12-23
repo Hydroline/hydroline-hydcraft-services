@@ -323,7 +323,7 @@ onMounted(() => {
     </div>
 
     <div class="grid gap-6 lg:grid-cols-2">
-      <UCard>
+      <UCard :ui="{ shadow: 'none', body: 'p-0 sm:p-0' }">
         <template #header>
           <div class="flex items-center justify-between">
             <div>
@@ -340,22 +340,64 @@ onMounted(() => {
             />
           </div>
         </template>
-        <div class="grid gap-4 md:grid-cols-2">
-          <CompanySummaryCard
-            v-for="item in companyStore.recommendations.recent"
-            :key="item.id"
-            :company="item"
-          />
-          <div
-            v-if="companyStore.recommendations.recent.length === 0"
-            class="col-span-full rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500"
-          >
-            暂无数据，稍后再来看看。
-          </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead
+              class="bg-slate-50/30 text-[10px] uppercase tracking-wider text-slate-400 dark:bg-slate-800/30"
+            >
+              <tr>
+                <th class="px-4 py-2 font-medium">公司</th>
+                <th class="px-4 py-2 font-medium">行业/类型</th>
+                <th class="px-4 py-2 font-medium">状态</th>
+                <th class="px-4 py-2 font-medium text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+              <tr
+                v-for="item in companyStore.recommendations.recent"
+                :key="item.id"
+                class="transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+              >
+                <td class="px-4 py-3">
+                  <div class="font-medium text-slate-900 dark:text-white">
+                    {{ item.name }}
+                  </div>
+                  <div class="text-xs text-slate-500 line-clamp-1">
+                    {{ item.summary || '暂无简介' }}
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">
+                  {{ item.industry?.name || '—' }}<br />
+                  {{ item.type?.name || '—' }}
+                </td>
+                <td class="px-4 py-3">
+                  <CompanyStatusBadge :status="item.status" />
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <UButton
+                    variant="ghost"
+                    size="xs"
+                    color="primary"
+                    to="/company/dashboard"
+                  >
+                    详情
+                  </UButton>
+                </td>
+              </tr>
+              <tr v-if="companyStore.recommendations.recent.length === 0">
+                <td
+                  colspan="4"
+                  class="py-8 text-center text-sm text-slate-500 border-dashed border-2 border-slate-100 dark:border-slate-800 rounded-xl"
+                >
+                  暂无数据，稍后再来看看
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </UCard>
 
-      <UCard>
+      <UCard :ui="{ shadow: 'none', body: 'p-0 sm:p-0' }">
         <template #header>
           <div class="flex items-center justify-between">
             <div>
@@ -372,24 +414,66 @@ onMounted(() => {
             />
           </div>
         </template>
-        <div class="grid gap-4 md:grid-cols-2">
-          <CompanySummaryCard
-            v-for="item in companyStore.recommendations.active"
-            :key="item.id"
-            :company="item"
-          />
-          <div
-            v-if="companyStore.recommendations.active.length === 0"
-            class="col-span-full rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500"
-          >
-            暂无数据，稍后再来看看。
-          </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead
+              class="bg-slate-50/30 text-[10px] uppercase tracking-wider text-slate-400 dark:bg-slate-800/30"
+            >
+              <tr>
+                <th class="px-4 py-2 font-medium">公司</th>
+                <th class="px-4 py-2 font-medium">行业/类型</th>
+                <th class="px-4 py-2 font-medium">状态</th>
+                <th class="px-4 py-2 font-medium text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+              <tr
+                v-for="item in companyStore.recommendations.active"
+                :key="item.id"
+                class="transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+              >
+                <td class="px-4 py-3">
+                  <div class="font-medium text-slate-900 dark:text-white">
+                    {{ item.name }}
+                  </div>
+                  <div class="text-xs text-slate-500 line-clamp-1">
+                    {{ item.summary || '暂无简介' }}
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">
+                  {{ item.industry?.name || '—' }}<br />
+                  {{ item.type?.name || '—' }}
+                </td>
+                <td class="px-4 py-3">
+                  <CompanyStatusBadge :status="item.status" />
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <UButton
+                    variant="ghost"
+                    size="xs"
+                    color="primary"
+                    to="/company/dashboard"
+                  >
+                    详情
+                  </UButton>
+                </td>
+              </tr>
+              <tr v-if="companyStore.recommendations.active.length === 0">
+                <td
+                  colspan="4"
+                  class="py-8 text-center text-sm text-slate-500 border-dashed border-2 border-slate-100 dark:border-slate-800 rounded-xl"
+                >
+                  暂无数据，稍后再来看看
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </UCard>
     </div>
 
     <div class="grid gap-6 lg:grid-cols-2">
-      <UCard>
+      <UCard :ui="{ shadow: 'none' }">
         <template #header>
           <div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
@@ -419,7 +503,7 @@ onMounted(() => {
         </div>
       </UCard>
 
-      <UCard>
+      <UCard :ui="{ shadow: 'none' }">
         <template #header>
           <div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
