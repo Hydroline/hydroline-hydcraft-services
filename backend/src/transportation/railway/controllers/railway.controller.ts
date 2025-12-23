@@ -28,7 +28,7 @@ export class TransportationRailwayController {
   ) {}
 
   @Get('overview')
-  @ApiOperation({ summary: '获取铁路概览数据（轮播、统计、最新动态等）' })
+  @ApiOperation({ summary: '获取铁路概览数据（统计、最新动态、设施推荐等）' })
   async getOverview() {
     return this.transportationRailwayService.getOverview();
   }

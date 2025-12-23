@@ -275,7 +275,10 @@ function closeForm() {
           <tbody v-else-if="loading">
             <tr>
               <td colspan="6" class="p-6 text-center text-slate-500">
-                加载中...
+                <UIcon
+                  name="i-lucide-loader-2"
+                  class="inline-block h-4 w-4 animate-spin"
+                />
               </td>
             </tr>
           </tbody>

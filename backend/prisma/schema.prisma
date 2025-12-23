@@ -68,8 +68,8 @@ model User {
   companiesUpdated        Company[]              @relation("CompanyUpdatedBy")
   legalRepresentativeCompanies Company[]        @relation("CompanyLegalRepresentative")
   workflowInstancesCreated WorkflowInstance[]    @relation("WorkflowInstanceCreator")
-  transportationRailwayBannersCreated TransportationRailwayBanner[] @relation("TransportationRailwayBannerCreatedBy")
-  transportationRailwayBannersUpdated TransportationRailwayBanner[] @relation("TransportationRailwayBannerUpdatedBy")
+  transportationRailwayFeaturedCreated TransportationRailwayFeaturedItem[] @relation("TransportationRailwayFeaturedCreatedBy")
+  transportationRailwayFeaturedUpdated TransportationRailwayFeaturedItem[] @relation("TransportationRailwayFeaturedUpdatedBy")
   transportationRailwaySyncJobs TransportationRailwaySyncJob[] @relation("TransportationRailwaySyncInitiator")
 
   @@map("users")
@@ -190,27 +190,23 @@ model PlayerMessageReaction {
   @@map("player_message_reactions")
 }
 
-model TransportationRailwayBanner {
-  id           String   @id @default(uuid())
-  title        String?
-  subtitle     String?
-  description  String?
-  attachmentId String?
-  ctaLabel     String?
-  ctaLink      String?
-  ctaIsInternal Boolean @default(false)
-  isPublished  Boolean  @default(true)
-  displayOrder Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdById  String?
-  updatedById  String?
-  attachment   Attachment? @relation("TransportationRailwayBannerAttachment", fields: [attachmentId], references: [id])
-  createdBy    User?       @relation("TransportationRailwayBannerCreatedBy", fields: [createdById], references: [id])
-  updatedBy    User?       @relation("TransportationRailwayBannerUpdatedBy", fields: [updatedById], references: [id])
+model TransportationRailwayFeaturedItem {
+  id          String                         @id @default(uuid())
+  entityType  TransportationRailwayFeaturedType
+  serverId    String
+  railwayMod  TransportationRailwayMod       @default(MTR)
+  entityId    String
+  displayOrder Int                           @default(0)
+  createdAt   DateTime                       @default(now())
+  updatedAt   DateTime                       @updatedAt
+  createdById String?
+  updatedById String?
+  createdBy   User?                          @relation("TransportationRailwayFeaturedCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?                          @relation("TransportationRailwayFeaturedUpdatedBy", fields: [updatedById], references: [id])
 
-  @@index([isPublished, displayOrder], map: "idx_transportation_railway_banners_published")
-  @@map("transportation_railway_banners")
+  @@unique([entityType, serverId, railwayMod, entityId], map: "uq_transportation_railway_featured_scope")
+  @@index([displayOrder, createdAt], map: "idx_transportation_railway_featured_order")
+  @@map("transportation_railway_featured_items")
 }
 
 model TransportationRailwayRoute {
@@ -1002,7 +998,6 @@ model Attachment {
   visibilityRoles       String[]                 @default([])
   shareTokens           AttachmentShareToken[]
   tags                  AttachmentTagging[]
-  transportationRailwayBanners TransportationRailwayBanner[] @relation("TransportationRailwayBannerAttachment")
   folder                AttachmentFolder?        @relation(fields: [folderId], references: [id])
   owner                 User?                    @relation("AttachmentUploader", fields: [ownerId], references: [id])
 
@@ -1501,6 +1496,12 @@ enum OAuthLogStatus {
 
 enum TransportationRailwayMod {
   MTR
+}
+
+enum TransportationRailwayFeaturedType {
+  ROUTE
+  STATION
+  DEPOT
 }
 
 enum TransportationRailwaySyncStatus {

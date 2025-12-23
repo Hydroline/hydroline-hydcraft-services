@@ -1,96 +1,33 @@
 import { Type } from 'class-transformer';
 import {
-  IsBoolean,
+  IsEnum,
   IsInt,
   IsIn,
   IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
-import { TransportationRailwayMod } from '@prisma/client';
+import {
+  TransportationRailwayFeaturedType,
+  TransportationRailwayMod,
+} from '@prisma/client';
 
-export class CreateRailwayBannerDto {
+export class CreateRailwayFeaturedItemDto {
+  @IsEnum(TransportationRailwayFeaturedType)
+  entityType!: TransportationRailwayFeaturedType;
+
+  @IsString()
+  @MaxLength(64)
+  serverId!: string;
+
   @IsString()
   @MaxLength(128)
-  attachmentId!: string;
+  entityId!: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(120)
-  title?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(160)
-  subtitle?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(300)
-  description?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(60)
-  ctaLabel?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(300)
-  ctaLink?: string | null;
-
-  @IsOptional()
-  @IsBoolean()
-  ctaIsInternal?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  isPublished?: boolean;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  displayOrder?: number;
-}
-
-export class UpdateRailwayBannerDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(128)
-  attachmentId?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  title?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(160)
-  subtitle?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(300)
-  description?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(60)
-  ctaLabel?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(300)
-  ctaLink?: string | null;
-
-  @IsOptional()
-  @IsBoolean()
-  ctaIsInternal?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  isPublished?: boolean;
+  @IsIn(Object.values(TransportationRailwayMod))
+  railwayType?: TransportationRailwayMod;
 
   @IsOptional()
   @Type(() => Number)

@@ -1,19 +1,3 @@
-export interface RailwayBanner {
-  id: string
-  title: string | null
-  subtitle: string | null
-  description: string | null
-  attachmentId: string | null
-  ctaLabel: string | null
-  ctaLink: string | null
-  ctaIsInternal: boolean
-  isPublished: boolean
-  displayOrder: number
-  createdAt: string
-  updatedAt: string
-  imageUrl: string | null
-}
-
 export interface RailwayEntity {
   id: string
   name: string | null
@@ -36,6 +20,15 @@ export interface RailwayRoute extends RailwayEntity {
   previewSvg?: string | null
 }
 
+export type RailwayFeaturedType = 'route' | 'station' | 'depot'
+
+export interface RailwayFeaturedItem {
+  id: string
+  type: RailwayFeaturedType
+  item: RailwayRoute | RailwayEntity
+  displayOrder: number
+}
+
 export interface RailwayOverviewStats {
   serverCount: number
   routes: number
@@ -44,14 +37,13 @@ export interface RailwayOverviewStats {
 }
 
 export interface RailwayOverview {
-  banners: RailwayBanner[]
   stats: RailwayOverviewStats
   latest: {
     depots: RailwayEntity[]
     stations: RailwayEntity[]
     routes: RailwayRoute[]
   }
-  recommendations: RailwayRoute[]
+  recommendations: RailwayFeaturedItem[]
   warnings: Array<{ serverId: string; message: string }>
 }
 
@@ -154,20 +146,6 @@ export interface RailwayRouteDetail {
     } | null
   }>
 }
-
-export type RailwayBannerPayload = {
-  attachmentId: string
-  title?: string | null
-  subtitle?: string | null
-  description?: string | null
-  ctaLabel?: string | null
-  ctaLink?: string | null
-  ctaIsInternal?: boolean
-  isPublished?: boolean
-  displayOrder?: number
-}
-
-export type RailwayBannerUpdatePayload = Partial<RailwayBannerPayload>
 
 export interface RailwayStationDetail {
   server: { id: string; name: string }

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
+import type { LeafletMouseEvent } from 'leaflet'
 import { RailwayStationRoutesMap } from '@/views/user/Transportation/railway/maps/stationRoutesMap'
 import type {
   RailwayRouteDetail,
@@ -40,6 +41,8 @@ const props = withDefaults(
 
 const containerRef = ref<HTMLElement | null>(null)
 const railwayMap = ref<RailwayStationRoutesMap | null>(null)
+const pointerBlockCoord = ref<{ x: number; z: number } | null>(null)
+const mapCursorCleanup = ref<(() => void) | null>(null)
 const isMounted = ref(false)
 const lastStationFocusKey = ref<string | null>(null)
 
@@ -73,26 +76,25 @@ const stationPolygon = computed(() => {
   ]
 })
 
-const stops = computed<RailwayRouteDetail['stops']>(() =>
-  props.platforms
-    .map((platform, index) => {
-      const position = computePlatformCenter(platform)
-      if (!position) return null
-      return {
-        order: index,
-        platformId: platform.id,
-        platformName: platform.name ?? platform.id,
-        stationId: platform.stationId,
-        stationName: null,
-        dwellTime: platform.dwellTime ?? null,
-        position,
-        bounds: null,
-      }
+const stops = computed<RailwayRouteDetail['stops']>(() => {
+  const result: RailwayRouteDetail['stops'] = []
+  props.platforms.forEach((platform, index) => {
+    const position = computePlatformCenter(platform)
+    if (!position) return
+
+    result.push({
+      order: index,
+      platformId: platform.id,
+      platformName: platform.name ?? platform.id,
+      stationId: platform.stationId ?? null,
+      stationName: null,
+      dwellTime: platform.dwellTime ?? null,
+      position,
+      bounds: null,
     })
-    .filter((stop): stop is RailwayRouteDetail['stops'][number] =>
-      Boolean(stop),
-    ),
-)
+  })
+  return result
+})
 
 const platformSegments = computed(() => {
   return props.platforms
@@ -155,6 +157,77 @@ const drawSignature = computed(() => {
     : 'null'
   return `${stationSig}:${props.platforms.length}:${groupCount}:${pathCount}:${Boolean(props.autoFocus)}`
 })
+
+let resizeObserver: ResizeObserver | null = null
+let scheduledResizeRaf: number | null = null
+let scheduledDrawFrame: number | null = null
+
+function invalidateMapSize() {
+  const map = railwayMap.value?.getController()?.getLeafletInstance()
+  if (!map) return
+  map.invalidateSize({ pan: false })
+}
+
+function scheduleDraw() {
+  if (scheduledDrawFrame != null) return
+  scheduledDrawFrame = requestAnimationFrame(() => {
+    scheduledDrawFrame = null
+    void draw()
+  })
+}
+
+function attachMapCursorTracking() {
+  mapCursorCleanup.value?.()
+  mapCursorCleanup.value = null
+  pointerBlockCoord.value = null
+
+  const controller = railwayMap.value?.getController()
+  const map = controller?.getLeafletInstance()
+  if (!controller || !map) return
+
+  const mapContainer = map.getContainer()
+
+  const handleMove = (event: LeafletMouseEvent) => {
+    pointerBlockCoord.value = controller.fromLatLng(event.latlng)
+  }
+  const handleLeave = () => {
+    pointerBlockCoord.value = null
+  }
+
+  const handleDomLeave = () => {
+    handleLeave()
+  }
+
+  const handleWindowBlur = () => {
+    handleLeave()
+  }
+
+  map.on('mousemove', handleMove)
+  map.on('mouseout', handleLeave)
+  map.on('dragstart', handleLeave)
+  map.on('zoomstart', handleLeave)
+
+  mapContainer.addEventListener('pointerleave', handleDomLeave, {
+    passive: true,
+  })
+  mapContainer.addEventListener('mouseleave', handleDomLeave, {
+    passive: true,
+  })
+  window.addEventListener('blur', handleWindowBlur)
+
+  mapCursorCleanup.value = () => {
+    map.off('mousemove', handleMove)
+    map.off('mouseout', handleLeave)
+    map.off('dragstart', handleLeave)
+    map.off('zoomstart', handleLeave)
+
+    mapContainer.removeEventListener('pointerleave', handleDomLeave)
+    mapContainer.removeEventListener('mouseleave', handleDomLeave)
+    window.removeEventListener('blur', handleWindowBlur)
+  }
+}
+
+const formatBlockCoordinate = (value: number) => Math.round(value)
 
 function computePlatformCenter(
   platform: RailwayStationDetail['platforms'][number],
@@ -235,11 +308,46 @@ onMounted(async () => {
     showZoomControl: false,
   })
 
+  attachMapCursorTracking()
+
+  // 容器首次布局/切换时尺寸可能为 0，Leaflet 会出现右下角空白或裁切。
+  // 监听容器尺寸，变为非零后强制 invalidateSize + 重绘。
+  resizeObserver?.disconnect()
+  resizeObserver = new ResizeObserver((entries) => {
+    const entry = entries[0]
+    const rect = entry?.contentRect
+    if (!rect) return
+    if (rect.width <= 0 || rect.height <= 0) return
+    if (scheduledResizeRaf != null) return
+    scheduledResizeRaf = requestAnimationFrame(() => {
+      scheduledResizeRaf = null
+      invalidateMapSize()
+      scheduleDraw()
+    })
+  })
+  resizeObserver.observe(containerRef.value)
+
   await draw()
 })
 
 onBeforeUnmount(() => {
   isMounted.value = false
+
+  if (scheduledResizeRaf != null) {
+    cancelAnimationFrame(scheduledResizeRaf)
+    scheduledResizeRaf = null
+  }
+  if (scheduledDrawFrame != null) {
+    cancelAnimationFrame(scheduledDrawFrame)
+    scheduledDrawFrame = null
+  }
+
+  resizeObserver?.disconnect()
+  resizeObserver = null
+
+  mapCursorCleanup.value?.()
+  mapCursorCleanup.value = null
+
   railwayMap.value?.destroy()
   railwayMap.value = null
 })
@@ -262,21 +370,43 @@ watch(
 </script>
 
 <template>
-  <div
-    class="relative railway-map-container"
-    :class="props.rounded ? 'rounded-3xl overflow-hidden' : ''"
-  >
+  <div class="relative railway-map-container">
     <div
       ref="containerRef"
-      class="w-full"
-      :style="{ height: containerHeight }"
+      class="w-full overflow-hidden border border-slate-200/70 bg-white/80 dark:bg-slate-900/20 dark:border-slate-800 transition duration-250"
+      :class="props.rounded ? 'rounded-3xl' : 'rounded-none'"
+      :style="{
+        minHeight: containerHeight,
+        height: containerHeight,
+      }"
     ></div>
 
     <div class="absolute inset-0 z-998 p-3 pointer-events-none flex items-end">
       <div
         class="absolute inset-0 bg-[linear-gradient(180deg,transparent_75%,var(--background-dark-2)_125%)]"
-        :class="props.rounded ? 'rounded-3xl' : ''"
+        :class="props.rounded ? 'rounded-3xl' : 'rounded-none'"
       ></div>
+
+      <div
+        class="relative w-full rounded-lg text-xs text-white flex items-end justify-between"
+        style="text-shadow: 0 0 5px rgba(0, 0, 0, 0.7)"
+      >
+        <div></div>
+
+        <Transition
+          enter-active-class="transition-opacity duration-200"
+          enter-from-class="opacity-0"
+          enter-to-class="opacity-100"
+          leave-active-class="transition-opacity duration-200"
+          leave-from-class="opacity-100"
+          leave-to-class="opacity-0"
+        >
+          <div v-if="pointerBlockCoord">
+            {{ formatBlockCoordinate(pointerBlockCoord.x) }},
+            {{ formatBlockCoordinate(pointerBlockCoord.z) }}
+          </div>
+        </Transition>
+      </div>
     </div>
 
     <Transition
@@ -290,6 +420,7 @@ watch(
       <div
         v-if="props.loading || props.mapLoading"
         class="absolute inset-0 bg-white/60 dark:bg-slate-900/30 backdrop-blur-[1px] flex items-center justify-center"
+        :class="props.rounded ? 'rounded-3xl' : 'rounded-none'"
       >
         <UIcon
           name="i-lucide-loader-2"

@@ -343,9 +343,11 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
             />
           </template>
         </template>
-        <span v-else-if="loading" class="text-xs text-slate-400"
-          >加载中...</span
-        >
+        <span v-else-if="loading" class="text-xs text-slate-400">
+          <UIcon
+            name="i-lucide-loader-2"
+            class="inline-block h-4 w-4 animate-spin"
+        /></span>
         <span v-else-if="error" class="text-xs text-rose-500">状态异常</span>
         <span v-else class="text-xs text-slate-400">暂无服务器</span>
       </div>

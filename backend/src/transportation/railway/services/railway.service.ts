@@ -1,17 +1,13 @@
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+  Prisma,
+  TransportationRailwayFeaturedItem,
+  TransportationRailwayFeaturedType,
+  TransportationRailwayMod,
+} from '@prisma/client';
 import { HydrolineBeaconPoolService } from '../../../lib/hydroline-beacon';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { buildPublicUrl } from '../../../lib/shared/url';
-import {
-  CreateRailwayBannerDto,
-  UpdateRailwayBannerDto,
-} from '../../dto/railway.dto';
+import { CreateRailwayFeaturedItemDto } from '../../dto/railway.dto';
 import { BeaconServerRecord } from '../utils/railway-common';
 import {
   fetchRailwaySnapshot,
@@ -22,7 +18,7 @@ import type {
   NormalizedRoute,
   OverviewStats,
   OverviewLatest,
-  RailwaySnapshotEntry,
+  QueryMtrEntityRow,
 } from '../types/railway-types';
 import {
   normalizeEntity,
@@ -30,30 +26,17 @@ import {
 } from '../utils/railway-normalizer';
 import { DEFAULT_RAILWAY_TYPE } from '../config/railway-type.config';
 
-const DEFAULT_RECOMMENDATION_COUNT = 4;
+const FEATURED_TYPE_LABELS = {
+  [TransportationRailwayFeaturedType.ROUTE]: 'route',
+  [TransportationRailwayFeaturedType.STATION]: 'station',
+  [TransportationRailwayFeaturedType.DEPOT]: 'depot',
+} as const;
 
-const bannerInclude =
-  Prisma.validator<Prisma.TransportationRailwayBannerInclude>()({
-    attachment: { select: { id: true, isPublic: true } },
-  });
-type BannerWithAttachment = Prisma.TransportationRailwayBannerGetPayload<{
-  include: typeof bannerInclude;
-}>;
-
-type SerializedBanner = {
+type FeaturedItemPayload = {
   id: string;
-  title: string | null;
-  subtitle: string | null;
-  description: string | null;
-  attachmentId: string | null;
-  ctaLabel: string | null;
-  ctaLink: string | null;
-  ctaIsInternal: boolean;
-  isPublished: boolean;
+  type: 'route' | 'station' | 'depot';
+  item: NormalizedRoute | NormalizedEntity;
   displayOrder: number;
-  createdAt: Date;
-  updatedAt: Date;
-  imageUrl: string | null;
 };
 
 @Injectable()
@@ -66,8 +49,8 @@ export class TransportationRailwayService {
   ) {}
 
   async getOverview() {
-    const [banners, servers] = await Promise.all([
-      this.getPublishedBanners(),
+    const [featuredItems, servers] = await Promise.all([
+      this.listFeaturedItems(),
       this.listBeaconServers(),
     ]);
 
@@ -83,7 +66,6 @@ export class TransportationRailwayService {
       routes: [],
     };
     const warnings: Array<{ serverId: string; message: string }> = [];
-    const recommendations: NormalizedRoute[] = [];
 
     await Promise.all(
       servers.map(async (server) => {
@@ -95,7 +77,6 @@ export class TransportationRailwayService {
           latest.depots.push(...summary.latestDepots);
           latest.stations.push(...summary.latestStations);
           latest.routes.push(...summary.latestRoutes);
-          recommendations.push(...summary.recommendationCandidates);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
@@ -115,102 +96,53 @@ export class TransportationRailwayService {
     latest.stations.splice(8);
     latest.routes.splice(8);
 
-    const pickedRecommendations = this.pickRecommendations(recommendations);
-
     return {
-      banners,
       stats,
       latest,
-      recommendations: pickedRecommendations,
+      recommendations: featuredItems,
       warnings,
     };
   }
 
-  async adminListBanners() {
-    const banners = await this.prisma.transportationRailwayBanner.findMany({
-      include: bannerInclude,
-      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
-    });
-    return banners.map((banner) => this.serializeBanner(banner));
+  async adminListFeaturedItems() {
+    return this.listFeaturedItems();
   }
 
-  async createBanner(userId: string, dto: CreateRailwayBannerDto) {
-    await this.ensureAttachmentPublic(dto.attachmentId);
-    const created = await this.prisma.transportationRailwayBanner.create({
+  async createFeaturedItem(userId: string, dto: CreateRailwayFeaturedItemDto) {
+    const railwayMod = dto.railwayType ?? DEFAULT_RAILWAY_TYPE;
+    await this.ensureFeaturedTargetExists(
+      dto.entityType,
+      dto.serverId,
+      railwayMod,
+      dto.entityId,
+    );
+
+    const displayOrder =
+      dto.displayOrder ?? (await this.nextFeaturedDisplayOrder());
+
+    const created = await this.prisma.transportationRailwayFeaturedItem.create({
       data: {
-        title: dto.title?.trim() || null,
-        subtitle: dto.subtitle?.trim() || null,
-        description: dto.description?.trim() || null,
-        attachmentId: dto.attachmentId,
-        ctaLabel: dto.ctaLabel?.trim() || null,
-        ctaLink: dto.ctaLink?.trim() || null,
-        ctaIsInternal: dto.ctaIsInternal ?? false,
-        isPublished: dto.isPublished ?? true,
-        displayOrder: dto.displayOrder ?? 0,
+        entityType: dto.entityType,
+        serverId: dto.serverId,
+        railwayMod,
+        entityId: dto.entityId,
+        displayOrder,
         createdById: userId,
         updatedById: userId,
       },
-      include: bannerInclude,
     });
-    return this.serializeBanner(created);
+
+    const resolved = await this.serializeFeaturedItem(created);
+    if (!resolved) {
+      throw new NotFoundException('Featured item not found');
+    }
+    return resolved;
   }
 
-  async updateBanner(id: string, userId: string, dto: UpdateRailwayBannerDto) {
-    const existing = await this.prisma.transportationRailwayBanner.findUnique({
+  async deleteFeaturedItem(id: string) {
+    await this.prisma.transportationRailwayFeaturedItem.delete({
       where: { id },
     });
-    if (!existing) {
-      throw new NotFoundException('Banner not found');
-    }
-    if (dto.attachmentId) {
-      await this.ensureAttachmentPublic(dto.attachmentId);
-    }
-    const updated = await this.prisma.transportationRailwayBanner.update({
-      where: { id },
-      data: {
-        title:
-          dto.title !== undefined ? dto.title?.trim() || null : existing.title,
-        subtitle:
-          dto.subtitle !== undefined
-            ? dto.subtitle?.trim() || null
-            : existing.subtitle,
-        description:
-          dto.description !== undefined
-            ? dto.description?.trim() || null
-            : existing.description,
-        attachmentId:
-          dto.attachmentId !== undefined
-            ? dto.attachmentId || null
-            : existing.attachmentId,
-        ctaLabel:
-          dto.ctaLabel !== undefined
-            ? dto.ctaLabel?.trim() || null
-            : existing.ctaLabel,
-        ctaLink:
-          dto.ctaLink !== undefined
-            ? dto.ctaLink?.trim() || null
-            : existing.ctaLink,
-        ctaIsInternal:
-          dto.ctaIsInternal !== undefined
-            ? dto.ctaIsInternal
-            : existing.ctaIsInternal,
-        isPublished:
-          dto.isPublished !== undefined
-            ? dto.isPublished
-            : existing.isPublished,
-        displayOrder:
-          dto.displayOrder !== undefined
-            ? dto.displayOrder
-            : existing.displayOrder,
-        updatedById: userId,
-      },
-      include: bannerInclude,
-    });
-    return this.serializeBanner(updated);
-  }
-
-  async deleteBanner(id: string) {
-    await this.prisma.transportationRailwayBanner.delete({ where: { id } });
     return { success: true };
   }
 
@@ -222,7 +154,6 @@ export class TransportationRailwayService {
     latestDepots: NormalizedEntity[];
     latestStations: NormalizedEntity[];
     latestRoutes: NormalizedRoute[];
-    recommendationCandidates: NormalizedRoute[];
   }> {
     const [snapshotRes, depotRows, stationRows, routeRows] = await Promise.all([
       this.fetchRailwaySnapshot(server),
@@ -280,29 +211,7 @@ export class TransportationRailwayService {
         .map((row) => normalizeEntity(row, server))
         .filter((row): row is NormalizedEntity => Boolean(row)),
       latestRoutes: normalizedRoutes,
-      recommendationCandidates: normalizedRoutes,
     };
-  }
-
-  private pickRecommendations(routes: NormalizedRoute[]) {
-    if (!routes.length) return [];
-    const deduped = new Map<string, NormalizedRoute>();
-    for (const route of routes) {
-      const key = `${route.server.id}:${route.id}`;
-      if (!deduped.has(key)) {
-        deduped.set(key, route);
-      }
-    }
-    return Array.from(deduped.values())
-      .sort((a, b) => {
-        const left = a.lastUpdated ?? 0;
-        const right = b.lastUpdated ?? 0;
-        if (left === right) {
-          return (b.platformCount ?? 0) - (a.platformCount ?? 0);
-        }
-        return right - left;
-      })
-      .slice(0, DEFAULT_RECOMMENDATION_COUNT);
   }
 
   private async fetchRailwaySnapshot(server: BeaconServerRecord) {
@@ -342,48 +251,241 @@ export class TransportationRailwayService {
       }));
   }
 
-  private async getPublishedBanners() {
-    const rows = await this.prisma.transportationRailwayBanner.findMany({
-      where: { isPublished: true },
-      include: bannerInclude,
-      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
-    });
-    return rows.map((row) => this.serializeBanner(row));
+  private async listFeaturedItems(): Promise<FeaturedItemPayload[]> {
+    const featuredRows =
+      await this.prisma.transportationRailwayFeaturedItem.findMany({
+        orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+      });
+
+    if (!featuredRows.length) return [];
+
+    const serverIds = Array.from(
+      new Set(featuredRows.map((row) => row.serverId)),
+    );
+    const serverMap = await this.resolveServerRecordMap(serverIds);
+
+    const results: FeaturedItemPayload[] = [];
+    for (const row of featuredRows) {
+      const resolved = await this.serializeFeaturedItem(row, serverMap);
+      if (resolved) {
+        results.push(resolved);
+      }
+    }
+    return results;
   }
 
-  private serializeBanner(row: BannerWithAttachment): SerializedBanner {
+  private async serializeFeaturedItem(
+    row: TransportationRailwayFeaturedItem,
+    serverMap?: Map<string, BeaconServerRecord>,
+  ): Promise<FeaturedItemPayload | null> {
+    const servers =
+      serverMap ?? (await this.resolveServerRecordMap([row.serverId]));
+    const server =
+      servers.get(row.serverId) ??
+      this.buildFallbackServer(row.serverId, row.railwayMod);
+
+    const entity = await this.resolveFeaturedEntity(row, server);
+    if (!entity) return null;
+
     return {
       id: row.id,
-      title: row.title ?? null,
-      subtitle: row.subtitle ?? null,
-      description: row.description ?? null,
-      attachmentId: row.attachmentId ?? null,
-      ctaLabel: row.ctaLabel ?? null,
-      ctaLink: row.ctaLink ?? null,
-      ctaIsInternal: row.ctaIsInternal,
-      isPublished: row.isPublished,
+      type: FEATURED_TYPE_LABELS[row.entityType],
+      item: entity,
       displayOrder: row.displayOrder,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      imageUrl:
-        row.attachment && row.attachment.isPublic
-          ? buildPublicUrl(`/attachments/public/${row.attachment.id}`)
+    };
+  }
+
+  private async resolveFeaturedEntity(
+    row: TransportationRailwayFeaturedItem,
+    server: BeaconServerRecord,
+  ): Promise<NormalizedRoute | NormalizedEntity | null> {
+    const targetServer = { ...server, railwayMod: row.railwayMod };
+
+    if (row.entityType === TransportationRailwayFeaturedType.ROUTE) {
+      const route = await this.prisma.transportationRailwayRoute.findUnique({
+        where: {
+          serverId_railwayMod_entityId: {
+            serverId: row.serverId,
+            railwayMod: row.railwayMod,
+            entityId: row.entityId,
+          },
+        },
+      });
+      if (!route) return null;
+      const normalized = normalizeRouteRow(
+        this.buildQueryRowFromStoredEntity(route),
+        targetServer,
+      );
+      return normalized;
+    }
+
+    if (row.entityType === TransportationRailwayFeaturedType.STATION) {
+      const station = await this.prisma.transportationRailwayStation.findUnique(
+        {
+          where: {
+            serverId_railwayMod_entityId: {
+              serverId: row.serverId,
+              railwayMod: row.railwayMod,
+              entityId: row.entityId,
+            },
+          },
+        },
+      );
+      if (!station) return null;
+      return normalizeEntity(
+        this.buildQueryRowFromStoredEntity(station),
+        targetServer,
+      );
+    }
+
+    const depot = await this.prisma.transportationRailwayDepot.findUnique({
+      where: {
+        serverId_railwayMod_entityId: {
+          serverId: row.serverId,
+          railwayMod: row.railwayMod,
+          entityId: row.entityId,
+        },
+      },
+    });
+    if (!depot) return null;
+    return normalizeEntity(
+      this.buildQueryRowFromStoredEntity(depot),
+      targetServer,
+    );
+  }
+
+  private buildQueryRowFromStoredEntity(row: {
+    entityId: string;
+    transportMode: string | null;
+    name: string | null;
+    color: number | null;
+    filePath: string | null;
+    payload: Prisma.JsonValue;
+    lastBeaconUpdatedAt: Date | null;
+    updatedAt: Date;
+  }): QueryMtrEntityRow {
+    return {
+      entity_id: row.entityId,
+      transport_mode: row.transportMode,
+      name: row.name,
+      color: row.color,
+      file_path: row.filePath,
+      last_updated:
+        row.lastBeaconUpdatedAt?.getTime() ?? row.updatedAt.getTime(),
+      payload:
+        row.payload &&
+        typeof row.payload === 'object' &&
+        !Array.isArray(row.payload)
+          ? (row.payload as Record<string, unknown>)
           : null,
     };
   }
 
-  private async ensureAttachmentPublic(attachmentId: string) {
-    const attachment = await this.prisma.attachment.findUnique({
-      where: { id: attachmentId },
-      select: { id: true, isPublic: true },
+  private async resolveServerRecordMap(serverIds: string[]) {
+    if (!serverIds.length) return new Map<string, BeaconServerRecord>();
+    const rows = await this.prisma.minecraftServer.findMany({
+      where: { id: { in: serverIds } },
+      select: {
+        id: true,
+        displayName: true,
+        beaconEndpoint: true,
+        beaconKey: true,
+        beaconRequestTimeoutMs: true,
+        beaconMaxRetry: true,
+        transportationRailwayMod: true,
+      },
     });
-    if (!attachment) {
-      throw new NotFoundException('Attachment not found');
+
+    const map = new Map<string, BeaconServerRecord>();
+    for (const row of rows) {
+      map.set(row.id, {
+        id: row.id,
+        displayName: row.displayName,
+        beaconEndpoint: row.beaconEndpoint ?? '',
+        beaconKey: row.beaconKey ?? '',
+        beaconRequestTimeoutMs: row.beaconRequestTimeoutMs,
+        beaconMaxRetry: row.beaconMaxRetry,
+        railwayMod: row.transportationRailwayMod ?? DEFAULT_RAILWAY_TYPE,
+      });
     }
-    if (!attachment.isPublic) {
-      throw new BadRequestException(
-        'Please set the attachment to public access first',
-      );
+    return map;
+  }
+
+  private buildFallbackServer(
+    serverId: string,
+    railwayMod: TransportationRailwayMod,
+  ): BeaconServerRecord {
+    return {
+      id: serverId,
+      displayName: serverId,
+      beaconEndpoint: '',
+      beaconKey: '',
+      beaconRequestTimeoutMs: null,
+      beaconMaxRetry: null,
+      railwayMod,
+    };
+  }
+
+  private async ensureFeaturedTargetExists(
+    entityType: TransportationRailwayFeaturedType,
+    serverId: string,
+    railwayMod: TransportationRailwayMod,
+    entityId: string,
+  ) {
+    if (entityType === TransportationRailwayFeaturedType.ROUTE) {
+      const exists = await this.prisma.transportationRailwayRoute.findUnique({
+        where: {
+          serverId_railwayMod_entityId: {
+            serverId,
+            railwayMod,
+            entityId,
+          },
+        },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new NotFoundException('线路不存在');
+      }
+      return;
     }
+
+    if (entityType === TransportationRailwayFeaturedType.STATION) {
+      const exists = await this.prisma.transportationRailwayStation.findUnique({
+        where: {
+          serverId_railwayMod_entityId: {
+            serverId,
+            railwayMod,
+            entityId,
+          },
+        },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new NotFoundException('车站不存在');
+      }
+      return;
+    }
+
+    const exists = await this.prisma.transportationRailwayDepot.findUnique({
+      where: {
+        serverId_railwayMod_entityId: {
+          serverId,
+          railwayMod,
+          entityId,
+        },
+      },
+      select: { id: true },
+    });
+    if (!exists) {
+      throw new NotFoundException('车厂不存在');
+    }
+  }
+
+  private async nextFeaturedDisplayOrder() {
+    const row = await this.prisma.transportationRailwayFeaturedItem.findFirst({
+      select: { displayOrder: true },
+      orderBy: { displayOrder: 'desc' },
+    });
+    return (row?.displayOrder ?? 0) + 1;
   }
 }

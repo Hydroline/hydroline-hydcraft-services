@@ -432,14 +432,14 @@ onMounted(() => {
                   {{ logError }}
                 </p>
                 <p v-else-if="!logs" class="text-sm text-slate-500">
-                  暂无日志记录。
+                  暂无日志记录
                 </p>
                 <div v-else>
                   <p
                     v-if="logs.entries.length === 0"
                     class="text-sm text-slate-500"
                   >
-                    暂无日志记录。
+                    暂无日志记录
                   </p>
                   <div v-else class="space-y-3">
                     <div
@@ -526,7 +526,10 @@ onMounted(() => {
             >
               暂无线路数据
             </p>
-            <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+            <div
+              v-else
+              class="divide-y divide-slate-100 dark:divide-slate-800/60"
+            >
               <div
                 v-for="route in associatedRoutes"
                 :key="route.id"

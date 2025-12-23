@@ -126,10 +126,20 @@ function getRouteLabel(routeId: string) {
   const route = routeIndex.value.get(routeId)
   const name = route?.name?.trim()
   if (name) {
-    return { label: name, tooltip: null as string | null }
+    return {
+      label: name,
+      group: extractRouteGroupName(name),
+      suffix: extractRouteSuffixLabel(name),
+      tooltip: null as string | null,
+    }
   }
   // Avoid showing raw IDs directly in UI; keep them in tooltip for debugging.
-  return { label: '未知线路', tooltip: routeId }
+  return {
+    label: '未知线路',
+    group: '未知线路',
+    suffix: '',
+    tooltip: routeId,
+  }
 }
 
 const routeGroupSelectItems = computed<RouteGroupSelectItem[]>(() => {
@@ -707,14 +717,14 @@ onUnmounted(() => {
                   {{ logError }}
                 </p>
                 <p v-else-if="!logs" class="text-sm text-slate-500">
-                  暂无日志记录。
+                  暂无日志记录
                 </p>
                 <div v-else>
                   <p
                     v-if="logs.entries.length === 0"
                     class="text-sm text-slate-500"
                   >
-                    暂无日志记录。
+                    暂无日志记录
                   </p>
                   <div v-else class="space-y-3">
                     <div
@@ -810,7 +820,10 @@ onUnmounted(() => {
               >
                 暂无线路数据
               </p>
-              <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <div
+                v-else
+                class="divide-y divide-slate-100 dark:divide-slate-800/60"
+              >
                 <div
                   v-for="route in associatedRoutes"
                   :key="route.id"
@@ -876,6 +889,7 @@ onUnmounted(() => {
               </span>
             </h3>
             <div
+              v-if="platforms.length > 0"
               class="mt-3 space-y-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
             >
               <table class="w-full text-left text-sm">
@@ -895,7 +909,7 @@ onUnmounted(() => {
                     class="border-t border-slate-100 text-slate-700 dark:border-slate-800 dark:text-slate-200"
                   >
                     <td class="py-2 font-medium">
-                      {{ platform.name.split('|')[0] || platform.id }}
+                      {{ platform.name?.split('|')[0] || platform.id }}
                     </td>
                     <td class="py-2">
                       <div class="flex flex-wrap gap-1">
@@ -912,7 +926,7 @@ onUnmounted(() => {
                               variant="soft"
                               @click="goRoute(routeId)"
                             >
-                              {{ getRouteLabel(routeId).label.split('|')[0] }}
+                              {{ getRouteLabel(routeId).group }}
                             </UButton>
                           </UTooltip>
                           <UButton
@@ -921,7 +935,9 @@ onUnmounted(() => {
                             variant="soft"
                             @click="goRoute(routeId)"
                           >
-                            {{ getRouteLabel(routeId).label.split('|')[0] }}
+                            {{
+                              `${getRouteLabel(routeId).group ?? ''} ${getRouteLabel(routeId).suffix}`.trim()
+                            }}
                           </UButton>
                         </template>
                       </div>
@@ -937,6 +953,12 @@ onUnmounted(() => {
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div
+              v-else
+              class="mt-3 space-y-2 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 text-sm text-slate-500"
+            >
+              暂无站台数据
             </div>
           </div>
         </div>

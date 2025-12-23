@@ -702,7 +702,10 @@ onMounted(() => {
                 colspan="3"
                 class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
               >
-                加载中...
+                <UIcon
+                  name="i-lucide-loader-2"
+                  class="inline-block h-4 w-4 animate-spin"
+                />
               </td>
             </tr>
           </tbody>

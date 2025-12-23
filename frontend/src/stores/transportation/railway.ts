@@ -2,11 +2,9 @@ import { defineStore } from 'pinia'
 import { apiFetch } from '@/utils/http/api'
 import { useAuthStore } from '@/stores/user/auth'
 import type {
-  RailwayBanner,
-  RailwayBannerPayload,
-  RailwayBannerUpdatePayload,
   RailwayDepotDetail,
   RailwayEntityListResponse,
+  RailwayFeaturedItem,
   RailwayOverview,
   RailwayRouteDetail,
   RailwayRouteListResponse,
@@ -47,9 +45,9 @@ export const useTransportationRailwayStore = defineStore(
       depotLogs: {} as Record<string, RailwayRouteLogResult>,
       routeVariants: {} as Record<string, RailwayRouteVariantsResult>,
       routeLoading: false,
-      adminBanners: [] as RailwayBanner[],
-      adminBannersLoading: false,
-      bannerSubmitting: false,
+      adminFeatured: [] as RailwayFeaturedItem[],
+      adminFeaturedLoading: false,
+      featuredSubmitting: false,
     }),
     getters: {
       hasOverview(state): boolean {
@@ -351,83 +349,64 @@ export const useTransportationRailwayStore = defineStore(
           `/transportation/railway/depots?${query.toString()}`,
         )
       },
-      async fetchAdminBanners() {
-        this.adminBannersLoading = true
+      async fetchAdminFeaturedItems() {
+        this.adminFeaturedLoading = true
         try {
           const authStore = useAuthStore()
-          this.adminBanners = await apiFetch<RailwayBanner[]>(
-            '/transportation/railway/admin/banners',
+          this.adminFeatured = await apiFetch<RailwayFeaturedItem[]>(
+            '/transportation/railway/admin/featured',
             {
               token: authStore.token,
             },
           )
-          return this.adminBanners
+          return this.adminFeatured
         } finally {
-          this.adminBannersLoading = false
+          this.adminFeaturedLoading = false
         }
       },
-      async createBanner(payload: RailwayBannerPayload) {
-        this.bannerSubmitting = true
+      async createFeaturedItem(payload: {
+        entityType: RailwayFeaturedItem['type']
+        serverId: string
+        entityId: string
+        railwayType: string
+        displayOrder?: number
+      }) {
+        this.featuredSubmitting = true
         try {
           const authStore = useAuthStore()
-          const banner = await apiFetch<RailwayBanner>(
-            '/transportation/railway/admin/banners',
+          const requestBody = {
+            ...payload,
+            entityType: payload.entityType.toUpperCase(),
+          }
+          const featured = await apiFetch<RailwayFeaturedItem>(
+            '/transportation/railway/admin/featured',
             {
               method: 'POST',
-              body: payload,
+              body: requestBody,
               token: authStore.token,
             },
           )
-          this.adminBanners.unshift(banner)
+          this.adminFeatured.unshift(featured)
           await this.fetchOverview(true)
-          return banner
+          return featured
         } finally {
-          this.bannerSubmitting = false
+          this.featuredSubmitting = false
         }
       },
-      async updateBanner(
-        bannerId: string,
-        payload: RailwayBannerUpdatePayload,
-      ) {
-        this.bannerSubmitting = true
-        try {
-          const authStore = useAuthStore()
-          const banner = await apiFetch<RailwayBanner>(
-            `/transportation/railway/admin/banners/${bannerId}`,
-            {
-              method: 'PATCH',
-              body: payload,
-              token: authStore.token,
-            },
-          )
-          const index = this.adminBanners.findIndex(
-            (item) => item.id === bannerId,
-          )
-          if (index !== -1) {
-            this.adminBanners[index] = banner
-          } else {
-            this.adminBanners.unshift(banner)
-          }
-          await this.fetchOverview(true)
-          return banner
-        } finally {
-          this.bannerSubmitting = false
-        }
-      },
-      async deleteBanner(bannerId: string) {
+      async deleteFeaturedItem(featuredId: string) {
         const authStore = useAuthStore()
-        await apiFetch(`/transportation/railway/admin/banners/${bannerId}`, {
+        await apiFetch(`/transportation/railway/admin/featured/${featuredId}`, {
           method: 'DELETE',
           token: authStore.token,
         })
-        this.adminBanners = this.adminBanners.filter(
-          (banner) => banner.id !== bannerId,
+        this.adminFeatured = this.adminFeatured.filter(
+          (item) => item.id !== featuredId,
         )
         await this.fetchOverview(true)
         return { success: true }
       },
-      clearBannerCache() {
-        this.adminBanners = []
+      clearFeaturedCache() {
+        this.adminFeatured = []
       },
     },
   },
