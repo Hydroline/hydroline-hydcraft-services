@@ -123,5 +123,21 @@ export const useAdminCompanyStore = defineStore('admin-companies', {
       this.selected = company
       return company
     },
+    async deleteCompany(id: string) {
+      const authStore = useAuthStore()
+      const result = await apiFetch<{ success: boolean }>(
+        `/admin/companies/${id}`,
+        {
+          method: 'DELETE',
+          token: authStore.token,
+        },
+      )
+      this.items = this.items.filter((item) => item.id !== id)
+      this.total = Math.max(this.total - 1, 0)
+      if (this.selected?.id === id) {
+        this.selected = null
+      }
+      return result
+    },
   },
 })

@@ -11,6 +11,7 @@ interface FetchOptions {
   search?: string
   page?: number
   pageSize?: number
+  workflowCode?: string
 }
 
 export const useAdminCompanyApplicationsStore = defineStore(
@@ -24,6 +25,8 @@ export const useAdminCompanyApplicationsStore = defineStore(
         pageSize: 20,
         pageCount: 1,
       },
+      autoApproveEnabled: false,
+      settingsLoading: false,
       loading: false,
     }),
     actions: {
@@ -43,6 +46,9 @@ export const useAdminCompanyApplicationsStore = defineStore(
         }
         if (options.search) {
           params.set('search', options.search)
+        }
+        if (options.workflowCode) {
+          params.set('workflowCode', options.workflowCode)
         }
         this.loading = true
         try {
@@ -65,6 +71,82 @@ export const useAdminCompanyApplicationsStore = defineStore(
           return result
         } finally {
           this.loading = false
+        }
+      },
+      async executeAction(
+        applicationId: string,
+        payload: { actionKey: string; comment?: string },
+      ) {
+        const auth = useAuthStore()
+        if (!auth.token) {
+          throw new Error('未登录，无法审批申请')
+        }
+        return apiFetch(
+          `/admin/company/applications/${applicationId}/actions`,
+          {
+            method: 'POST',
+            body: payload,
+            token: auth.token,
+          },
+        )
+      },
+      async fetchSettings() {
+        return this.fetchSettingsByWorkflow()
+      },
+      async fetchSettingsByWorkflow(workflowCode?: string) {
+        const auth = useAuthStore()
+        if (!auth.token) {
+          throw new Error('未登录，无法获取审批设置')
+        }
+        this.settingsLoading = true
+        try {
+          const params = new URLSearchParams()
+          if (workflowCode) {
+            params.set('workflowCode', workflowCode)
+          }
+          const result = await apiFetch<{ autoApprove: boolean }>(
+            `/admin/company/applications/settings${
+              params.toString() ? `?${params.toString()}` : ''
+            }`,
+            { token: auth.token },
+          )
+          this.autoApproveEnabled = result.autoApprove
+          return result
+        } finally {
+          this.settingsLoading = false
+        }
+      },
+      async updateSettings(autoApprove: boolean) {
+        return this.updateSettingsByWorkflow(autoApprove)
+      },
+      async updateSettingsByWorkflow(
+        autoApprove: boolean,
+        workflowCode?: string,
+      ) {
+        const auth = useAuthStore()
+        if (!auth.token) {
+          throw new Error('未登录，无法更新审批设置')
+        }
+        this.settingsLoading = true
+        try {
+          const params = new URLSearchParams()
+          if (workflowCode) {
+            params.set('workflowCode', workflowCode)
+          }
+          const result = await apiFetch<{ autoApprove: boolean }>(
+            `/admin/company/applications/settings${
+              params.toString() ? `?${params.toString()}` : ''
+            }`,
+            {
+              method: 'POST',
+              body: { autoApprove },
+              token: auth.token,
+            },
+          )
+          this.autoApproveEnabled = result.autoApprove
+          return result
+        } finally {
+          this.settingsLoading = false
         }
       },
     },

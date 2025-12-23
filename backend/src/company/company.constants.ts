@@ -6,6 +6,8 @@ import {
 import { UpsertWorkflowDefinitionDto } from '../workflow/dto/upsert-workflow-definition.dto';
 
 export const DEFAULT_COMPANY_WORKFLOW_CODE = 'company.registration';
+export const DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE =
+  'company.deregistration';
 
 export const DEFAULT_COMPANY_WORKFLOW_DEFINITION: UpsertWorkflowDefinitionDto =
   {
@@ -88,7 +90,7 @@ export const DEFAULT_COMPANY_WORKFLOW_DEFINITION: UpsertWorkflowDefinitionDto =
       },
       {
         key: 'approved',
-        label: '已生效',
+        label: '已注册',
         final: true,
         business: {
           companyStatus: CompanyStatus.ACTIVE,
@@ -105,7 +107,7 @@ export const DEFAULT_COMPANY_WORKFLOW_DEFINITION: UpsertWorkflowDefinitionDto =
       },
       {
         key: 'suspended',
-        label: '已暂停',
+        label: '暂停营业',
         business: {
           companyStatus: CompanyStatus.SUSPENDED,
           applicationStatus: CompanyApplicationStatus.ARCHIVED,
@@ -127,7 +129,7 @@ export const DEFAULT_COMPANY_WORKFLOW_DEFINITION: UpsertWorkflowDefinitionDto =
       },
       {
         key: 'archived',
-        label: '已归档',
+        label: '注销',
         final: true,
         business: {
           companyStatus: CompanyStatus.ARCHIVED,
@@ -151,6 +153,77 @@ export const DEFAULT_COMPANY_WORKFLOW_DEFINITION: UpsertWorkflowDefinitionDto =
             roles: ['ADMIN'],
           },
         ],
+      },
+    ],
+  };
+
+export const DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_DEFINITION: UpsertWorkflowDefinitionDto =
+  {
+    code: DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE,
+    name: '公司注销审批流程',
+    description: '公司发起注销申请，审核通过后完成注销',
+    category: 'company',
+    states: [
+      {
+        key: 'submitted',
+        label: '已提交',
+        business: {
+          applicationStatus: CompanyApplicationStatus.SUBMITTED,
+        },
+        actions: [
+          {
+            key: 'route_to_review',
+            label: '进入审核',
+            to: 'under_review',
+            roles: ['ADMIN'],
+          },
+          {
+            key: 'reject',
+            label: '驳回申请',
+            to: 'rejected',
+            roles: ['ADMIN'],
+          },
+        ],
+      },
+      {
+        key: 'under_review',
+        label: '审核中',
+        business: {
+          applicationStatus: CompanyApplicationStatus.UNDER_REVIEW,
+        },
+        actions: [
+          {
+            key: 'approve',
+            label: '批准注销',
+            to: 'approved',
+            roles: ['ADMIN'],
+          },
+          {
+            key: 'reject',
+            label: '驳回申请',
+            to: 'rejected',
+            roles: ['ADMIN'],
+          },
+        ],
+      },
+      {
+        key: 'approved',
+        label: '已注销',
+        final: true,
+        business: {
+          companyStatus: CompanyStatus.ARCHIVED,
+          applicationStatus: CompanyApplicationStatus.APPROVED,
+        },
+        actions: [],
+      },
+      {
+        key: 'rejected',
+        label: '已驳回',
+        final: true,
+        business: {
+          applicationStatus: CompanyApplicationStatus.REJECTED,
+        },
+        actions: [],
       },
     ],
   };

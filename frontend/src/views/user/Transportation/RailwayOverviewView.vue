@@ -443,10 +443,18 @@ async function handleAddFeatured(item: RailwayRoute | RailwayEntity) {
   }
 }
 
+const removeFeaturedConfirmOpen = ref(false)
+const removeFeaturedTargetId = ref<string | null>(null)
+
 async function handleRemoveFeatured(id: string) {
-  if (!window.confirm('确定要移除该置顶内容吗？')) return
+  removeFeaturedTargetId.value = id
+  removeFeaturedConfirmOpen.value = true
+}
+
+async function confirmRemoveFeatured() {
+  if (!removeFeaturedTargetId.value) return
   try {
-    await transportationStore.deleteFeaturedItem(id)
+    await transportationStore.deleteFeaturedItem(removeFeaturedTargetId.value)
     toast.add({ title: '已移除', color: 'warning' })
   } catch (error) {
     toast.add({
@@ -454,6 +462,9 @@ async function handleRemoveFeatured(id: string) {
       description: error instanceof Error ? error.message : '请稍后再试',
       color: 'error',
     })
+  } finally {
+    removeFeaturedConfirmOpen.value = false
+    removeFeaturedTargetId.value = null
   }
 }
 
@@ -1178,6 +1189,36 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="removeFeaturedConfirmOpen"
+      :ui="{ content: 'w-full max-w-md w-[calc(100vw-2rem)]' }"
+    >
+      <template #content>
+        <div class="space-y-4 p-6 text-sm">
+          <header class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+              移除置顶
+            </h3>
+          </header>
+          <p class="text-sm text-slate-600 dark:text-slate-300">
+            确定要移除该置顶内容吗？
+          </p>
+          <div class="flex justify-end gap-2">
+            <UButton
+              color="neutral"
+              variant="ghost"
+              @click="removeFeaturedConfirmOpen = false"
+            >
+              取消
+            </UButton>
+            <UButton color="error" @click="confirmRemoveFeatured">
+              确认移除
+            </UButton>
           </div>
         </div>
       </template>

@@ -7,7 +7,6 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import {
-  Company,
   CompanyApplicationStatus,
   CompanyCategory,
   CompanyIndustry,
@@ -27,20 +26,34 @@ import {
   AdminCreateCompanyDto,
   AdminUpdateCompanyDto,
   CompanyActionDto,
+  CompanyAttachmentSearchDto,
+  CompanyDeregistrationApplyDto,
+  CompanyDirectoryQueryDto,
+  CompanyMemberApprovalDto,
   CompanyMemberInviteDto,
   CompanyMemberJoinDto,
+  CompanyMemberRejectDto,
+  CompanyMemberUpdateDto,
   CompanyRecommendationsQueryDto,
+  CompanySettingsDto,
   CompanyUserSearchDto,
   CreateCompanyApplicationDto,
   UpdateCompanyProfileDto,
 } from './dto/company.dto';
 import {
   COMPANY_MEMBER_WRITE_ROLES,
+  DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE,
+  DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_DEFINITION,
   DEFAULT_COMPANY_WORKFLOW_CODE,
   DEFAULT_COMPANY_WORKFLOW_DEFINITION,
 } from './company.constants';
+import { AttachmentsService } from '../attachments/attachments.service';
+import { buildPublicUrl } from '../lib/shared/url';
+import type { StoredUploadedFile } from '../attachments/uploaded-file.interface';
+import { ConfigService } from '../config/config.service';
 import {
   CompanyApplicationListQueryDto,
+  CompanyApplicationSettingsDto,
   UpsertCompanyIndustryDto,
   UpsertCompanyTypeDto,
 } from './dto/admin-config.dto';
@@ -52,6 +65,19 @@ import type {
 const companyInclude = Prisma.validator<Prisma.CompanyInclude>()({
   type: true,
   industry: true,
+  legalRepresentative: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      avatarAttachmentId: true,
+      profile: {
+        select: {
+          displayName: true,
+        },
+      },
+    },
+  },
   members: {
     include: {
       user: {
@@ -59,6 +85,7 @@ const companyInclude = Prisma.validator<Prisma.CompanyInclude>()({
           id: true,
           name: true,
           email: true,
+          avatarAttachmentId: true,
           profile: {
             select: {
               displayName: true,
@@ -75,6 +102,20 @@ const companyInclude = Prisma.validator<Prisma.CompanyInclude>()({
   auditRecords: {
     orderBy: { createdAt: 'desc' },
     take: 20,
+    include: {
+      actor: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          profile: {
+            select: {
+              displayName: true,
+            },
+          },
+        },
+      },
+    },
   },
   applications: {
     orderBy: { submittedAt: 'desc' },
@@ -84,6 +125,9 @@ const companyInclude = Prisma.validator<Prisma.CompanyInclude>()({
     include: { definition: true },
   },
 });
+
+const COMPANY_CONFIG_NAMESPACE = 'company';
+const COMPANY_CONFIG_AUTO_APPROVE_KEY = 'auto_approve_applications';
 
 type CompanyWithRelations = Prisma.CompanyGetPayload<{
   include: typeof companyInclude;
@@ -105,6 +149,11 @@ type CompanyDashboardStats = {
   companyCount: number;
   individualBusinessCount: number;
   memberCount: number;
+};
+
+type CompanySettings = {
+  joinPolicy?: 'AUTO' | 'REVIEW';
+  positionPermissions?: Record<string, string[]>;
 };
 
 const DEFAULT_INDUSTRIES = [
@@ -246,6 +295,8 @@ export class CompanyService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workflowService: WorkflowService,
+    private readonly attachmentsService: AttachmentsService,
+    private readonly configService: ConfigService,
   ) {}
 
   async onModuleInit() {
@@ -342,6 +393,15 @@ export class CompanyService implements OnModuleInit {
       include: {
         type: true,
         industry: true,
+        legalRepresentative: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarAttachmentId: true,
+            profile: { select: { displayName: true } },
+          },
+        },
         members: {
           where: {
             role: {
@@ -373,6 +433,20 @@ export class CompanyService implements OnModuleInit {
         company.members,
         CompanyMemberRole.LEGAL_PERSON,
       ),
+      legalRepresentative: company.legalRepresentative
+        ? {
+            id: company.legalRepresentative.id,
+            name: company.legalRepresentative.name,
+            email: company.legalRepresentative.email,
+            displayName:
+              company.legalRepresentative.profile?.displayName ?? null,
+            avatarUrl: company.legalRepresentative.avatarAttachmentId
+              ? buildPublicUrl(
+                  `/attachments/public/${company.legalRepresentative.avatarAttachmentId}`,
+                )
+              : null,
+          }
+        : null,
       owners: company.members.filter(
         (member) => member.role === CompanyMemberRole.OWNER,
       ),
@@ -419,6 +493,17 @@ export class CompanyService implements OnModuleInit {
         },
       },
     });
+  }
+
+  async searchUserAttachments(
+    userId: string,
+    query: CompanyAttachmentSearchDto,
+  ) {
+    return this.attachmentsService.searchUserAttachments(
+      userId,
+      query.keyword,
+      query.limit,
+    );
   }
 
   async upsertIndustry(dto: UpsertCompanyIndustryDto) {
@@ -474,7 +559,6 @@ export class CompanyService implements OnModuleInit {
         members: {
           some: {
             userId,
-            role: { in: COMPANY_MEMBER_WRITE_ROLES },
           },
         },
       },
@@ -487,6 +571,47 @@ export class CompanyService implements OnModuleInit {
       companies: companies.map((company) =>
         this.serializeCompany(company, userId),
       ),
+    };
+  }
+
+  async listDirectory(query: CompanyDirectoryQueryDto) {
+    const page = Math.max(query.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(query.pageSize ?? 20, 5), 50);
+    const where: Prisma.CompanyWhereInput = {
+      status: CompanyStatus.ACTIVE,
+      visibility: CompanyVisibility.PUBLIC,
+    };
+    if (query.typeId) {
+      where.typeId = query.typeId;
+    }
+    if (query.industryId) {
+      where.industryId = query.industryId;
+    }
+    if (query.category) {
+      where.category = query.category as CompanyCategory;
+    }
+    if (query.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { summary: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.company.count({ where }),
+      this.prisma.company.findMany({
+        where,
+        include: companyInclude,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    return {
+      total,
+      page,
+      pageSize,
+      pageCount: Math.max(Math.ceil(total / pageSize), 1),
+      items: items.map((company) => this.serializeCompany(company)),
     };
   }
 
@@ -621,8 +746,129 @@ export class CompanyService implements OnModuleInit {
       },
     });
 
+    const settings = await this.getCompanyApplicationSettings(
+      DEFAULT_COMPANY_WORKFLOW_CODE,
+    );
+    if (settings.autoApprove) {
+      const systemUser = await this.resolveSystemUser();
+      await this.adminExecuteAction(company.id, systemUser.id, {
+        actionKey: 'route_to_review',
+        comment: 'Auto approval enabled',
+        payload: { workflowInstanceId: workflowInstance.id },
+      });
+      await this.adminExecuteAction(company.id, systemUser.id, {
+        actionKey: 'approve',
+        comment: 'Auto approval enabled',
+        payload: { workflowInstanceId: workflowInstance.id },
+      });
+    }
+
     const withRelations = await this.findCompanyOrThrow(company.id);
     return this.serializeCompany(withRelations, userId);
+  }
+
+  async createDeregistrationApplication(
+    companyId: string,
+    userId: string,
+    dto: CompanyDeregistrationApplyDto,
+  ) {
+    await this.workflowService.ensureDefinition(
+      DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_DEFINITION,
+    );
+    await this.assertOwnerOrLegal(companyId, userId);
+    const company = await this.findCompanyOrThrow(companyId);
+    if (
+      company.status !== CompanyStatus.ACTIVE &&
+      company.status !== CompanyStatus.SUSPENDED
+    ) {
+      throw new BadRequestException(
+        'Company is not eligible for deregistration',
+      );
+    }
+    const existing = await this.prisma.companyApplication.findFirst({
+      where: {
+        companyId,
+        status: {
+          in: [
+            CompanyApplicationStatus.SUBMITTED,
+            CompanyApplicationStatus.UNDER_REVIEW,
+            CompanyApplicationStatus.NEEDS_CHANGES,
+          ],
+        },
+        workflowInstance: {
+          definition: { code: DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE },
+        },
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException('Deregistration request already submitted');
+    }
+
+    const workflowInstance = await this.workflowService.createInstance({
+      definitionCode: DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE,
+      targetType: 'company',
+      targetId: company.id,
+      createdById: userId,
+      context: {
+        name: company.name,
+      },
+    });
+
+    const application = await this.prisma.companyApplication.create({
+      data: {
+        companyId: company.id,
+        applicantId: userId,
+        status: CompanyApplicationStatus.SUBMITTED,
+        payload: this.toJsonValue({
+          reason: dto.reason ?? null,
+        }),
+        workflowInstanceId: workflowInstance.id,
+      },
+    });
+
+    await this.prisma.company.update({
+      where: { id: company.id },
+      data: {
+        workflowInstanceId: workflowInstance.id,
+        workflowDefinitionCode: DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE,
+        workflowState: workflowInstance.currentState,
+        updatedById: userId,
+      },
+    });
+
+    await this.prisma.companyAuditRecord.create({
+      data: {
+        companyId: company.id,
+        applicationId: application.id,
+        actorId: userId,
+        actionKey: 'submit_deregistration',
+        actionLabel: '提交注销申请',
+        resultState: workflowInstance.currentState,
+        comment: dto.reason ?? undefined,
+        payload: this.toJsonValue({ reason: dto.reason ?? null }),
+      },
+    });
+
+    const settings = await this.getCompanyApplicationSettings(
+      DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE,
+    );
+    if (settings.autoApprove) {
+      const systemUser = await this.resolveSystemUser();
+      await this.adminExecuteAction(company.id, systemUser.id, {
+        actionKey: 'route_to_review',
+        comment: 'Auto approval enabled',
+        payload: { workflowInstanceId: workflowInstance.id },
+      });
+      await this.adminExecuteAction(company.id, systemUser.id, {
+        actionKey: 'approve',
+        comment: 'Auto approval enabled',
+        payload: { workflowInstanceId: workflowInstance.id },
+      });
+    }
+
+    const refreshed = await this.findCompanyOrThrow(company.id);
+    return this.serializeCompany(refreshed, userId);
   }
 
   async updateCompanyAsMember(
@@ -630,7 +876,7 @@ export class CompanyService implements OnModuleInit {
     userId: string,
     dto: UpdateCompanyProfileDto,
   ) {
-    await this.assertMember(companyId, userId);
+    await this.assertMemberPermission(companyId, userId, 'EDIT_COMPANY');
     const industry = await this.resolveIndustry(
       dto.industryId,
       dto.industryCode,
@@ -659,12 +905,13 @@ export class CompanyService implements OnModuleInit {
     actorId: string,
     dto: CompanyMemberInviteDto,
   ) {
-    await this.assertMember(companyId, actorId);
+    await this.assertMemberPermission(companyId, actorId, 'MANAGE_MEMBERS');
     const role = dto.role ?? CompanyMemberRole.MEMBER;
     if (!INVITEABLE_MEMBER_ROLES.includes(role)) {
       throw new BadRequestException('Disallowed member role');
     }
-    await this.findCompanyOrThrow(companyId);
+    const company = await this.findCompanyOrThrow(companyId);
+    const settings = this.parseCompanySettings(company.settings ?? null);
     const targetUser = await this.prisma.user.findUnique({
       where: { id: dto.userId },
     });
@@ -681,6 +928,10 @@ export class CompanyService implements OnModuleInit {
       throw new BadRequestException('This user is already a member');
     }
     const position = await this.resolvePosition(dto.positionCode ?? 'staff');
+    const basePermissions = this.resolvePositionPermissions(
+      settings,
+      position?.code ?? null,
+    );
     await this.prisma.companyMember.create({
       data: {
         companyId,
@@ -688,6 +939,7 @@ export class CompanyService implements OnModuleInit {
         role,
         title: dto.title,
         positionCode: position?.code,
+        permissions: basePermissions,
       },
     });
     await this.prisma.company.update({
@@ -709,6 +961,7 @@ export class CompanyService implements OnModuleInit {
     if (company.status !== CompanyStatus.ACTIVE) {
       throw new BadRequestException('Can only join active entities');
     }
+    const settings = this.parseCompanySettings(company.settings ?? null);
     const existingMember = await this.prisma.companyMember.findFirst({
       where: {
         companyId,
@@ -719,23 +972,241 @@ export class CompanyService implements OnModuleInit {
       throw new BadRequestException('You are already a member of this entity');
     }
     const position = await this.resolvePosition(dto.positionCode ?? 'staff');
+    const joinPolicy = this.resolveJoinPolicy(settings);
+    const basePermissions = this.resolvePositionPermissions(
+      settings,
+      position?.code ?? null,
+    );
+    const metadata =
+      joinPolicy === 'REVIEW'
+        ? this.toJsonValue(
+            this.buildMemberMetadata(null, {
+              joinStatus: 'PENDING',
+              requestedPositionCode: position?.code ?? null,
+              requestedTitle: dto.title ?? null,
+            }),
+          )
+        : Prisma.JsonNull;
     await this.prisma.companyMember.create({
       data: {
         companyId,
         userId,
         role: CompanyMemberRole.MEMBER,
-        title: dto.title,
-        positionCode: position?.code,
+        title: joinPolicy === 'AUTO' ? dto.title : null,
+        positionCode: joinPolicy === 'AUTO' ? position?.code : null,
+        permissions: basePermissions,
+        metadata,
       },
     });
     await this.prisma.company.update({
       where: { id: companyId },
       data: {
-        lastActiveAt: new Date(),
+        lastActiveAt: joinPolicy === 'AUTO' ? new Date() : undefined,
       },
     });
     const refreshed = await this.findCompanyOrThrow(companyId);
     return this.serializeCompany(refreshed, userId);
+  }
+
+  async approveJoinRequest(
+    companyId: string,
+    userId: string,
+    dto: CompanyMemberApprovalDto,
+  ) {
+    await this.assertMemberPermission(companyId, userId, 'MANAGE_MEMBERS');
+    const company = await this.findCompanyOrThrow(companyId);
+    const settings = this.parseCompanySettings(company.settings ?? null);
+    const member = await this.prisma.companyMember.findFirst({
+      where: { id: dto.memberId, companyId },
+    });
+    if (!member) {
+      throw new NotFoundException('Pending member not found');
+    }
+    if (this.resolveJoinStatus(member.metadata) !== 'PENDING') {
+      throw new BadRequestException('Member is not pending approval');
+    }
+    const requestedPositionCode =
+      (member.metadata as { requestedPositionCode?: string })
+        ?.requestedPositionCode ?? null;
+    const position = await this.resolvePosition(
+      dto.positionCode ?? requestedPositionCode ?? 'staff',
+    );
+    const permissions = this.resolvePositionPermissions(
+      settings,
+      position?.code ?? null,
+    );
+    await this.prisma.companyMember.update({
+      where: { id: member.id },
+      data: {
+        positionCode: position?.code ?? null,
+        title: dto.title ?? member.title ?? null,
+        permissions,
+        metadata: this.toJsonValue(
+          this.buildMemberMetadata(member.metadata, {
+            joinStatus: 'ACTIVE',
+          }),
+        ),
+      },
+    });
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { lastActiveAt: new Date() },
+    });
+    const refreshed = await this.findCompanyOrThrow(companyId);
+    return this.serializeCompany(refreshed, userId);
+  }
+
+  async rejectJoinRequest(
+    companyId: string,
+    userId: string,
+    dto: CompanyMemberRejectDto,
+  ) {
+    await this.assertMemberPermission(companyId, userId, 'MANAGE_MEMBERS');
+    const member = await this.prisma.companyMember.findFirst({
+      where: { id: dto.memberId, companyId },
+    });
+    if (!member) {
+      throw new NotFoundException('Pending member not found');
+    }
+    if (this.resolveJoinStatus(member.metadata) !== 'PENDING') {
+      throw new BadRequestException('Member is not pending approval');
+    }
+    await this.prisma.companyMember.delete({ where: { id: member.id } });
+    const refreshed = await this.findCompanyOrThrow(companyId);
+    return this.serializeCompany(refreshed, userId);
+  }
+
+  async updateMember(
+    companyId: string,
+    userId: string,
+    dto: CompanyMemberUpdateDto,
+  ) {
+    await this.assertMemberPermission(companyId, userId, 'MANAGE_MEMBERS');
+    const member = await this.prisma.companyMember.findFirst({
+      where: { id: dto.memberId, companyId },
+    });
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+    const position = dto.positionCode
+      ? await this.resolvePosition(dto.positionCode)
+      : null;
+    await this.prisma.companyMember.update({
+      where: { id: member.id },
+      data: {
+        positionCode: position?.code ?? null,
+        title: dto.title ?? null,
+        permissions: dto.permissions ?? member.permissions ?? [],
+      },
+    });
+    const refreshed = await this.findCompanyOrThrow(companyId);
+    return this.serializeCompany(refreshed, userId);
+  }
+
+  async updateCompanySettings(
+    companyId: string,
+    userId: string,
+    dto: CompanySettingsDto,
+  ) {
+    await this.assertMemberPermission(companyId, userId, 'EDIT_COMPANY');
+    const company = await this.findCompanyOrThrow(companyId);
+    const currentSettings = this.parseCompanySettings(company.settings ?? null);
+    const merged = this.buildCompanySettings(currentSettings, {
+      joinPolicy: dto.joinPolicy,
+      positionPermissions: dto.positionPermissions ?? {},
+    });
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        settings: this.toJsonValue(merged),
+        updatedById: userId,
+      },
+      include: companyInclude,
+    });
+    return this.serializeCompany(updated, userId);
+  }
+
+  async updateCompanyLogo(
+    companyId: string,
+    userId: string,
+    file: StoredUploadedFile,
+  ) {
+    await this.assertMemberPermission(companyId, userId, 'EDIT_COMPANY');
+    if (!file) {
+      throw new BadRequestException('Logo file is required');
+    }
+    const company = await this.findCompanyOrThrow(companyId);
+    const attachment = await this.attachmentsService.uploadAttachment(
+      userId,
+      file,
+      {
+        name: `${company.slug}-logo`,
+        isPublic: true,
+        metadata: {
+          scope: 'company-logo',
+          companyId,
+        },
+      },
+    );
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        logoAttachmentId: attachment.id,
+        updatedById: userId,
+      },
+      include: companyInclude,
+    });
+    if (
+      company.logoAttachmentId &&
+      company.logoAttachmentId !== attachment.id
+    ) {
+      try {
+        await this.attachmentsService.deleteAttachment(
+          company.logoAttachmentId,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to clean old logo: ${error}`);
+      }
+    }
+    return this.serializeCompany(updated, userId);
+  }
+
+  async updateCompanyLogoAttachment(
+    companyId: string,
+    userId: string,
+    attachmentId: string,
+  ) {
+    await this.assertMemberPermission(companyId, userId, 'EDIT_COMPANY');
+    const attachment =
+      await this.attachmentsService.getAttachmentOrThrow(attachmentId);
+    if (attachment.owner?.id !== userId) {
+      throw new ForbiddenException('Attachment is not owned by the requester');
+    }
+    if (!attachment.isPublic) {
+      throw new BadRequestException('Attachment must be public');
+    }
+    const company = await this.findCompanyOrThrow(companyId);
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        logoAttachmentId: attachment.id,
+        updatedById: userId,
+      },
+      include: companyInclude,
+    });
+    if (
+      company.logoAttachmentId &&
+      company.logoAttachmentId !== attachment.id
+    ) {
+      try {
+        await this.attachmentsService.deleteAttachment(
+          company.logoAttachmentId,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to clean old logo: ${error}`);
+      }
+    }
+    return this.serializeCompany(updated, userId);
   }
 
   async updateCompanyAsAdmin(
@@ -749,9 +1220,13 @@ export class CompanyService implements OnModuleInit {
       dto.industryCode,
       true,
     );
+    if (dto.logoAttachmentId) {
+      await this.attachmentsService.getAttachmentOrThrow(dto.logoAttachmentId);
+    }
     const updated = await this.prisma.company.update({
       where: { id: companyId },
       data: {
+        name: dto.name,
         summary: dto.summary,
         description: dto.description,
         contactEmail: dto.contactEmail,
@@ -760,14 +1235,25 @@ export class CompanyService implements OnModuleInit {
         homepageUrl: dto.homepageUrl,
         industryId: industry?.id ?? undefined,
         typeId: type?.id ?? undefined,
+        category: dto.category,
         extra: dto.extra ? this.toJsonValue(dto.extra) : Prisma.JsonNull,
         status: dto.status,
         visibility: dto.visibility,
         highlighted: dto.highlighted,
         recommendationScore: dto.recommendationScore,
+        logoAttachmentId: dto.logoAttachmentId ?? undefined,
         updatedById: userId,
       },
       include: companyInclude,
+    });
+    await this.prisma.companyAuditRecord.create({
+      data: {
+        companyId: updated.id,
+        actorId: userId,
+        actionKey: 'admin_update',
+        actionLabel: '管理员更新公司信息',
+        comment: dto.auditReason ?? '管理员更新公司信息',
+      },
     });
     return this.serializeCompany(updated, userId);
   }
@@ -938,6 +1424,13 @@ export class CompanyService implements OnModuleInit {
     if (query.status) {
       where.status = query.status;
     }
+    if (query.workflowCode) {
+      where.workflowInstance = {
+        definition: {
+          code: query.workflowCode,
+        },
+      };
+    }
     if (query.search) {
       const keyword = query.search.trim();
       where.OR = [
@@ -1001,40 +1494,126 @@ export class CompanyService implements OnModuleInit {
     };
   }
 
+  async getCompanyApplicationSettings(
+    workflowCode?: string,
+  ): Promise<CompanyApplicationSettingsDto> {
+    const entry = await this.configService.getEntry(
+      COMPANY_CONFIG_NAMESPACE,
+      this.resolveAutoApproveKey(workflowCode),
+    );
+    const value = entry?.value;
+    const autoApprove =
+      typeof value === 'boolean'
+        ? value
+        : typeof value === 'object' && value !== null && 'autoApprove' in value
+          ? Boolean((value as { autoApprove?: boolean }).autoApprove)
+          : false;
+    return { autoApprove };
+  }
+
+  async updateCompanyApplicationSettings(
+    autoApprove: boolean,
+    userId: string,
+    workflowCode?: string,
+  ): Promise<CompanyApplicationSettingsDto> {
+    const namespace = await this.configService.ensureNamespaceByKey(
+      COMPANY_CONFIG_NAMESPACE,
+      {
+        name: '工商系统配置',
+        description: '工商系统全局设置',
+      },
+    );
+    const entry = await this.configService.getEntry(
+      COMPANY_CONFIG_NAMESPACE,
+      this.resolveAutoApproveKey(workflowCode),
+    );
+    if (entry) {
+      await this.configService.updateEntry(
+        entry.id,
+        { value: autoApprove },
+        userId,
+      );
+    } else {
+      const description =
+        workflowCode === DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE
+          ? '公司注销自动审批'
+          : '公司申请自动审批';
+      await this.configService.createEntry(
+        namespace.id,
+        {
+          key: this.resolveAutoApproveKey(workflowCode),
+          value: autoApprove,
+          description,
+        },
+        userId,
+      );
+    }
+    return { autoApprove };
+  }
+
   async adminExecuteAction(
     companyId: string,
     actorId: string,
     dto: CompanyActionDto,
   ) {
     const company = await this.findCompanyOrThrow(companyId);
-    if (!company.workflowInstanceId) {
+    const payload = dto.payload as
+      | { workflowInstanceId?: string; [key: string]: unknown }
+      | undefined;
+    const instanceId =
+      payload?.workflowInstanceId ?? company.workflowInstanceId;
+    if (!instanceId) {
       throw new BadRequestException(
         'This company is not yet associated with a process instance',
       );
     }
-    const transition = await this.workflowService.performAction({
-      instanceId: company.workflowInstanceId,
-      actionKey: dto.actionKey,
+    const sanitizedPayload =
+      payload && 'workflowInstanceId' in payload
+        ? Object.fromEntries(
+            Object.entries(payload).filter(
+              ([key]) => key !== 'workflowInstanceId',
+            ),
+          )
+        : dto.payload;
+    return this.executeWorkflowAction(
+      company,
       actorId,
-      actorRoles: ['ADMIN'],
-      comment: dto.comment,
-      payload: dto.payload,
-    });
-    await this.applyWorkflowEffects(company, transition);
-    await this.prisma.companyAuditRecord.create({
-      data: {
-        companyId: company.id,
-        applicationId: company.applications[0]?.id,
-        actorId,
-        actionKey: transition.action.key,
-        actionLabel: transition.action.label,
-        resultState: transition.nextState.key,
-        comment: dto.comment,
-        payload: dto.payload ? this.toJsonValue(dto.payload) : Prisma.JsonNull,
+      { ...dto, payload: sanitizedPayload },
+      instanceId,
+    );
+  }
+
+  async adminExecuteApplicationAction(
+    applicationId: string,
+    actorId: string,
+    dto: CompanyActionDto,
+  ) {
+    const application = await this.prisma.companyApplication.findUnique({
+      where: { id: applicationId },
+      select: {
+        id: true,
+        companyId: true,
+        workflowInstanceId: true,
       },
     });
-    const updated = await this.findCompanyOrThrow(companyId);
-    return this.serializeCompany(updated);
+    if (!application?.companyId || !application.workflowInstanceId) {
+      throw new BadRequestException('Application is not linked to a company');
+    }
+    const company = await this.findCompanyOrThrow(application.companyId);
+    return this.executeWorkflowAction(
+      company,
+      actorId,
+      dto,
+      application.workflowInstanceId,
+      application.id,
+    );
+  }
+
+  async deleteCompanyAsAdmin(companyId: string, userId: string) {
+    await this.findCompanyOrThrow(companyId);
+    await this.prisma.company.delete({ where: { id: companyId } });
+    this.logger.log(`Company ${companyId} deleted by ${userId}`);
+    return { success: true };
   }
 
   private async applyWorkflowEffects(
@@ -1061,6 +1640,10 @@ export class CompanyService implements OnModuleInit {
           companyStatus === CompanyStatus.ACTIVE
             ? new Date()
             : company.approvedAt,
+        archivedAt:
+          companyStatus === CompanyStatus.ARCHIVED
+            ? new Date()
+            : company.archivedAt,
       },
     });
     if (applicationStatus) {
@@ -1072,6 +1655,43 @@ export class CompanyService implements OnModuleInit {
         data: { status: applicationStatus, resolvedAt: new Date() },
       });
     }
+  }
+
+  private async executeWorkflowAction(
+    company: CompanyWithRelations,
+    actorId: string,
+    dto: CompanyActionDto,
+    instanceId: string,
+    applicationId?: string,
+  ) {
+    const transition = await this.workflowService.performAction({
+      instanceId,
+      actionKey: dto.actionKey,
+      actorId,
+      actorRoles: ['ADMIN'],
+      comment: dto.comment,
+      payload: dto.payload,
+    });
+    await this.applyWorkflowEffects(company, transition);
+    const resolvedApplicationId =
+      applicationId ??
+      company.applications.find(
+        (entry) => entry.workflowInstanceId === transition.instance.id,
+      )?.id;
+    await this.prisma.companyAuditRecord.create({
+      data: {
+        companyId: company.id,
+        applicationId: resolvedApplicationId,
+        actorId,
+        actionKey: transition.action.key,
+        actionLabel: transition.action.label,
+        resultState: transition.nextState.key,
+        comment: dto.comment,
+        payload: dto.payload ? this.toJsonValue(dto.payload) : Prisma.JsonNull,
+      },
+    });
+    const updated = await this.findCompanyOrThrow(company.id);
+    return this.serializeCompany(updated);
   }
 
   private canViewCompany(
@@ -1097,19 +1717,33 @@ export class CompanyService implements OnModuleInit {
     return members.find((member) => member.role === role);
   }
 
-  private async assertMember(companyId: string, userId: string) {
+  private async assertMemberPermission(
+    companyId: string,
+    userId: string,
+    permission: 'MANAGE_MEMBERS' | 'EDIT_COMPANY',
+  ) {
     const member = await this.prisma.companyMember.findFirst({
       where: {
         companyId,
         userId,
-        role: { in: COMPANY_MEMBER_WRITE_ROLES },
       },
     });
     if (!member) {
-      throw new ForbiddenException(
-        'Only company owner or legal representative can edit',
-      );
+      throw new ForbiddenException('Not a company member');
     }
+    if (this.resolveJoinStatus(member.metadata) !== 'ACTIVE') {
+      throw new ForbiddenException('Pending members cannot manage company');
+    }
+    if (
+      member.role === CompanyMemberRole.OWNER ||
+      member.role === CompanyMemberRole.LEGAL_PERSON
+    ) {
+      return;
+    }
+    if (member.permissions?.includes(permission)) {
+      return;
+    }
+    throw new ForbiddenException('Insufficient member permissions');
   }
 
   private async resolveCompanyType(
@@ -1167,6 +1801,51 @@ export class CompanyService implements OnModuleInit {
     return company;
   }
 
+  private resolveAutoApproveKey(workflowCode?: string) {
+    return workflowCode === DEFAULT_COMPANY_DEREGISTRATION_WORKFLOW_CODE
+      ? 'auto_approve_deregistration'
+      : COMPANY_CONFIG_AUTO_APPROVE_KEY;
+  }
+
+  private async assertOwnerOrLegal(companyId: string, userId: string) {
+    const member = await this.prisma.companyMember.findFirst({
+      where: {
+        companyId,
+        userId,
+        role: {
+          in: [CompanyMemberRole.OWNER, CompanyMemberRole.LEGAL_PERSON],
+        },
+      },
+    });
+    if (!member) {
+      throw new ForbiddenException(
+        'Only company owners can request deregistration',
+      );
+    }
+    if (this.resolveJoinStatus(member.metadata) !== 'ACTIVE') {
+      throw new ForbiddenException(
+        'Pending members cannot request deregistration',
+      );
+    }
+  }
+
+  private async resolveSystemUser() {
+    let systemUser = await this.prisma.user.findFirst({
+      where: { email: 'system@hydroline.local' },
+      select: { id: true },
+    });
+    if (!systemUser) {
+      systemUser = await this.prisma.user.create({
+        data: {
+          email: 'system@hydroline.local',
+          name: 'System',
+        },
+        select: { id: true },
+      });
+    }
+    return systemUser;
+  }
+
   private async generateUniqueSlug(name: string) {
     const base = this.slugify(name);
     for (let i = 0; i < 20; i += 1) {
@@ -1192,25 +1871,113 @@ export class CompanyService implements OnModuleInit {
       : `company-${randomUUID().slice(0, 6)}`;
   }
 
+  private parseCompanySettings(
+    value: Prisma.JsonValue | null,
+  ): CompanySettings {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+    const settings = value as Record<string, unknown>;
+    const joinPolicy = settings.joinPolicy;
+    const positionPermissions = settings.positionPermissions;
+    return {
+      joinPolicy: joinPolicy === 'AUTO' ? 'AUTO' : 'REVIEW',
+      positionPermissions:
+        typeof positionPermissions === 'object' && positionPermissions
+          ? (positionPermissions as Record<string, string[]>)
+          : {},
+    };
+  }
+
+  private buildCompanySettings(
+    existing: CompanySettings,
+    next: CompanySettings,
+  ) {
+    return {
+      ...existing,
+      ...next,
+      positionPermissions: {
+        ...(existing.positionPermissions ?? {}),
+        ...(next.positionPermissions ?? {}),
+      },
+    };
+  }
+
+  private resolveJoinPolicy(settings: CompanySettings | null | undefined) {
+    return settings?.joinPolicy === 'AUTO' ? 'AUTO' : 'REVIEW';
+  }
+
+  private resolvePositionPermissions(
+    settings: CompanySettings | null | undefined,
+    positionCode?: string | null,
+  ) {
+    if (!positionCode) return [];
+    return settings?.positionPermissions?.[positionCode] ?? [];
+  }
+
+  private resolveJoinStatus(metadata: Prisma.JsonValue | null) {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      return 'ACTIVE';
+    }
+    const status = (metadata as { joinStatus?: string }).joinStatus;
+    return status === 'PENDING' ? 'PENDING' : 'ACTIVE';
+  }
+
+  private buildMemberMetadata(
+    metadata: Prisma.JsonValue | null,
+    patch: Record<string, unknown>,
+  ) {
+    const base =
+      metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : {};
+    return {
+      ...base,
+      ...patch,
+    };
+  }
+
   private serializeCompany(company: CompanyWithRelations, viewerId?: string) {
-    const canEdit = viewerId
-      ? company.members.some(
+    const settings = this.parseCompanySettings(company.settings ?? null);
+    const viewerMember = viewerId
+      ? company.members.find(
           (member) =>
             member.userId === viewerId &&
-            COMPANY_MEMBER_WRITE_ROLES.includes(member.role),
+            this.resolveJoinStatus(member.metadata) === 'ACTIVE',
         )
-      : false;
+      : undefined;
+    const isOwner =
+      viewerMember?.role === CompanyMemberRole.OWNER ||
+      viewerMember?.role === CompanyMemberRole.LEGAL_PERSON;
+    const memberPermissions = viewerMember?.permissions ?? [];
+    const canEdit =
+      Boolean(isOwner) ||
+      COMPANY_MEMBER_WRITE_ROLES.includes(viewerMember?.role ?? 'MEMBER') ||
+      memberPermissions.includes('EDIT_COMPANY');
+    const canManageMembers =
+      Boolean(isOwner) || memberPermissions.includes('MANAGE_MEMBERS');
+    const canViewDashboard =
+      Boolean(isOwner) ||
+      memberPermissions.includes('VIEW_DASHBOARD') ||
+      memberPermissions.includes('MANAGE_MEMBERS') ||
+      memberPermissions.includes('EDIT_COMPANY');
     return {
       id: company.id,
       name: company.name,
       slug: company.slug,
       summary: company.summary,
       description: company.description,
+      logoAttachmentId: company.logoAttachmentId,
+      logoUrl: company.logoAttachmentId
+        ? buildPublicUrl(`/attachments/public/${company.logoAttachmentId}`)
+        : null,
       status: company.status,
       visibility: company.visibility,
       category: company.category,
       recommendationScore: company.recommendationScore,
       highlighted: company.highlighted,
+      joinPolicy: this.resolveJoinPolicy(settings),
+      positionPermissions: settings.positionPermissions ?? {},
       workflow: company.workflowInstance
         ? {
             id: company.workflowInstance.id,
@@ -1224,6 +1991,13 @@ export class CompanyService implements OnModuleInit {
         id: member.id,
         role: member.role,
         title: member.title,
+        joinStatus: this.resolveJoinStatus(member.metadata),
+        requestedPositionCode: (
+          member.metadata as { requestedPositionCode?: string }
+        )?.requestedPositionCode,
+        requestedTitle: (member.metadata as { requestedTitle?: string })
+          ?.requestedTitle,
+        permissions: member.permissions ?? [],
         isPrimary: member.isPrimary,
         user: member.user
           ? {
@@ -1231,6 +2005,11 @@ export class CompanyService implements OnModuleInit {
               name: member.user.name,
               email: member.user.email,
               displayName: member.user.profile?.displayName ?? null,
+              avatarUrl: member.user.avatarAttachmentId
+                ? buildPublicUrl(
+                    `/attachments/public/${member.user.avatarAttachmentId}`,
+                  )
+                : null,
             }
           : null,
         position: member.position
@@ -1262,7 +2041,8 @@ export class CompanyService implements OnModuleInit {
       homepageUrl: company.homepageUrl,
       permissions: {
         canEdit,
-        canManageMembers: canEdit,
+        canManageMembers,
+        canViewDashboard,
       },
       availableActions: this.getAvailableActions(company),
     };
@@ -1299,7 +2079,11 @@ export class CompanyService implements OnModuleInit {
       (company) => company.isIndividualBusiness,
     ).length;
     const memberCount = companies.reduce(
-      (sum, company) => sum + company.members.length,
+      (sum, company) =>
+        sum +
+        company.members.filter(
+          (member) => this.resolveJoinStatus(member.metadata) === 'ACTIVE',
+        ).length,
       0,
     );
     return {

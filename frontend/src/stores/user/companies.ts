@@ -4,12 +4,14 @@ import { useAuthStore } from '@/stores/user/auth'
 import type {
   CompanyDashboardStats,
   CompanyDailyRegistration,
+  CompanyDirectoryResponse,
   CompanyMemberInvitePayload,
   CompanyMemberJoinPayload,
   CompanyMemberUserRef,
   CompanyMeta,
   CompanyModel,
   CompanyRecommendation,
+  CompanyDeregistrationApplyPayload,
   CreateCompanyApplicationPayload,
   UpdateCompanyPayload,
 } from '@/types/company'
@@ -32,6 +34,14 @@ export const useCompanyStore = defineStore('companies', {
       individualBusinessCount: 0,
       memberCount: 0,
     } as CompanyDashboardStats,
+    directory: {
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+      items: [],
+    } as CompanyDirectoryResponse,
+    directoryLoading: false,
     dailyRegistrations: [] as CompanyDailyRegistration[],
     dailyRegistrationsLoading: false,
     submitting: false,
@@ -88,7 +98,10 @@ export const useCompanyStore = defineStore('companies', {
         (company) => company.isIndividualBusiness,
       ).length
       const memberCount = this.dashboard.reduce(
-        (sum, company) => sum + company.members.length,
+        (sum, company) =>
+          sum +
+          company.members.filter((member) => member.joinStatus !== 'PENDING')
+            .length,
         0,
       )
       this.dashboardStats = {
@@ -122,6 +135,33 @@ export const useCompanyStore = defineStore('companies', {
           token: authStore.token,
         })
         this.dashboard.unshift(company)
+        this.recalculateStats()
+        return company
+      } finally {
+        this.submitting = false
+      }
+    },
+    async applyDeregistration(
+      companyId: string,
+      payload: CompanyDeregistrationApplyPayload,
+    ) {
+      this.submitting = true
+      try {
+        const authStore = useAuthStore()
+        const company = await apiFetch<CompanyModel>(
+          `/companies/${companyId}/deregistration`,
+          {
+            method: 'POST',
+            body: payload,
+            token: authStore.token,
+          },
+        )
+        const index = this.dashboard.findIndex((item) => item.id === companyId)
+        if (index !== -1) {
+          this.dashboard[index] = company
+        } else {
+          this.dashboard.unshift(company)
+        }
         this.recalculateStats()
         return company
       } finally {
@@ -194,6 +234,127 @@ export const useCompanyStore = defineStore('companies', {
       this.recalculateStats()
       return company
     },
+    async updateSettings(
+      companyId: string,
+      payload: {
+        joinPolicy: 'AUTO' | 'REVIEW'
+        positionPermissions: Record<string, string[]>
+      },
+    ) {
+      const authStore = useAuthStore()
+      const company = await apiFetch<CompanyModel>(
+        `/companies/${companyId}/settings`,
+        {
+          method: 'PATCH',
+          body: payload,
+          token: authStore.token,
+        },
+      )
+      const index = this.dashboard.findIndex((item) => item.id === companyId)
+      if (index !== -1) {
+        this.dashboard[index] = company
+      }
+      return company
+    },
+    async uploadLogo(companyId: string, file: File) {
+      const authStore = useAuthStore()
+      const formData = new FormData()
+      formData.append('logo', file)
+      const company = await apiFetch<CompanyModel>(
+        `/companies/${companyId}/logo`,
+        {
+          method: 'PATCH',
+          body: formData,
+          token: authStore.token,
+        },
+      )
+      const index = this.dashboard.findIndex((item) => item.id === companyId)
+      if (index !== -1) {
+        this.dashboard[index] = company
+      }
+      return company
+    },
+    async setLogoAttachment(companyId: string, attachmentId: string) {
+      const authStore = useAuthStore()
+      const company = await apiFetch<CompanyModel>(
+        `/companies/${companyId}/logo/attachment`,
+        {
+          method: 'PATCH',
+          body: { attachmentId },
+          token: authStore.token,
+        },
+      )
+      const index = this.dashboard.findIndex((item) => item.id === companyId)
+      if (index !== -1) {
+        this.dashboard[index] = company
+      }
+      return company
+    },
+    async approveJoinRequest(
+      companyId: string,
+      payload: {
+        memberId: string
+        positionCode?: string | null
+        title?: string
+      },
+    ) {
+      const authStore = useAuthStore()
+      const company = await apiFetch<CompanyModel>(
+        `/companies/${companyId}/members/approve`,
+        {
+          method: 'POST',
+          body: payload,
+          token: authStore.token,
+        },
+      )
+      const index = this.dashboard.findIndex((item) => item.id === companyId)
+      if (index !== -1) {
+        this.dashboard[index] = company
+      }
+      this.recalculateStats()
+      return company
+    },
+    async rejectJoinRequest(companyId: string, payload: { memberId: string }) {
+      const authStore = useAuthStore()
+      const company = await apiFetch<CompanyModel>(
+        `/companies/${companyId}/members/reject`,
+        {
+          method: 'POST',
+          body: payload,
+          token: authStore.token,
+        },
+      )
+      const index = this.dashboard.findIndex((item) => item.id === companyId)
+      if (index !== -1) {
+        this.dashboard[index] = company
+      }
+      this.recalculateStats()
+      return company
+    },
+    async updateMember(
+      companyId: string,
+      payload: {
+        memberId: string
+        positionCode?: string | null
+        title?: string
+        permissions: string[]
+      },
+    ) {
+      const authStore = useAuthStore()
+      const company = await apiFetch<CompanyModel>(
+        `/companies/${companyId}/members/${payload.memberId}`,
+        {
+          method: 'PATCH',
+          body: payload,
+          token: authStore.token,
+        },
+      )
+      const index = this.dashboard.findIndex((item) => item.id === companyId)
+      if (index !== -1) {
+        this.dashboard[index] = company
+      }
+      return company
+    },
     async fetchDailyRegistrations(days = 30) {
       this.dailyRegistrationsLoading = true
       try {
@@ -206,6 +367,32 @@ export const useCompanyStore = defineStore('companies', {
         return stats
       } finally {
         this.dailyRegistrationsLoading = false
+      }
+    },
+    async fetchDirectory(params: {
+      page?: number
+      pageSize?: number
+      typeId?: string
+      industryId?: string
+      search?: string
+      category?: string
+    }) {
+      const query = new URLSearchParams()
+      if (params.page) query.set('page', String(params.page))
+      if (params.pageSize) query.set('pageSize', String(params.pageSize))
+      if (params.typeId) query.set('typeId', params.typeId)
+      if (params.industryId) query.set('industryId', params.industryId)
+      if (params.search) query.set('search', params.search)
+      if (params.category) query.set('category', params.category)
+      this.directoryLoading = true
+      try {
+        const response = await apiFetch<CompanyDirectoryResponse>(
+          `/companies/list?${query.toString()}`,
+        )
+        this.directory = response
+        return response
+      } finally {
+        this.directoryLoading = false
       }
     },
   },

@@ -118,7 +118,7 @@ const handleInviteClick = () => emit('invite')
                     <div>
                       <p class="font-semibold text-slate-900 dark:text-white">
                         {{
-                          member.user?.profile?.displayName ||
+                          member.user?.displayName ||
                           member.user?.name ||
                           '未知用户'
                         }}

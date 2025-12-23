@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -83,5 +84,13 @@ export class CompanyAdminController {
   ) {
     const userId = this.getUserId(req);
     return this.companyService.adminExecuteAction(id, userId, body);
+  }
+
+  @Delete(':id')
+  @RequirePermissions(PERMISSIONS.COMPANY_MANAGE_ADMIN)
+  @ApiOperation({ summary: '删除公司' })
+  async remove(@Param('id') id: string, @Req() req: Request) {
+    const userId = this.getUserId(req);
+    return this.companyService.deleteCompanyAsAdmin(id, userId);
   }
 }

@@ -201,8 +201,13 @@ async function submitRole() {
 
 async function deleteRole(role: (typeof roles.value)[number]) {
   if (role.isSystem) return
-  if (!confirm(`确定删除角色「${role.name}」吗？该操作不可恢复。`)) return
-  await rbacStore.deleteRole(role.id)
+  openConfirmDialog({
+    title: '删除角色',
+    message: `确定删除角色「${role.name}」吗？该操作不可恢复。`,
+    action: async () => {
+      await rbacStore.deleteRole(role.id)
+    },
+  })
 }
 
 function switchPermission(key: string, value: boolean | 'indeterminate') {
@@ -275,8 +280,47 @@ async function submitLabel() {
 }
 
 async function deleteLabel(label: (typeof labels.value)[number]) {
-  if (!confirm(`确定删除标签「${label.name}」吗？`)) return
-  await rbacStore.deleteLabel(label.id)
+  openConfirmDialog({
+    title: '删除权限标签',
+    message: `确定删除标签「${label.name}」吗？`,
+    action: async () => {
+      await rbacStore.deleteLabel(label.id)
+    },
+  })
+}
+
+const confirmDialogOpen = ref(false)
+const confirmDialogTitle = ref('确认操作')
+const confirmDialogMessage = ref('')
+const confirmDialogLoading = ref(false)
+const confirmDialogAction = ref<null | (() => Promise<void>)>(null)
+
+function openConfirmDialog(payload: {
+  title: string
+  message: string
+  action: () => Promise<void>
+}) {
+  confirmDialogTitle.value = payload.title
+  confirmDialogMessage.value = payload.message
+  confirmDialogAction.value = payload.action
+  confirmDialogOpen.value = true
+}
+
+async function handleConfirmDialog() {
+  if (!confirmDialogAction.value) return
+  confirmDialogLoading.value = true
+  try {
+    await confirmDialogAction.value()
+    confirmDialogOpen.value = false
+  } finally {
+    confirmDialogLoading.value = false
+    confirmDialogAction.value = null
+  }
+}
+
+function cancelConfirmDialog() {
+  confirmDialogOpen.value = false
+  confirmDialogAction.value = null
 }
 
 // ==== 分页函数 ====
@@ -1154,6 +1198,36 @@ watch(
           >
         </div>
       </form>
+    </template>
+  </UModal>
+
+  <UModal
+    v-model:open="confirmDialogOpen"
+    :ui="{ content: 'w-full max-w-md w-[calc(100vw-2rem)]' }"
+  >
+    <template #content>
+      <div class="space-y-4 p-6 text-sm">
+        <header class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
+            {{ confirmDialogTitle }}
+          </h3>
+        </header>
+        <p class="text-sm text-slate-600 dark:text-slate-300">
+          {{ confirmDialogMessage }}
+        </p>
+        <div class="flex justify-end gap-2">
+          <UButton color="neutral" variant="ghost" @click="cancelConfirmDialog">
+            取消
+          </UButton>
+          <UButton
+            color="error"
+            :loading="confirmDialogLoading"
+            @click="handleConfirmDialog"
+          >
+            确认
+          </UButton>
+        </div>
+      </div>
     </template>
   </UModal>
 </template>

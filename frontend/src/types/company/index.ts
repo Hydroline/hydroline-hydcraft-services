@@ -18,6 +18,15 @@ export type CompanyMemberRole =
   | 'MEMBER'
   | 'AUDITOR'
 
+export type CompanyJoinPolicy = 'AUTO' | 'REVIEW'
+
+export type CompanyPermissionKey =
+  | 'VIEW_DASHBOARD'
+  | 'MANAGE_MEMBERS'
+  | 'EDIT_COMPANY'
+
+export type CompanyJoinStatus = 'PENDING' | 'ACTIVE'
+
 export interface CompanyIndustry {
   id: string
   code: string
@@ -47,12 +56,17 @@ export interface CompanyMemberUserRef {
   name?: string | null
   email?: string | null
   displayName?: string | null
+  avatarUrl?: string | null
 }
 
 export interface CompanyMember {
   id: string
   role: CompanyMemberRole
   title?: string | null
+  joinStatus?: CompanyJoinStatus | null
+  requestedTitle?: string | null
+  requestedPositionCode?: string | null
+  permissions?: CompanyPermissionKey[]
   isPrimary: boolean
   user?: CompanyMemberUserRef | null
   position?: CompanyPosition | null
@@ -88,6 +102,12 @@ export interface CompanyAuditRecord {
   comment?: string | null
   payload?: Record<string, unknown> | null
   createdAt: string
+  actor?: {
+    id: string
+    name?: string | null
+    email?: string | null
+    profile?: { displayName?: string | null } | null
+  } | null
 }
 
 export interface CompanyApplication {
@@ -146,6 +166,7 @@ export interface AdminCompanyApplicationEntry {
 export interface CompanyPermissions {
   canEdit: boolean
   canManageMembers: boolean
+  canViewDashboard: boolean
 }
 
 export interface CompanyModel {
@@ -154,6 +175,8 @@ export interface CompanyModel {
   slug: string
   summary?: string | null
   description?: string | null
+  logoUrl?: string | null
+  logoAttachmentId?: string | null
   status: CompanyStatus
   visibility: CompanyVisibility
   category?: string | null
@@ -162,6 +185,8 @@ export interface CompanyModel {
   highlighted?: boolean | null
   lastActiveAt?: string | null
   approvedAt?: string | null
+  joinPolicy?: CompanyJoinPolicy
+  positionPermissions?: Record<string, CompanyPermissionKey[]>
   type?: CompanyType | null
   industry?: CompanyIndustry | null
   members: CompanyMember[]
@@ -203,6 +228,14 @@ export interface CompanyMeta {
   positions: CompanyPosition[]
 }
 
+export interface CompanyDirectoryResponse {
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
+  items: CompanyModel[]
+}
+
 export interface CompanyDashboardStats {
   companyCount: number
   individualBusinessCount: number
@@ -239,6 +272,10 @@ export interface CreateCompanyApplicationPayload {
   category?: string
   isIndividualBusiness?: boolean
   legalRepresentativeId?: string
+}
+
+export interface CompanyDeregistrationApplyPayload {
+  reason?: string
 }
 
 export interface UpdateCompanyPayload {

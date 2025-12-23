@@ -171,7 +171,7 @@ const STATIC_TRANSLATIONS: Record<string, string> = {
   'Disallowed member role': '不允许的成员角色',
   'Invalid member user': '无效的成员用户',
   'This user is already a member': '该用户已经是成员',
-  'Can only join active entities': '只能加入已生效的主体',
+  'Can only join active entities': '只能加入已注册的主体',
   'You are already a member of this entity': '你已经是该主体的成员',
   'Invalid owner': '无效的持有人',
   'Invalid legal representative user': '无效的法人用户',

@@ -11,7 +11,7 @@ const store = useAdminCompanyApplicationsStore()
 const router = useRouter()
 const toast = useToast()
 
-const workflowCode = 'company.registration'
+const workflowCode = 'company.deregistration'
 
 const filters = reactive({
   status: undefined as CompanyApplicationStatus | undefined,
@@ -104,12 +104,11 @@ function actionsForEntry(entry: AdminCompanyApplicationEntry) {
     case 'SUBMITTED':
       return [
         { key: 'route_to_review', label: '进入审核', color: 'primary' },
-        { key: 'reject', label: '直接驳回', color: 'neutral' },
+        { key: 'reject', label: '驳回申请', color: 'neutral' },
       ]
     case 'UNDER_REVIEW':
       return [
-        { key: 'approve', label: '通过入库', color: 'primary' },
-        { key: 'request_changes', label: '打回修改', color: 'neutral' },
+        { key: 'approve', label: '通过注销', color: 'primary' },
         { key: 'reject', label: '驳回申请', color: 'neutral' },
       ]
     default:
@@ -233,7 +232,7 @@ watch(autoApproveDraft, async (value) => {
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="w-full flex flex-wrap justify-between items-center">
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-          公司申请
+          注销审批
         </h1>
 
         <div class="flex flex-wrap items-center gap-3">
@@ -442,7 +441,7 @@ watch(autoApproveDraft, async (value) => {
           >
             <div>
               <p class="text-xs uppercase tracking-wide text-slate-500">
-                公司申请审批
+                公司注销审批
               </p>
               <h3 class="text-lg font-semibold text-slate-900 dark:text-white">
                 {{ actionTarget?.company?.name || '审批操作' }}

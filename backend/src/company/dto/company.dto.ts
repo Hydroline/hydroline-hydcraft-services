@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
+  IsIn,
   IsEmail,
   IsEnum,
   IsInt,
@@ -85,7 +87,7 @@ export class CreateCompanyApplicationDto {
   isIndividualBusiness?: boolean;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   legalRepresentativeId?: string;
 }
 
@@ -130,6 +132,12 @@ export class UpdateCompanyProfileDto {
 
 export class AdminUpdateCompanyDto extends UpdateCompanyProfileDto {
   @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
   @IsEnum(CompanyStatus)
   status?: CompanyStatus;
 
@@ -153,6 +161,18 @@ export class AdminUpdateCompanyDto extends UpdateCompanyProfileDto {
   @IsOptional()
   @IsString()
   typeCode?: string;
+
+  @IsOptional()
+  @IsEnum(CompanyCategory)
+  category?: CompanyCategory;
+
+  @IsOptional()
+  @IsUUID()
+  logoAttachmentId?: string;
+
+  @IsOptional()
+  @IsString()
+  auditReason?: string;
 }
 
 export class AdminCreateCompanyDto {
@@ -197,11 +217,11 @@ export class AdminCreateCompanyDto {
   isIndividualBusiness?: boolean;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   legalRepresentativeId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   ownerId?: string;
 
   @IsOptional()
@@ -262,7 +282,7 @@ export class CompanyUserSearchDto {
 }
 
 export class CompanyMemberInviteDto {
-  @IsUUID()
+  @IsString()
   userId!: string;
 
   @IsOptional()
@@ -286,6 +306,109 @@ export class CompanyMemberJoinDto {
   @IsOptional()
   @IsString()
   positionCode?: string;
+}
+
+export class CompanyAttachmentSearchDto {
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
+}
+
+export class CompanyLogoAttachmentDto {
+  @IsString()
+  attachmentId!: string;
+}
+
+export class CompanyDeregistrationApplyDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  reason?: string;
+}
+
+export class CompanyDirectoryQueryDto {
+  @IsOptional()
+  @IsUUID()
+  typeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  industryId?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  @Min(5)
+  @Max(50)
+  pageSize?: number;
+}
+
+export class CompanySettingsDto {
+  @IsIn(['AUTO', 'REVIEW'])
+  joinPolicy!: 'AUTO' | 'REVIEW';
+
+  @IsOptional()
+  @IsObject()
+  positionPermissions?: Record<string, string[]>;
+}
+
+export class CompanyMemberApprovalDto {
+  @IsUUID()
+  memberId!: string;
+
+  @IsOptional()
+  @IsString()
+  positionCode?: string;
+
+  @IsOptional()
+  @IsString()
+  title?: string;
+}
+
+export class CompanyMemberRejectDto {
+  @IsUUID()
+  memberId!: string;
+}
+
+export class CompanyMemberUpdateDto {
+  @IsOptional()
+  @IsUUID()
+  memberId?: string;
+
+  @IsOptional()
+  @IsString()
+  positionCode?: string;
+
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @IsIn(['VIEW_DASHBOARD', 'MANAGE_MEMBERS', 'EDIT_COMPANY'], { each: true })
+  permissions?: string[];
 }
 
 export class CompanyActionDto {

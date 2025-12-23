@@ -414,6 +414,54 @@ export class AttachmentsService implements OnModuleInit {
     return attachments.map((item) => this.serializeAttachment(item));
   }
 
+  async searchUserAttachments(
+    userId: string,
+    keyword?: string,
+    limit?: number,
+  ) {
+    const take = Math.min(Math.max(limit ?? 20, 1), 50);
+    const trimmed = keyword?.trim();
+    const filters: Prisma.AttachmentWhereInput = {
+      deletedAt: null,
+      ownerId: userId,
+    };
+    if (trimmed?.length) {
+      filters.OR = [
+        { name: { contains: trimmed, mode: 'insensitive' } },
+        { originalName: { contains: trimmed, mode: 'insensitive' } },
+        { id: { equals: trimmed } },
+        {
+          folder: {
+            OR: [
+              { name: { contains: trimmed, mode: 'insensitive' } },
+              { path: { contains: trimmed, mode: 'insensitive' } },
+            ],
+          },
+        },
+        {
+          tags: {
+            some: {
+              tag: {
+                OR: [
+                  { key: { contains: trimmed, mode: 'insensitive' } },
+                  { name: { contains: trimmed, mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        },
+      ];
+    }
+
+    const attachments = await this.prisma.attachment.findMany({
+      where: filters,
+      orderBy: [{ createdAt: 'desc' }],
+      take,
+      include: this.attachmentIncludes,
+    });
+    return attachments.map((item) => this.serializeAttachment(item));
+  }
+
   async uploadAttachment(
     userId: string,
     file: StoredUploadedFile | undefined,

@@ -150,6 +150,11 @@ const menuGroups = computed<MenuGroup[]>(() => [
         icon: 'i-lucide-clipboard-list',
       },
       {
+        label: '注销审批',
+        to: '/admin/company/deregistrations',
+        icon: 'i-lucide-clipboard-check',
+      },
+      {
         label: '行业配置',
         to: '/admin/company/industries',
         icon: 'i-lucide-layers-3',

@@ -65,25 +65,59 @@ export const userRoutes: RouteRecordRaw[] = [
       },
       {
         path: 'company',
-        name: 'company',
-        component: () => import('@/views/user/Company/CompanyOverviewView.vue'),
+        component: () => import('@/views/user/Company/CompanyLayout.vue'),
         meta: {
           layout: 'user',
           title: '工商系统',
           icon: 'i-lucide-building-2',
         },
-      },
-      {
-        path: 'company/dashboard',
-        name: 'company.dashboard',
-        component: () =>
-          import('@/views/user/Company/CompanyDashboardView.vue'),
-        meta: {
-          layout: 'user',
-          title: '公司工作台',
-          icon: 'i-lucide-briefcase',
-          requiresAuth: true,
-        },
+        children: [
+          {
+            path: '',
+            name: 'company.overview',
+            component: () =>
+              import('@/views/user/Company/CompanyOverviewView.vue'),
+          },
+          {
+            path: 'dashboard',
+            name: 'company.dashboard',
+            component: () =>
+              import('@/views/user/Company/CompanyDashboardView.vue'),
+            meta: {
+              requiresAuth: true,
+            },
+          },
+          {
+            path: 'dashboard/owned',
+            name: 'company.dashboard.owned',
+            component: () =>
+              import('@/views/user/Company/CompanyOwnedListView.vue'),
+            meta: {
+              requiresAuth: true,
+            },
+          },
+          {
+            path: 'dashboard/join',
+            name: 'company.dashboard.join',
+            component: () =>
+              import('@/views/user/Company/CompanyJoinListView.vue'),
+            meta: {
+              requiresAuth: true,
+            },
+          },
+          {
+            path: 'database',
+            name: 'company.database',
+            component: () =>
+              import('@/views/user/Company/CompanyDatabaseView.vue'),
+          },
+          {
+            path: 'database/:companyId',
+            name: 'company.database.detail',
+            component: () =>
+              import('@/views/user/Company/CompanyDatabaseDetailView.vue'),
+          },
+        ],
       },
       {
         path: 'transportation',
@@ -443,6 +477,19 @@ export const adminRoutes: RouteRecordRaw[] = [
         name: 'admin.company.applications',
         component: () =>
           import('@/views/admin/Company/CompanyApplicationsView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresPermissions: ['company.admin.applications'],
+          layout: 'admin',
+        },
+      },
+      {
+        path: 'company/deregistrations',
+        name: 'admin.company.deregistrations',
+        component: () =>
+          import(
+            '@/views/admin/Company/CompanyDeregistrationApplicationsView.vue'
+          ),
         meta: {
           requiresAuth: true,
           requiresPermissions: ['company.admin.applications'],

@@ -191,9 +191,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="space-y-8 mx-auto w-full max-w-6xl p-6">
+  <section class="space-y-6">
     <div
-      class="relative overflow-hidden rounded-3xl border border-slate-200 bg-linear-to-br from-slate-50 via-white to-primary-50 p-8 dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900 mt-4"
+      class="relative overflow-hidden rounded-3xl border border-slate-200 bg-linear-to-br from-slate-50 via-white to-primary-50 p-8 dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900"
     >
       <div class="space-y-4 relative z-1">
         <p
@@ -210,11 +210,6 @@ onMounted(() => {
           MTR 铁路想要运营主体？信息只登记在玩家名下不够带派？氢气工艺使用
           Hydroline 工商系统为所有玩家提供仿真式的公司注册与管理服务！
         </p>
-        <div class="flex flex-wrap gap-3">
-          <UButton color="primary" size="lg" @click="handleDashboard">
-            {{ canManage ? '工商仪表盘' : '立刻登录' }}
-          </UButton>
-        </div>
       </div>
       <div
         class="pointer-events-none absolute z-0 inset-y-0 right-0 hidden w-1/2 select-none items-center justify-center lg:flex"

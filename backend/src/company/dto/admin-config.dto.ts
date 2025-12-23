@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsObject,
@@ -91,6 +92,10 @@ export class CompanyApplicationListQueryDto {
 
   @IsOptional()
   @IsString()
+  workflowCode?: string;
+
+  @IsOptional()
+  @IsString()
   search?: string;
 
   @IsOptional()
@@ -104,4 +109,9 @@ export class CompanyApplicationListQueryDto {
   @IsInt()
   @Min(5)
   pageSize?: number;
+}
+
+export class CompanyApplicationSettingsDto {
+  @IsBoolean()
+  autoApprove!: boolean;
 }

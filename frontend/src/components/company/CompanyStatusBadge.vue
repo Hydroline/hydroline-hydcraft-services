@@ -9,10 +9,10 @@ const statusMeta: Record<CompanyStatus, { label: string; color: string }> = {
   PENDING_REVIEW: { label: '待提交', color: 'warning' },
   UNDER_REVIEW: { label: '审核中', color: 'warning' },
   NEEDS_REVISION: { label: '待补件', color: 'warning' },
-  ACTIVE: { label: '已生效', color: 'success' },
-  SUSPENDED: { label: '已暂停', color: 'info' },
+  ACTIVE: { label: '已注册', color: 'success' },
+  SUSPENDED: { label: '暂停营业', color: 'info' },
   REJECTED: { label: '已驳回', color: 'error' },
-  ARCHIVED: { label: '已归档', color: 'neutral' },
+  ARCHIVED: { label: '注销', color: 'neutral' },
 }
 
 const meta = computed(() => statusMeta[props.status] ?? statusMeta.DRAFT)
