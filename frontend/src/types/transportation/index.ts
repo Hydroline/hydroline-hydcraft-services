@@ -258,6 +258,8 @@ export interface RailwaySystemDetail {
   serverId: string
   dimensionContext: string | null
   routes: RailwaySystemRouteSummary[]
+  routeDetails?: RailwayRouteDetail[]
+  bindings?: RailwayCompanyBindingPayload
   updatedAt: string
 }
 

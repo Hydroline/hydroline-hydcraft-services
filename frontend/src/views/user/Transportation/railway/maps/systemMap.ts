@@ -21,6 +21,7 @@ export type SystemStop = {
   name: string
   position: RailwayGeometryPoint
   isTransfer: boolean
+  color?: number | null
 }
 
 function toHexColor(value: number | null | undefined) {
@@ -32,6 +33,8 @@ export class RailwaySystemMap {
   private controller: DynmapMapController
   private polylines: L.Polyline[] = []
   private stopLayer: L.LayerGroup | null = null
+  private zoomHandler: (() => void) | null = null
+  private stops: SystemStop[] = []
 
   constructor() {
     this.controller = createHydcraftDynmapMap()
@@ -39,17 +42,33 @@ export class RailwaySystemMap {
 
   mount(options: DynmapMapInitOptions) {
     this.controller.mount(options)
+    const map = this.controller.getLeafletInstance()
+    if (map) {
+      this.zoomHandler = () => {
+        this.renderStops(map, this.stops)
+      }
+      map.on('zoomend', this.zoomHandler)
+    }
+  }
+
+  getController() {
+    return this.controller
   }
 
   destroy() {
     this.clearRoutes()
     const map = this.controller.getLeafletInstance()
     if (map) {
+      if (this.zoomHandler) {
+        map.off('zoomend', this.zoomHandler)
+        this.zoomHandler = null
+      }
       map.remove()
     }
   }
 
   drawRoutes(routes: SystemRoutePath[], stops: SystemStop[], autoFocus = true) {
+    this.stops = stops
     this.clearRoutes()
     const map = this.controller.getLeafletInstance()
     if (!map || !(map as any)._loaded) {
@@ -90,29 +109,48 @@ export class RailwaySystemMap {
       map.removeLayer(this.stopLayer)
     }
     const layer = L.layerGroup()
+
     stops.forEach((stop) => {
       const latlng = this.controller.toLatLng({
         x: stop.position.x,
         z: stop.position.z,
       })
       if (!latlng) return
-      const marker = L.circleMarker(latlng, {
-        radius: stop.isTransfer ? 6 : 4,
-        color: stop.isTransfer ? '#0f172a' : '#475569',
-        weight: 1.5,
-        fillColor: stop.isTransfer ? '#f97316' : '#e2e8f0',
-        fillOpacity: 0.9,
-        className: stop.isTransfer
-          ? 'railway-system-transfer-marker'
-          : 'railway-system-stop-marker',
+
+      const isTransfer = stop.isTransfer
+      const routeColor = toHexColor(stop.color)
+      const primaryColor = '#0ea5e9'
+
+      // Style Logic:
+      // Transfer: Fill = Primary, Border = White
+      // Normal: Fill = White, Border = Route Color
+      const fillColor = isTransfer ? primaryColor : '#ffffff'
+      const borderColor = isTransfer ? '#ffffff' : routeColor
+
+      const size = 18
+      const radius = size / 2
+      const borderWidth = 4
+
+      const marker = L.marker(latlng, {
+        icon: L.divIcon({
+          className: 'bg-transparent',
+          html: `
+            <div class="rounded-full"
+                 style="width: ${size}px; height: ${size}px; background-color: ${fillColor}; border: ${borderWidth}px solid ${borderColor}; box-sizing: border-box; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            </div>
+          `,
+          iconSize: [size, size],
+          iconAnchor: [radius, radius],
+        }),
       })
+
       marker.bindTooltip(stop.name, {
-        permanent: false,
-        sticky: true,
+        permanent: true,
         direction: 'top',
-        offset: L.point(0, -6),
-        className: 'railway-system-stop-label',
+        offset: L.point(0, -8),
+        className: 'railway-station-label',
       })
+
       marker.addTo(layer)
     })
     layer.addTo(map)

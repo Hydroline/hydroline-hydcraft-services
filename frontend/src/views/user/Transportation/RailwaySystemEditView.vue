@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTransportationRailwayStore } from '@/stores/transportation/railway'
 import { useTransportationRailwaySystemsStore } from '@/stores/transportation/railwaySystems'
+import { useAuthStore } from '@/stores/user/auth'
+import { useUiStore } from '@/stores/shared/ui'
 import type {
   RailwayRoute,
   RailwaySystemDetail,
@@ -13,6 +15,8 @@ const route = useRoute()
 const router = useRouter()
 const systemsStore = useTransportationRailwaySystemsStore()
 const railwayStore = useTransportationRailwayStore()
+const authStore = useAuthStore()
+const uiStore = useUiStore()
 const toast = useToast()
 
 const systemId = computed(() => route.params.systemId as string)
@@ -64,6 +68,19 @@ function buildGroupKey(
 function buildGroupName(name: string | null | undefined, fallback?: string) {
   if (!name) return fallback ?? '未知线路'
   return name.split('||')[0].split('|')[0].trim() || fallback || name
+}
+
+function parseRouteName(name: string | null | undefined) {
+  if (!name) return { main: '未知线路', sub: null, extra: null }
+  const parts = name.split('||')
+  const mainPart = parts[0] ?? ''
+  const extraPart = parts[1] ?? ''
+
+  const main = mainPart.split('|')[0]?.trim() || name
+  const sub = mainPart.split('|')[1]?.trim() || null
+  const extra = extraPart.split('|')[0]?.trim() || null
+
+  return { main, sub, extra }
 }
 
 const groupedSearchResults = computed(() => {
@@ -124,7 +141,8 @@ const selectedPage = ref(1)
 const selectedPageSize = ref(10)
 
 const paginatedSelectedGroups = computed(() => {
-  const start = (selectedPage.value - 1) * selectedPageSize.value
+  const page = Number(selectedPage.value)
+  const start = (page - 1) * selectedPageSize.value
   const end = start + selectedPageSize.value
   return selectedGroups.value.slice(start, end)
 })
@@ -210,7 +228,7 @@ async function searchRoutes() {
   try {
     const response = await railwayStore.searchRoutes({
       search: keyword,
-      page: searchPage.value,
+      page: Number(searchPage.value),
       pageSize: searchPageSize.value,
     })
     routeSearchResults.value = response.items
@@ -355,23 +373,33 @@ watch(
   },
 )
 
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
+
 watch(
   () => routeSearchTerm.value,
   (value) => {
     searchPage.value = 1
+    if (searchTimeout) clearTimeout(searchTimeout)
+
     if (!value.trim()) {
       routeSearchResults.value = []
       lastSearchKeyword.value = ''
       searchTotal.value = 0
+      return
     }
+
+    searchTimeout = setTimeout(() => {
+      void searchRoutes()
+    }, 500)
   },
 )
 
-watch(searchPage, () => {
+function onSearchPageChange(newPage: number) {
+  searchPage.value = newPage
   if (routeSearchTerm.value.trim()) {
     void searchRoutes()
   }
-})
+}
 
 watch(
   () => groupedSearchResults.value,
@@ -402,6 +430,9 @@ watch(
 )
 
 onMounted(() => {
+  if (!authStore.isAuthenticated) {
+    uiStore.openLoginDialog()
+  }
   void loadSystem()
 })
 
@@ -552,12 +583,12 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <div class="grid gap-6 md:grid-cols-2">
+      <div class="grid gap-6 md:grid-cols-2 items-start">
         <div
-          class="rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800/70 dark:bg-slate-900"
+          class="flex flex-col rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800/70 dark:bg-slate-900 min-h-[600px]"
         >
           <div
-            class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between"
+            class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between flex-shrink-0"
           >
             <div>
               <h3
@@ -577,188 +608,230 @@ onBeforeUnmount(() => {
               }}
             </span>
           </div>
-          <div class="mt-3">
+          <div class="mt-3 flex-shrink-0">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
               <UInput
                 v-model="routeSearchTerm"
                 placeholder="搜索线路名称"
                 icon="i-lucide-search"
                 class="flex-1"
-                @keyup.enter="searchRoutes"
               />
-              <UButton
-                color="primary"
-                :loading="routeSearching"
-                class="flex-shrink-0"
-                @click="searchRoutes"
-              >
-                搜索
-              </UButton>
             </div>
-            <div class="mt-4 space-y-3">
-              <div
-                v-if="groupedSearchResults.length === 0"
-                class="rounded-xl border border-dashed border-slate-200/70 bg-slate-50/80 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400"
-              >
-                {{
-                  routeSearching
-                    ? '搜索中…'
-                    : routeSearchTerm
-                      ? '暂无符合的线路'
-                      : '请输入关键词后开始搜索'
-                }}
-              </div>
-              <div
-                v-else
-                v-for="group in groupedSearchResults"
-                :key="group.groupKey"
-                class="rounded-2xl border border-slate-200/70 bg-white p-0 dark:border-slate-800/70 dark:bg-slate-900"
-              >
-                <template v-if="group.routes.length === 1">
-                  <div
-                    class="grid cursor-pointer grid-cols-[1fr,auto] items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                    @click="
-                      isRouteSelected(group.routes[0].id)
-                        ? removeRoute(group.routes[0].id)
-                        : addRoute(group.routes[0])
-                    "
-                  >
-                    <div>
-                      <p
-                        class="text-base font-semibold text-slate-900 dark:text-white"
-                      >
-                        {{ group.groupName }}
-                      </p>
-                      <p class="text-xs text-slate-500 dark:text-slate-400">
-                        {{ group.routes[0].server.name }} ·
-                        {{ group.routes[0].railwayType }} ·
-                        {{ group.routes[0].dimension ?? '主世界' }}
-                      </p>
-                    </div>
-                    <UButton
-                      size="2xs"
-                      variant="ghost"
-                      :color="
-                        isRouteSelected(group.routes[0].id)
-                          ? 'neutral'
-                          : 'primary'
-                      "
-                      @click.stop="
+          </div>
+          <div class="mt-4 flex-1 flex flex-col min-h-0">
+            <div
+              v-if="groupedSearchResults.length === 0"
+              class="rounded-xl border border-dashed border-slate-200/70 bg-slate-50/80 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400"
+            >
+              {{
+                routeSearching
+                  ? '搜索中…'
+                  : routeSearchTerm
+                    ? '暂无符合的线路'
+                    : '请输入关键词后开始搜索'
+              }}
+            </div>
+            <div v-else class="flex-1 flex flex-col min-h-0">
+              <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+                <div
+                  v-for="group in groupedSearchResults"
+                  :key="group.groupKey"
+                  class="overflow-hidden rounded-2xl border border-slate-100/70 bg-slate-50/80 p-0 dark:border-slate-800/70 dark:bg-slate-900/60"
+                >
+                  <template v-if="group.routes.length === 1">
+                    <div
+                      class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-100/50 dark:hover:bg-slate-800/50"
+                      @click="
                         isRouteSelected(group.routes[0].id)
                           ? removeRoute(group.routes[0].id)
                           : addRoute(group.routes[0])
                       "
                     >
-                      {{
-                        isRouteSelected(group.routes[0].id) ? '取消' : '选择'
-                      }}
-                    </UButton>
-                  </div>
-                </template>
-                <template v-else>
-                  <button
-                    type="button"
-                    class="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                    @click="toggleSearchGroup(group.groupKey)"
-                  >
-                    <div>
-                      <p
-                        class="text-base font-semibold text-slate-900 dark:text-white"
-                      >
-                        {{ group.groupName }}
-                      </p>
-                      <p class="text-xs text-slate-500">
-                        {{ group.routes.length }} 个方向 · 已选
-                        {{ selectedCountByGroup[group.groupKey] ?? 0 }}/{{
-                          group.routes.length
-                        }}
-                      </p>
-                    </div>
-                    <div
-                      class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
-                    >
-                      <span>
-                        {{
-                          (selectedCountByGroup[group.groupKey] ?? 0) > 0
-                            ? '部分已选'
-                            : '展开选择'
-                        }}
-                      </span>
-                      <UIcon
-                        name="i-lucide-chevron-down"
-                        class="h-4 w-4 transition-transform"
-                        :class="{
-                          'rotate-180': searchGroupExpanded[group.groupKey],
-                        }"
-                      />
-                    </div>
-                  </button>
-                  <Transition
-                    enter-active-class="transition-all duration-200"
-                    leave-active-class="transition-all duration-200"
-                  >
-                    <div
-                      v-show="searchGroupExpanded[group.groupKey]"
-                      class="max-h-60 overflow-y-auto border-t border-slate-100 dark:border-slate-800"
-                    >
-                      <div
-                        v-for="route in group.routes"
-                        :key="route.id"
-                        class="grid cursor-pointer grid-cols-[1fr,auto] items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-slate-50/60 dark:border-slate-800 dark:hover:bg-slate-800"
-                        @click="
-                          isRouteSelected(route.id)
-                            ? removeRoute(route.id)
-                            : addRoute(route)
-                        "
-                      >
-                        <div>
-                          <p
-                            class="text-sm font-semibold text-slate-900 dark:text-white"
+                      <div>
+                        <div class="flex items-baseline gap-2">
+                          <span
+                            class="text-base font-semibold text-slate-900 dark:text-white"
                           >
-                            {{ route.name || route.id }}
-                          </p>
-                          <p class="text-xs text-slate-500 dark:text-slate-400">
-                            {{ route.server.name }} · {{ route.railwayType }} ·
-                            {{ route.dimension ?? '主世界' }}
-                          </p>
+                            {{ parseRouteName(group.routes[0].name).main }}
+                          </span>
+                          <span
+                            v-if="parseRouteName(group.routes[0].name).sub"
+                            class="text-xs text-slate-500 dark:text-slate-400"
+                          >
+                            {{ parseRouteName(group.routes[0].name).sub }}
+                          </span>
                         </div>
                         <div
-                          class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
+                          v-if="parseRouteName(group.routes[0].name).extra"
+                          class="text-xs text-slate-500 dark:text-slate-400"
                         >
-                          <span
-                            v-if="isRouteSelected(route.id)"
-                            class="rounded-full border border-slate-200 px-2 py-0.5 text-xs dark:border-slate-700"
-                          >
-                            已选
-                          </span>
-                          <UButton
-                            size="2xs"
-                            variant="ghost"
-                            :color="
-                              isRouteSelected(route.id) ? 'neutral' : 'primary'
-                            "
-                            @click.stop="
+                          {{ parseRouteName(group.routes[0].name).extra }}
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                          {{ group.routes[0].server.name }} ·
+                          {{ group.routes[0].railwayType }} ·
+                          {{ group.routes[0].dimension ?? '主世界' }}
+                        </p>
+                      </div>
+                      <div
+                        class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
+                      >
+                        <span
+                          v-if="isRouteSelected(group.routes[0].id)"
+                          class="rounded-full border border-slate-200 px-2 py-0.5 text-xs dark:border-slate-700"
+                        >
+                          已选
+                        </span>
+                        <UButton
+                          size="2xs"
+                          variant="ghost"
+                          :color="
+                            isRouteSelected(group.routes[0].id)
+                              ? 'neutral'
+                              : 'primary'
+                          "
+                          @click.stop="
+                            isRouteSelected(group.routes[0].id)
+                              ? removeRoute(group.routes[0].id)
+                              : addRoute(group.routes[0])
+                          "
+                        >
+                          {{
+                            isRouteSelected(group.routes[0].id)
+                              ? '取消'
+                              : '选择'
+                          }}
+                        </UButton>
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <button
+                      type="button"
+                      class="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left hover:bg-slate-100/50 dark:hover:bg-slate-800/50"
+                      @click="toggleSearchGroup(group.groupKey)"
+                    >
+                      <div>
+                        <p
+                          class="text-base font-semibold text-slate-900 dark:text-white"
+                        >
+                          {{ group.groupName }}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                          {{ group.routes.length }} 个方向 · 已选
+                          {{ selectedCountByGroup[group.groupKey] ?? 0 }}/{{
+                            group.routes.length
+                          }}
+                        </p>
+                      </div>
+                      <div
+                        class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
+                      >
+                        <span>
+                          {{ selectedCountByGroup[group.groupKey] ?? 0 }}/{{
+                            group.routes.length
+                          }}
+                        </span>
+                        <UIcon
+                          name="i-lucide-chevron-down"
+                          class="h-4 w-4 transition-transform"
+                          :class="{
+                            'rotate-180': searchGroupExpanded[group.groupKey],
+                          }"
+                        />
+                      </div>
+                    </button>
+                    <Transition
+                      enter-active-class="transition-all duration-200"
+                      leave-active-class="transition-all duration-200"
+                    >
+                      <div
+                        v-show="searchGroupExpanded[group.groupKey]"
+                        class="max-h-60 overflow-y-auto border-t border-slate-200/60 px-4 py-3 dark:border-slate-800/60"
+                      >
+                        <div class="space-y-2">
+                          <div
+                            v-for="route in group.routes"
+                            :key="route.id"
+                            class="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm transition hover:border-slate-300 dark:border-slate-800/60 dark:bg-slate-900/60"
+                            @click="
                               isRouteSelected(route.id)
                                 ? removeRoute(route.id)
                                 : addRoute(route)
                             "
                           >
-                            {{ isRouteSelected(route.id) ? '取消' : '选择' }}
-                          </UButton>
+                            <div>
+                              <div class="flex items-baseline gap-2">
+                                <span
+                                  class="text-sm font-medium text-slate-900 dark:text-white"
+                                >
+                                  {{ parseRouteName(route.name).main }}
+                                </span>
+                                <span
+                                  v-if="parseRouteName(route.name).sub"
+                                  class="text-xs text-slate-500 dark:text-slate-400"
+                                >
+                                  {{ parseRouteName(route.name).sub }}
+                                </span>
+                              </div>
+                              <div
+                                v-if="parseRouteName(route.name).extra"
+                                class="text-xs text-slate-500 dark:text-slate-400"
+                              >
+                                {{ parseRouteName(route.name).extra }}
+                              </div>
+                              <p
+                                class="text-xs text-slate-500 dark:text-slate-400"
+                              >
+                                {{ route.server.name }} ·
+                                {{ route.railwayType }} ·
+                                {{ route.dimension ?? '主世界' }}
+                              </p>
+                            </div>
+                            <div
+                              class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
+                            >
+                              <span
+                                v-if="isRouteSelected(route.id)"
+                                class="rounded-full border border-slate-200 px-2 py-0.5 text-xs dark:border-slate-700"
+                              >
+                                已选
+                              </span>
+                              <UButton
+                                size="2xs"
+                                variant="ghost"
+                                :color="
+                                  isRouteSelected(route.id)
+                                    ? 'neutral'
+                                    : 'primary'
+                                "
+                                @click.stop="
+                                  isRouteSelected(route.id)
+                                    ? removeRoute(route.id)
+                                    : addRoute(route)
+                                "
+                              >
+                                {{
+                                  isRouteSelected(route.id) ? '取消' : '选择'
+                                }}
+                              </UButton>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Transition>
-                </template>
+                    </Transition>
+                  </template>
+                </div>
               </div>
               <div
                 v-if="searchTotal > searchPageSize"
-                class="flex justify-center pt-2"
+                class="flex justify-center pt-2 flex-shrink-0"
               >
                 <UPagination
-                  v-model="searchPage"
-                  :page-count="searchPageSize"
+                  :page="searchPage"
+                  :items-per-page="searchPageSize"
                   :total="searchTotal"
+                  @update:page="onSearchPageChange"
                 />
               </div>
             </div>
@@ -766,9 +839,9 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          class="rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800/70 dark:bg-slate-900"
+          class="flex flex-col rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800/70 dark:bg-slate-900 min-h-[600px]"
         >
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between flex-shrink-0">
             <div>
               <h3
                 class="text-base font-semibold text-slate-800 dark:text-slate-200"
@@ -782,93 +855,156 @@ onBeforeUnmount(() => {
             </div>
             <p class="text-xs text-slate-400">可单独移除方向</p>
           </div>
-          <div class="mt-4 space-y-4">
+          <div class="mt-4 flex-1 flex flex-col min-h-0">
             <div
               v-if="selectedGroups.length === 0"
               class="rounded-xl border border-dashed border-slate-200/70 bg-slate-50/80 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400"
             >
               暂无选中线路，添加后会在这里显示
             </div>
-            <div v-else class="space-y-4">
-              <div
-                v-for="group in paginatedSelectedGroups"
-                :key="group.groupKey"
-                class="rounded-2xl border border-slate-100/70 bg-slate-50/80 p-0 dark:border-slate-800/70 dark:bg-slate-900/60"
-              >
-                <button
-                  type="button"
-                  class="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left hover:bg-slate-100/50 dark:hover:bg-slate-800/50"
-                  @click="toggleSelectedGroup(group.groupKey)"
+            <div v-else class="flex-1 flex flex-col min-h-0">
+              <div class="flex-1 overflow-y-auto space-y-4 pr-1">
+                <div
+                  v-for="group in paginatedSelectedGroups"
+                  :key="group.groupKey"
+                  class="overflow-hidden rounded-2xl border border-slate-100/70 bg-slate-50/80 p-0 dark:border-slate-800/70 dark:bg-slate-900/60"
                 >
-                  <div>
-                    <p
-                      class="text-sm font-semibold text-slate-900 dark:text-white"
+                  <template v-if="group.routes.length === 1">
+                    <div
+                      class="flex items-center justify-between gap-3 px-4 py-3"
                     >
-                      {{ group.groupName }}
-                    </p>
-                    <p class="text-xs text-slate-500">
-                      已选 {{ group.routes.length }}/{{ group.totalCount }}
-                      个方向
-                    </p>
-                  </div>
-                  <div
-                    class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
-                  >
-                    <span>
-                      {{ group.routes.length }}/{{ group.totalCount }}
-                    </span>
-                    <UIcon
-                      name="i-lucide-chevron-down"
-                      class="h-4 w-4 transition-transform"
-                      :class="{
-                        'rotate-180': selectedGroupExpanded[group.groupKey],
-                      }"
-                    />
-                  </div>
-                </button>
-                <Transition
-                  enter-active-class="transition-all duration-200"
-                  leave-active-class="transition-all duration-200"
-                >
-                  <div
-                    v-show="selectedGroupExpanded[group.groupKey]"
-                    class="max-h-60 overflow-y-auto border-t border-slate-200/60 px-4 py-3 dark:border-slate-800/60"
-                  >
-                    <div class="space-y-2">
-                      <div
-                        v-for="route in group.routes"
-                        :key="route.entityId"
-                        class="flex items-center justify-between gap-3 rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm transition hover:border-slate-300 dark:border-slate-800/60 dark:bg-slate-900/60"
-                      >
-                        <div>
-                          <p class="text-slate-900 dark:text-white">
-                            {{ route.name || route.entityId }}
-                          </p>
-                          <p class="text-xs text-slate-500 dark:text-slate-400">
-                            {{ route.server.name }} · {{ route.railwayType }} ·
-                            {{ route.dimension ?? '主世界' }}
-                          </p>
+                      <div>
+                        <div class="flex items-baseline gap-2">
+                          <span
+                            class="text-base font-semibold text-slate-900 dark:text-white"
+                          >
+                            {{ parseRouteName(group.routes[0].name).main }}
+                          </span>
+                          <span
+                            v-if="parseRouteName(group.routes[0].name).sub"
+                            class="text-xs text-slate-500 dark:text-slate-400"
+                          >
+                            {{ parseRouteName(group.routes[0].name).sub }}
+                          </span>
                         </div>
-                        <UButton
-                          size="2xs"
-                          variant="ghost"
-                          color="primary"
-                          @click="removeRoute(route.entityId)"
+                        <div
+                          v-if="parseRouteName(group.routes[0].name).extra"
+                          class="text-xs text-slate-500 dark:text-slate-400"
                         >
-                          移除
-                        </UButton>
+                          {{ parseRouteName(group.routes[0].name).extra }}
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                          {{ group.routes[0].server.name }} ·
+                          {{ group.routes[0].railwayType }} ·
+                          {{ group.routes[0].dimension ?? '主世界' }}
+                        </p>
                       </div>
+                      <UButton
+                        size="2xs"
+                        variant="ghost"
+                        color="primary"
+                        @click="removeRoute(group.routes[0].entityId)"
+                      >
+                        移除
+                      </UButton>
                     </div>
-                  </div>
-                </Transition>
+                  </template>
+                  <template v-else>
+                    <button
+                      type="button"
+                      class="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left hover:bg-slate-100/50 dark:hover:bg-slate-800/50"
+                      @click="toggleSelectedGroup(group.groupKey)"
+                    >
+                      <div>
+                        <p
+                          class="text-sm font-semibold text-slate-900 dark:text-white"
+                        >
+                          {{ group.groupName }}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                          {{ group.totalCount }} 个方向 · 已选
+                          {{ group.routes.length }}/{{ group.totalCount }}
+                        </p>
+                      </div>
+                      <div
+                        class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
+                      >
+                        <span>
+                          {{ group.routes.length }}/{{ group.totalCount }}
+                        </span>
+                        <UIcon
+                          name="i-lucide-chevron-down"
+                          class="h-4 w-4 transition-transform"
+                          :class="{
+                            'rotate-180': selectedGroupExpanded[group.groupKey],
+                          }"
+                        />
+                      </div>
+                    </button>
+                    <Transition
+                      enter-active-class="transition-all duration-200"
+                      leave-active-class="transition-all duration-200"
+                    >
+                      <div
+                        v-show="selectedGroupExpanded[group.groupKey]"
+                        class="max-h-60 overflow-y-auto border-t border-slate-200/60 px-4 py-3 dark:border-slate-800/60"
+                      >
+                        <div class="space-y-2">
+                          <div
+                            v-for="route in group.routes"
+                            :key="route.entityId"
+                            class="flex items-center justify-between gap-3 rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm transition hover:border-slate-300 dark:border-slate-800/60 dark:bg-slate-900/60"
+                          >
+                            <div>
+                              <div class="flex items-baseline gap-2">
+                                <span
+                                  class="text-sm font-medium text-slate-900 dark:text-white"
+                                >
+                                  {{ parseRouteName(route.name).main }}
+                                </span>
+                                <span
+                                  v-if="parseRouteName(route.name).sub"
+                                  class="text-xs text-slate-500 dark:text-slate-400"
+                                >
+                                  {{ parseRouteName(route.name).sub }}
+                                </span>
+                              </div>
+                              <div
+                                v-if="parseRouteName(route.name).extra"
+                                class="text-xs text-slate-500 dark:text-slate-400"
+                              >
+                                {{ parseRouteName(route.name).extra }}
+                              </div>
+                              <p
+                                class="text-xs text-slate-500 dark:text-slate-400"
+                              >
+                                {{ route.server.name }} ·
+                                {{ route.railwayType }} ·
+                                {{ route.dimension ?? '主世界' }}
+                              </p>
+                            </div>
+                            <UButton
+                              size="2xs"
+                              variant="ghost"
+                              color="primary"
+                              @click="removeRoute(route.entityId)"
+                            >
+                              移除
+                            </UButton>
+                          </div>
+                        </div>
+                      </div>
+                    </Transition>
+                  </template>
+                </div>
               </div>
               <div
                 v-if="selectedGroups.length > selectedPageSize"
-                class="flex justify-center pt-2"
+                class="flex justify-center pt-2 flex-shrink-0"
               >
                 <UPagination
-                  v-model="selectedPage"
-                  :page-count="selectedPageSize"
+                  v-model:page="selectedPage"
+                  :items-per-page="selectedPageSize"
                   :total="selectedGroups.length"
                 />
               </div>

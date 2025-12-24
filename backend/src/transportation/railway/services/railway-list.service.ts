@@ -46,9 +46,14 @@ type RailwayListResponse<TItem> = {
   pagination: RailwayListPagination;
 };
 
-function clampInt(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, Math.trunc(value)));
+function clampInt(
+  value: number | string | undefined | null,
+  min: number,
+  max: number,
+) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(num)));
 }
 
 function buildQueryRowFromStoredEntity(row: {

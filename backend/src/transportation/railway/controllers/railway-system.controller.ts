@@ -47,6 +47,12 @@ export class TransportationRailwaySystemController {
     return this.railwaySystemService.listSystems(query);
   }
 
+  @Get('servers')
+  @ApiOperation({ summary: '获取启用 Beacon 的服务器列表' })
+  async listServers() {
+    return this.railwaySystemService.listBeaconServers();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '线路系统详情' })
   async detail(@Param('id') id: string) {

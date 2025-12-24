@@ -15,6 +15,9 @@ const systemsResponse = ref(
 )
 const renderToken = ref(0)
 
+const servers = ref<{ id: string; name: string; code: string }[]>([])
+const selectedServer = ref<string>('')
+
 const pageInput = ref('1')
 
 const pagination = computed(() => {
@@ -27,17 +30,27 @@ const pagination = computed(() => {
   }
 })
 
+async function loadServers() {
+  servers.value = await systemsStore.fetchServers()
+}
+
 async function loadSystems() {
   loading.value = true
   try {
     systemsResponse.value = await systemsStore.fetchSystems({
       page: page.value,
       pageSize: pageSize.value,
+      serverId: selectedServer.value,
     })
     renderToken.value += 1
   } finally {
     loading.value = false
   }
+}
+
+function getServerName(id: string) {
+  const server = servers.value.find((s) => s.id === id)
+  return server ? `${server.name} (${server.code})` : id
 }
 
 function goToPage(nextPage: number) {
@@ -58,19 +71,30 @@ function openSystem(systemId: string, edit = false) {
 }
 
 onMounted(() => {
+  void loadServers()
   void loadSystems()
 })
 </script>
 
 <template>
-  <div class="space-y-6 relative">
-    <div class="absolute right-4 top-6 md:top-10 flex items-center gap-2">
+  <div class="space-y-6">
+    <div>
+      <UButton
+        v-if="systemsResponse"
+        size="sm"
+        class="absolute left-4 top-6 md:top-10"
+        variant="ghost"
+        icon="i-lucide-arrow-left"
+        @click="router.push({ name: 'transportation.railway' })"
+      >
+        返回概览
+      </UButton>
       <UTooltip text="新建铁路线路系统">
         <UButton
           color="primary"
           variant="soft"
           size="xs"
-          class="p-1"
+          class="absolute right-4 top-6 md:top-10 p-1"
           icon="i-lucide-plus"
           @click="router.push({ name: 'transportation.railway.system.create' })"
         />
@@ -82,16 +106,23 @@ onMounted(() => {
           全服铁路线路系统
         </h1>
       </div>
-      <UButton
-        v-if="systemsResponse"
-        size="sm"
-        class="absolute left-4 top-6 md:top-10"
-        variant="ghost"
-        icon="i-lucide-arrow-left"
-        @click="router.push({ name: 'transportation.railway' })"
-      >
-        返回概览
-      </UButton>
+      <div class="w-48">
+        <USelect
+          class="w-full"
+          v-model="selectedServer"
+          :items="[
+            { label: '全部服务端', value: '' },
+            ...servers.map((s) => ({ label: s.name, value: s.id })),
+          ]"
+          placeholder="选择服务端"
+          @update:model-value="
+            () => {
+              page = 1
+              loadSystems()
+            }
+          "
+        />
+      </div>
     </div>
 
     <div
@@ -147,14 +178,25 @@ onMounted(() => {
                 class="border-t border-slate-100 dark:border-slate-800"
               >
                 <td class="px-4 py-3">
-                  <div class="text-slate-900 dark:text-white">
-                    {{ item.name }}
+                  <div class="flex items-center gap-3">
+                    <UAvatar
+                      :src="item.logoUrl || undefined"
+                      :alt="item.name"
+                      size="sm"
+                      :ui="{ rounded: 'rounded-md' }"
+                      class="bg-slate-100 dark:bg-slate-800"
+                    />
+                    <div>
+                      <div class="text-slate-900 dark:text-white">
+                        {{ item.name }}
+                      </div>
+                      <span class="text-xs text-slate-400">{{
+                        item.englishName || '—'
+                      }}</span>
+                    </div>
                   </div>
-                  <span class="text-xs text-slate-400">{{
-                    item.englishName || '—'
-                  }}</span>
                 </td>
-                <td class="px-4 py-3">{{ item.serverId }}</td>
+                <td class="px-4 py-3">{{ getServerName(item.serverId) }}</td>
                 <td class="px-4 py-3">{{ item.routeCount }}</td>
                 <td class="px-4 py-3">{{ item.updatedAt }}</td>
                 <td class="px-4 py-3">

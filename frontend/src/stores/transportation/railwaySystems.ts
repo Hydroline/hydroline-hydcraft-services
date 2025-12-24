@@ -49,6 +49,11 @@ export const useTransportationRailwaySystemsStore = defineStore(
           `/transportation/railway/systems?${query.toString()}`,
         )
       },
+      async fetchServers() {
+        return apiFetch<{ id: string; name: string; code: string }[]>(
+          '/transportation/railway/systems/servers',
+        )
+      },
       async fetchSystemDetail(id: string) {
         return apiFetch<RailwaySystemDetail>(
           `/transportation/railway/systems/${id}`,

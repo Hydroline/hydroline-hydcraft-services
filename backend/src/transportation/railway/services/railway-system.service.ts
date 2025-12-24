@@ -20,6 +20,9 @@ import {
   RailwaySystemUpdateDto,
 } from '../../dto/railway-system.dto';
 import { buildDimensionContextFromDimension } from '../utils/railway-normalizer';
+import { TransportationRailwayRouteDetailService } from '../route-detail/railway-route-detail.service';
+import { TransportationRailwayCompanyBindingService } from './railway-company-binding.service';
+import { MinecraftServerService } from '../../../minecraft/minecraft-server.service';
 
 export type RailwaySystemRouteSummary = {
   entityId: string;
@@ -38,7 +41,21 @@ export class TransportationRailwaySystemService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly routeDetailService: TransportationRailwayRouteDetailService,
+    private readonly bindingService: TransportationRailwayCompanyBindingService,
+    private readonly minecraftServerService: MinecraftServerService,
   ) {}
+
+  async listBeaconServers() {
+    const servers = await this.minecraftServerService.listServers();
+    return servers
+      .filter((s) => s.beaconEnabled)
+      .map((s) => ({
+        id: s.id,
+        name: s.displayName,
+        code: s.internalCodeCn,
+      }));
+  }
 
   async listSystems(query: RailwaySystemListQueryDto) {
     const page = Math.max(query.page ?? 1, 1);
@@ -128,6 +145,31 @@ export class TransportationRailwaySystemService {
       .map((item) => this.normalizeRoute(item.route, serverNameMap))
       .filter((route): route is RailwaySystemRouteSummary => Boolean(route));
 
+    const bindings = await this.bindingService.getBindings({
+      entityType: 'SYSTEM',
+      entityId: system.id,
+      serverId: system.serverId,
+      railwayType: routes[0]?.railwayType ?? null,
+      dimension: this.extractDimensionFromContext(system.dimensionContext),
+    });
+
+    const routeDetails = await Promise.all(
+      routes.map(async (route) => {
+        try {
+          return await this.routeDetailService.getRouteDetail(
+            route.entityId,
+            route.railwayType,
+            {
+              serverId: route.server.id,
+              dimension: route.dimension ?? undefined,
+            },
+          );
+        } catch (error) {
+          return null;
+        }
+      }),
+    );
+
     return {
       id: system.id,
       name: system.name,
@@ -139,6 +181,8 @@ export class TransportationRailwaySystemService {
       serverId: system.serverId,
       dimensionContext: system.dimensionContext ?? null,
       routes,
+      routeDetails: routeDetails.filter((item) => item !== null),
+      bindings,
       updatedAt: system.updatedAt,
     };
   }
@@ -275,12 +319,29 @@ export class TransportationRailwaySystemService {
       throw new NotFoundException('Railway system not found');
     }
 
+    const folderName = '铁路线路系统';
+    let folder = await this.prisma.attachmentFolder.findFirst({
+      where: {
+        name: folderName,
+        parentId: null,
+      },
+    });
+
+    if (!folder) {
+      folder = await this.attachmentsService.createFolder(userId, {
+        name: folderName,
+        description: '铁路线路系统相关图片',
+        visibilityMode: 'public',
+      });
+    }
+
     const attachment = await this.attachmentsService.uploadAttachment(
       userId,
       file,
       {
         name: `${system.name}-logo`,
         isPublic: true,
+        folderId: folder.id,
         metadata: {
           scope: 'railway-system-logo',
           systemId: id,

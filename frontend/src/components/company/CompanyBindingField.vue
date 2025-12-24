@@ -98,7 +98,7 @@ function resolveCompanyLogo(companyId: string) {
         {{ label }}
 
         <UButton
-          class="rounded-full p-1"
+          class="rounded-full p-0.5"
           v-if="allowEdit"
           variant="soft"
           size="xs"
@@ -114,7 +114,7 @@ function resolveCompanyLogo(companyId: string) {
           <div
             v-for="companyId in orderedCompanyIds"
             :key="companyId"
-            class="flex items-center gap-2 rounded-full border border-slate-200/70 bg-white px-3 py-1 text-slate-700 shadow-sm dark:border-slate-800/70 dark:bg-slate-700/60 dark:text-slate-200"
+            class="flex items-center gap-2 text-sm"
           >
             <img
               v-if="resolveCompanyLogo(companyId)"
@@ -123,14 +123,15 @@ function resolveCompanyLogo(companyId: string) {
               class="h-4 w-4 rounded-full object-cover"
             />
             <span>{{ resolveCompanyName(companyId) }}</span>
-            <button
+            <UButton
               v-if="allowEdit"
-              type="button"
-              class="text-slate-400 hover:text-slate-700 dark:hover:text-white"
+              variant="link"
+              color="neutral"
+              class="p-0.5"
               @click="removeCompany(companyId)"
             >
-              <UIcon name="i-lucide-x" class="h-3.5 w-3.5" />
-            </button>
+              <UIcon name="i-lucide-x" class="h-3 w-3" />
+            </UButton>
           </div>
         </div>
       </span>

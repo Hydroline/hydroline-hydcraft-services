@@ -44,13 +44,34 @@ const combinedSvgEntries = computed(() => {
     .filter((svg): svg is string => Boolean(svg))
 })
 
+const totalLengthKm = computed(() => {
+  let total = 0
+  for (const detail of routeDetails.value) {
+    if (detail.metadata.lengthKm) {
+      total += detail.metadata.lengthKm
+    }
+  }
+  return total > 0 ? Number(total.toFixed(2)) : null
+})
+
 async function fetchSystemDetail() {
   loading.value = true
   try {
     const detail = await systemsStore.fetchSystemDetail(systemId.value)
     system.value = detail
-    await fetchBindings(detail)
-    await fetchRouteDetails(detail)
+
+    if (detail.bindings) {
+      bindingPayload.value = detail.bindings
+    } else {
+      await fetchBindings(detail)
+    }
+
+    if (detail.routeDetails) {
+      routeDetails.value = detail.routeDetails
+    } else {
+      await fetchRouteDetails(detail)
+    }
+
     await fetchRelatedSystems(detail)
   } catch (error) {
     toast.add({
@@ -131,8 +152,9 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
+    <div class="flex flex-col gap-1">
+      <p class="text-sm uppercase text-slate-500">铁路线路系统信息</p>
+      <div class="flex items-center gap-1">
         <img
           v-if="system?.logoUrl"
           :src="system.logoUrl"
@@ -141,7 +163,7 @@ onMounted(() => {
         />
         <div>
           <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-            {{ system?.name || '线路系统' }}
+            {{ system?.name }}
           </h1>
           <p class="text-sm text-slate-500">
             {{ system?.englishName || '—' }}
@@ -173,41 +195,59 @@ onMounted(() => {
       </UButton>
     </div>
 
-    <div v-if="loading" class="text-sm text-slate-500">正在加载…</div>
+    <div v-if="loading" class="text-sm text-slate-500">
+      <UIcon name="i-lucide-loader-2" class="animate-spin" />
+    </div>
 
     <div v-else-if="system" class="space-y-6">
-      <div class="space-y-3">
-        <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200">
-            系统地图
-          </h2>
-          <UButton size="sm" variant="ghost" @click="fullscreenOpen = true">
-            全屏
-          </UButton>
-        </div>
+      <div
+        class="mt-3 relative rounded-3xl border border-slate-200/70 dark:border-slate-800"
+      >
         <RailwaySystemMapPanel
           :routes="routeDetails"
           :loading="routeDetails.length === 0"
           height="520px"
         />
+
+        <div class="pointer-events-none absolute bottom-3 left-3 z-998">
+          <div
+            class="rounded-lg text-xl font-semibold text-white"
+            style="text-shadow: 0 0 5px rgba(0, 0, 0, 0.7)"
+          >
+            <span class="text-xs mr-1">系统总长</span>
+            <span>
+              {{ totalLengthKm ? `${totalLengthKm} km` : '—' }}
+            </span>
+          </div>
+        </div>
+
+        <div
+          class="pointer-events-none absolute inset-x-4 top-4 flex justify-end z-999"
+        >
+          <UButton
+            size="sm"
+            variant="ghost"
+            color="neutral"
+            class="flex items-center gap-1 pointer-events-auto backdrop-blur-2xl text-white bg-black/20 dark:bg-slate-900/10 hover:bg-white/10 dark:hover:bg-slate-900/20 shadow"
+            @click="fullscreenOpen = true"
+          >
+            <UIcon name="i-lucide-maximize" class="h-3.5 w-3.5" />
+            全屏
+          </UButton>
+        </div>
       </div>
 
       <div class="grid gap-6 lg:grid-cols-2">
-        <div class="space-y-4">
-          <div
-            class="rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
-          >
-            <div class="flex items-center justify-between">
-              <h3
-                class="text-base font-semibold text-slate-800 dark:text-slate-200"
-              >
+        <div class="space-y-6">
+          <div class="space-y-3">
+            <div class="flex items-center gap-1">
+              <h3 class="text-lg text-slate-600 dark:text-slate-300">
                 基本信息
               </h3>
               <UButton
-                size="2xs"
-                variant="soft"
+                size="xs"
+                variant="link"
                 color="primary"
-                icon="i-lucide-edit"
                 @click="
                   router.push({
                     name: 'transportation.railway.system.edit',
@@ -215,161 +255,141 @@ onMounted(() => {
                   })
                 "
               >
-                编辑系统
+                编辑
               </UButton>
             </div>
-            <div class="mt-3 space-y-2 text-sm text-slate-600">
-              <div class="flex justify-between">
-                <span>中文名</span>
-                <span class="text-slate-900 dark:text-white">{{
-                  system.name
-                }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>英文名</span>
-                <span class="text-slate-900 dark:text-white">{{
-                  system.englishName
-                }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>所属服务端</span>
-                <span class="text-slate-900 dark:text-white">{{
-                  system.serverId
-                }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>维度</span>
-                <span class="text-slate-900 dark:text-white">
-                  {{ systemDimension || '—' }}
-                </span>
-              </div>
-            </div>
-          </div>
 
-          <div
-            class="rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
-          >
-            <h3
-              class="text-base font-semibold text-slate-800 dark:text-slate-200"
-            >
-              系统 Logo
-            </h3>
-            <div class="mt-3 flex items-center gap-3">
-              <div
-                class="h-16 w-16 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40"
-              >
-                <img
-                  v-if="system.logoUrl"
-                  :src="system.logoUrl"
-                  :alt="system.name"
-                  class="h-full w-full object-cover"
-                />
-              </div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">
-                <p
-                  v-if="system.logoAttachmentId"
-                  class="text-slate-900 dark:text-white"
+            <div class="space-y-3">
+              <div class="mt-1 flex gap-3 items-center">
+                <div
+                  class="h-32 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40"
                 >
-                  附件 ID：{{ system.logoAttachmentId }}
-                </p>
-                <p v-else>暂无 Logo</p>
+                  <img
+                    v-if="system.logoUrl"
+                    :src="system.logoUrl"
+                    :alt="system.name"
+                    class="h-full w-full object-cover block"
+                  />
+                </div>
+
+                <div
+                  class="relative h-32 w-32 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-500"
+                >
+                  <div
+                    v-for="(svg, index) in combinedSvgEntries"
+                    :key="index"
+                    class="absolute inset-0 flex items-center justify-center opacity-90"
+                    v-html="svg"
+                  ></div>
+                </div>
+              </div>
+
+              <div
+                class="space-y-3 rounded-xl border border-slate-200/60 bg-white px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:bg-slate-700/60 dark:text-slate-300"
+              >
+                <div class="flex justify-between">
+                  <span>中文名</span>
+                  <span class="text-slate-900 dark:text-white">{{
+                    system.name
+                  }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>英文名</span>
+                  <span class="text-slate-900 dark:text-white">{{
+                    system.englishName
+                  }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>所属服务端</span>
+                  <span class="text-slate-900 dark:text-white">{{
+                    system.serverId
+                  }}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div
-            class="rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
-          >
-            <h3
-              class="text-base font-semibold text-slate-800 dark:text-slate-200"
-            >
-              线路系统 SVG
-            </h3>
+          <div class="space-y-3">
+            <h3 class="text-lg text-slate-600 dark:text-slate-300">有关单位</h3>
+
             <div
-              class="mt-3 relative h-32 w-full rounded-xl border border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
+              class="space-y-3 rounded-xl border border-slate-200/60 bg-white px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:bg-slate-700/60 dark:text-slate-300"
             >
-              <div
-                v-for="(svg, index) in combinedSvgEntries"
-                :key="index"
-                class="absolute inset-0 flex items-center justify-center opacity-90"
-                v-html="svg"
-              ></div>
-              <div
-                v-if="combinedSvgEntries.length === 0"
-                class="absolute inset-0 flex items-center justify-center text-xs text-slate-400"
-              >
-                暂无 SVG
-              </div>
+              <RailwayCompanyBindingSection
+                entity-type="SYSTEM"
+                :entity-id="system.id"
+                :server-id="system.serverId"
+                :railway-type="system.routes[0]?.railwayType ?? null"
+                :dimension="systemDimension"
+                :operator-company-ids="bindingPayload.operatorCompanyIds"
+                :builder-company-ids="bindingPayload.builderCompanyIds"
+              />
             </div>
           </div>
         </div>
 
-        <div class="space-y-4">
-          <div
-            class="rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
-          >
-            <h3
-              class="text-base font-semibold text-slate-800 dark:text-slate-200"
+        <div class="space-y-6">
+          <div class="space-y-3">
+            <h3 class="text-lg text-slate-600 dark:text-slate-300">包含线路</h3>
+            <div
+              v-if="routeDetails.length === 0"
+              class="text-sm text-slate-500"
             >
-              线路清单
-            </h3>
-            <div class="mt-3 space-y-2">
-              <div
-                v-for="routeInfo in system.routes"
-                :key="routeInfo.entityId"
-                class="flex items-center justify-between rounded-lg border border-slate-200/60 px-3 py-2 text-sm dark:border-slate-800/60"
-              >
-                <div>
-                  <p class="text-slate-900 dark:text-white">
-                    {{ routeInfo.name || routeInfo.entityId }}
-                  </p>
-                  <p class="text-xs text-slate-500">
-                    {{ routeInfo.server.name }} · {{ routeInfo.railwayType }}
-                  </p>
-                </div>
-                <UButton
-                  size="2xs"
-                  variant="ghost"
-                  @click="
-                    router.push({
-                      name: 'transportation.railway.route',
-                      params: {
-                        railwayType: routeInfo.railwayType.toLowerCase(),
-                        routeId: routeInfo.entityId,
-                      },
-                      query: {
-                        serverId: routeInfo.server.id,
-                        dimension: routeInfo.dimension ?? undefined,
-                      },
-                    })
-                  "
+              暂无线路数据
+            </div>
+            <div
+              v-else
+              class="space-y-3 rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
+            >
+              <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                <RouterLink
+                  v-for="detail in routeDetails"
+                  :key="detail.route.id"
+                  :to="{
+                    name: 'transportation.railway.route',
+                    params: {
+                      railwayType: detail.route.railwayType.toLowerCase(),
+                      routeId: detail.route.id,
+                    },
+                    query: {
+                      serverId: detail.server.id,
+                      dimension: detail.dimension ?? undefined,
+                    },
+                  }"
+                  class="flex items-center justify-between py-3 first:pt-0 last:pb-0 hover:underline"
                 >
-                  查看线路
-                </UButton>
+                  <div class="flex items-center gap-3">
+                    <div
+                      class="h-2.5 w-2.5 rounded-full"
+                      :style="{
+                        backgroundColor: detail.route.color
+                          ? `#${(detail.route.color >>> 0)
+                              .toString(16)
+                              .padStart(6, '0')}`
+                          : '#cbd5e1',
+                      }"
+                    ></div>
+                    <div>
+                      <div class="font-medium text-slate-900 dark:text-white">
+                        {{ detail.route.name?.split('||')[0].split('|')[0] }}
+                      </div>
+                      <div class="text-xs text-slate-500">
+                        {{
+                          detail.metadata.lengthKm
+                            ? `${detail.metadata.lengthKm} km`
+                            : '—'
+                        }}
+                        · {{ detail.stops.length }} 站
+                      </div>
+                    </div>
+                  </div>
+                  <UIcon
+                    name="i-lucide-chevron-right"
+                    class="h-4 w-4 text-slate-400"
+                  />
+                </RouterLink>
               </div>
             </div>
-          </div>
-
-          <div
-            class="rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
-          >
-            <h3
-              class="text-base font-semibold text-slate-800 dark:text-slate-200"
-            >
-              运营 / 建设单位
-            </h3>
-            <RailwayCompanyBindingSection
-              entity-type="SYSTEM"
-              :entity-id="system.id"
-              :server-id="system.serverId"
-              :railway-type="system.routes[0]?.railwayType ?? null"
-              :dimension="systemDimension"
-              :operator-company-ids="bindingPayload.operatorCompanyIds"
-              :builder-company-ids="bindingPayload.builderCompanyIds"
-            />
-            <p class="mt-2 text-xs text-slate-400">
-              系统必须至少绑定一个运营单位
-            </p>
           </div>
         </div>
       </div>
