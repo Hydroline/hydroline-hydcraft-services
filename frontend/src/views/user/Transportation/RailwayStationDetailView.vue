@@ -450,6 +450,54 @@ function goLogNext() {
   void fetchLogs(false)
 }
 
+const routesExpanded = ref(false)
+const MAX_VISIBLE_ROUTES = 10
+
+const visibleRoutes = computed(() => {
+  if (routesExpanded.value) return associatedRoutes.value
+  return associatedRoutes.value.slice(0, MAX_VISIBLE_ROUTES)
+})
+
+const hasMoreRoutes = computed(
+  () => associatedRoutes.value.length > MAX_VISIBLE_ROUTES,
+)
+
+const routesContentRef = ref<HTMLElement | null>(null)
+let lastRoutesContentHeight: number | null = null
+
+watch(
+  () => [visibleRoutes.value.length, routesExpanded.value] as const,
+  async () => {
+    await nextTick()
+    const el = routesContentRef.value
+    if (!el) return
+
+    const nextHeight = el.getBoundingClientRect().height
+    if (lastRoutesContentHeight == null) {
+      lastRoutesContentHeight = nextHeight
+      return
+    }
+    if (Math.abs(nextHeight - lastRoutesContentHeight) < 1) return
+
+    el.style.height = `${lastRoutesContentHeight}px`
+    el.style.overflow = 'hidden'
+    // force reflow
+    void el.getBoundingClientRect()
+    el.style.transition = 'height 300ms cubic-bezier(0.4, 0, 0.2, 1)'
+    el.style.height = `${nextHeight}px`
+
+    window.setTimeout(() => {
+      if (el !== routesContentRef.value) return
+      el.style.transition = ''
+      el.style.height = ''
+      el.style.overflow = ''
+    }, 320)
+
+    lastRoutesContentHeight = nextHeight
+  },
+  { flush: 'post' },
+)
+
 watch(
   () => route.fullPath,
   () => {
@@ -843,58 +891,84 @@ onUnmounted(() => {
               >
                 暂无线路数据
               </p>
-              <div
-                v-else
-                class="divide-y divide-slate-100 dark:divide-slate-800/60"
-              >
-                <div
-                  v-for="route in associatedRoutes"
-                  :key="route.id"
-                  class="flex items-center justify-between py-3 first:pt-0 last:pb-0"
-                >
-                  <div>
-                    <p
-                      class="flex items-baseline gap-1 font-medium text-slate-900 dark:text-white"
+              <div v-else>
+                <div ref="routesContentRef">
+                  <div
+                    class="divide-y divide-slate-100 dark:divide-slate-800/60"
+                  >
+                    <div
+                      v-for="route in visibleRoutes"
+                      :key="route.id"
+                      class="flex items-center justify-between py-3 first:pt-0 last:pb-0"
                     >
-                      <span
-                        class="block h-3 w-3 rounded-full"
-                        :style="
-                          colorToHex(route.color)
-                            ? { backgroundColor: colorToHex(route.color) }
-                            : undefined
-                        "
-                      ></span>
-                      <span>
-                        {{ route.name?.split('|')[0] || '未命名' }}
-                      </span>
+                      <div>
+                        <p
+                          class="flex items-baseline gap-1 font-medium text-slate-900 dark:text-white"
+                        >
+                          <span
+                            class="block h-3 w-3 rounded-full"
+                            :style="
+                              colorToHex(route.color)
+                                ? { backgroundColor: colorToHex(route.color) }
+                                : undefined
+                            "
+                          ></span>
+                          <span>
+                            {{ route.name?.split('|')[0] || '未命名' }}
+                          </span>
 
-                      <span
-                        class="text-xs text-slate-700 dark:text-slate-500"
-                        v-if="route.name?.split('|')[1]"
-                      >
-                        {{ route.name?.split('|')[1] }}
-                      </span>
-                    </p>
-                    <div class="flex items-center gap-1">
-                      <UBadge
+                          <span
+                            class="text-xs text-slate-700 dark:text-slate-500"
+                            v-if="route.name?.split('|')[1]"
+                          >
+                            {{ route.name?.split('|')[1] }}
+                          </span>
+                        </p>
+                        <div class="flex items-center gap-1">
+                          <UBadge
+                            variant="soft"
+                            size="sm"
+                            v-if="route.name?.split('||').length > 1"
+                          >
+                            {{ route.name?.split('||')[1].split('|')[0] }}
+                          </UBadge>
+
+                          <UBadge variant="soft" color="neutral" size="sm">
+                            {{ route.server.name }}
+                          </UBadge>
+
+                          <UBadge variant="soft" color="neutral" size="sm">
+                            {{
+                              getDimensionName(route.dimension) || '未知维度'
+                            }}
+                          </UBadge>
+                        </div>
+                      </div>
+                      <UButton
+                        size="xs"
                         variant="soft"
-                        size="sm"
-                        v-if="route.name?.split('||').length > 1"
+                        @click="goRoute(route.id)"
                       >
-                        {{ route.name?.split('||')[1].split('|')[0] }}
-                      </UBadge>
-
-                      <UBadge variant="soft" color="neutral" size="sm">
-                        {{ route.server.name }}
-                      </UBadge>
-
-                      <UBadge variant="soft" color="neutral" size="sm">
-                        {{ getDimensionName(route.dimension) || '未知维度' }}
-                      </UBadge>
+                        查看
+                      </UButton>
                     </div>
                   </div>
-                  <UButton size="xs" variant="soft" @click="goRoute(route.id)">
-                    查看
+                </div>
+
+                <div
+                  v-if="hasMoreRoutes && !routesExpanded"
+                  class="pt-2 flex justify-center border-t border-slate-100 dark:border-slate-800/60"
+                >
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    class="w-full flex justify-center"
+                    @click="routesExpanded = true"
+                  >
+                    查看剩余
+                    {{ associatedRoutes.length - MAX_VISIBLE_ROUTES }} 条线路
+                    <UIcon name="i-lucide-chevron-down" class="ml-1 h-3 w-3" />
                   </UButton>
                 </div>
               </div>
