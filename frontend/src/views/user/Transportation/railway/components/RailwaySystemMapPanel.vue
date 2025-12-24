@@ -8,6 +8,7 @@ import type {
 } from '@/types/transportation'
 import {
   RailwaySystemMap,
+  type SystemPlatform,
   type SystemRoutePath,
   type SystemStop,
 } from '@/views/user/Transportation/railway/maps/systemMap'
@@ -62,48 +63,141 @@ const routePaths = computed<SystemRoutePath[]>(() => {
         id: detail.route.id,
         color: detail.route.color ?? null,
         paths,
-        label: detail.route.name ?? detail.route.id,
+        label: detail.route.name
+          ? detail.route.name.split('||')[0].split('|')[0]
+          : detail.route.id,
       }
     })
     .filter((entry): entry is SystemRoutePath => Boolean(entry))
 })
 
 const systemStops = computed<SystemStop[]>(() => {
-  const stopMap = new Map<
+  // IMPORTANT: For zoomed-out view we must show station stops (站点) with station names,
+  // not platform names (站台). Build stops primarily from stations bounds.
+  const stationMap = new Map<
     string,
     {
-      stop: RailwayRouteDetail['stops'][number]
-      count: number
+      name: string
+      positions: { x: number; z: number }[]
+      routeIds: Set<string>
       color: number | null
     }
   >()
 
+  const platformStationMap = new Map<string, string>()
+  const stationNameMap = new Map<string, string>()
+  for (const detail of props.routes) {
+    for (const p of detail.platforms ?? []) {
+      if (p.id && p.stationId) {
+        platformStationMap.set(p.id, p.stationId)
+      }
+    }
+
+    for (const s of detail.stations ?? []) {
+      if (s.id && s.name) {
+        stationNameMap.set(s.id, s.name)
+      }
+    }
+  }
+
+  const resolveStationCenterFromBounds = (
+    bounds:
+      | {
+          xMin: number | null
+          xMax: number | null
+          zMin: number | null
+          zMax: number | null
+        }
+      | null
+      | undefined,
+  ) => {
+    if (!bounds) return null
+    const { xMin, xMax, zMin, zMax } = bounds
+    if (
+      xMin == null ||
+      xMax == null ||
+      zMin == null ||
+      zMax == null ||
+      !Number.isFinite(xMin) ||
+      !Number.isFinite(xMax) ||
+      !Number.isFinite(zMin) ||
+      !Number.isFinite(zMax)
+    ) {
+      return null
+    }
+    return { x: (xMin + xMax) / 2, z: (zMin + zMax) / 2 }
+  }
+
+  // 1) Seed station markers from stations bounds.
+  for (const detail of props.routes) {
+    const routeColor = detail.route.color ?? null
+    for (const station of detail.stations ?? []) {
+      if (!station.id) continue
+      const center = resolveStationCenterFromBounds(station.bounds)
+      if (!center) continue
+
+      const rawName = (station.name || station.id).split('||')[0].split('|')[0]
+      const name = rawName.trim() || station.id
+      const existing = stationMap.get(station.id)
+      if (existing) {
+        existing.positions.push(center)
+        existing.routeIds.add(detail.route.id)
+      } else {
+        stationMap.set(station.id, {
+          name,
+          positions: [center],
+          routeIds: new Set([detail.route.id]),
+          color: routeColor,
+        })
+      }
+    }
+  }
+
+  // 2) Fallback: if bounds missing, use stop positions mapped to stationId.
   for (const detail of props.routes) {
     const routeColor = detail.route.color ?? null
     for (const stop of detail.stops ?? []) {
-      const stationId = stop.stationId ?? stop.platformId
-      if (!stationId || !stop.position) continue
-      const existing = stopMap.get(stationId)
+      if (!stop.position) continue
+      const stationId =
+        stop.stationId || platformStationMap.get(stop.platformId)
+      if (!stationId) continue
+
+      const resolvedName =
+        stationNameMap.get(stationId) || stop.stationName || stationId
+      const rawName = resolvedName.split('||')[0].split('|')[0]
+      const name = rawName.trim() || stationId
+      const existing = stationMap.get(stationId)
       if (existing) {
-        existing.count += 1
+        existing.positions.push(stop.position)
+        existing.routeIds.add(detail.route.id)
       } else {
-        stopMap.set(stationId, { stop, count: 1, color: routeColor })
+        stationMap.set(stationId, {
+          name,
+          positions: [stop.position],
+          routeIds: new Set([detail.route.id]),
+          color: routeColor,
+        })
       }
     }
   }
 
   const result: SystemStop[] = []
-  for (const [stationId, entry] of stopMap.entries()) {
-    const rawName =
-      entry.stop.stationName || entry.stop.platformName || stationId
-    const stopName = rawName.split('||')[0].split('|')[0]
+  for (const [id, entry] of stationMap.entries()) {
+    if (!entry.positions.length) continue
+    let sumX = 0
+    let sumZ = 0
+    for (const pos of entry.positions) {
+      sumX += pos.x
+      sumZ += pos.z
+    }
+    const avgX = sumX / entry.positions.length
+    const avgZ = sumZ / entry.positions.length
 
-    if (!entry.stop.position) continue
     result.push({
-      id: stationId,
-      name: stopName,
-      position: entry.stop.position,
-      isTransfer: entry.count > 1,
+      id,
+      name: entry.name,
+      position: { x: avgX, z: avgZ },
+      isTransfer: entry.routeIds.size > 1,
       color: entry.color,
     })
   }
@@ -111,13 +205,36 @@ const systemStops = computed<SystemStop[]>(() => {
   return result
 })
 
+const systemPlatforms = computed<SystemPlatform[]>(() => {
+  const map = new Map<string, SystemPlatform>()
+  for (const detail of props.routes) {
+    for (const stop of detail.stops ?? []) {
+      const platformId = stop.platformId
+      if (!platformId || !stop.position) continue
+      if (map.has(platformId)) continue
+
+      const rawName = stop.platformName || platformId
+      const name = rawName.split('||')[0].split('|')[0]
+
+      map.set(platformId, {
+        id: platformId,
+        name,
+        position: stop.position,
+        color: detail.route.color ?? null,
+      })
+    }
+  }
+  return Array.from(map.values())
+})
+
 watch(
-  () => [routePaths.value, systemStops.value] as const,
+  () => [routePaths.value, systemStops.value, systemPlatforms.value] as const,
   () => {
     if (!systemMap.value) return
     systemMap.value.drawRoutes(
       routePaths.value,
       systemStops.value,
+      systemPlatforms.value,
       props.autoFocus,
     )
   },
@@ -133,7 +250,12 @@ onMounted(() => {
     showZoomControl: props.showZoomControl,
   })
   attachMapCursorTracking()
-  map.drawRoutes(routePaths.value, systemStops.value, props.autoFocus)
+  map.drawRoutes(
+    routePaths.value,
+    systemStops.value,
+    systemPlatforms.value,
+    props.autoFocus,
+  )
 })
 
 onBeforeUnmount(() => {
@@ -286,11 +408,48 @@ function formatBlockCoordinate(value: number) {
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
-.railway-station-label::before {
+.railway-station-label-small {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
+.railway-station-label::before,
+.railway-station-label-small::before {
   display: none;
 }
 
 .dark .railway-station-label {
+  color: #f1f5f9;
+  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.85);
+}
+
+.dark .railway-station-label-small {
+  color: #f1f5f9;
+  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.85);
+}
+
+.railway-route-hover-label {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
+.railway-route-hover-label::before {
+  display: none;
+}
+
+.dark .railway-route-hover-label {
   color: #f1f5f9;
   text-shadow: 0 1px 2px rgba(2, 6, 23, 0.85);
 }

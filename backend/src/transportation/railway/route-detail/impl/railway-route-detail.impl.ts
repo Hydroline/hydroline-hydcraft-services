@@ -37,6 +37,7 @@ import type {
 } from '../../types/railway-types';
 
 const BLOCKS_PER_KM = 1000;
+const NEAREST_STATION_MAX_DISTANCE_BLOCKS = 256;
 
 type StoredRailwayEntity =
   | TransportationRailwayRoute
@@ -161,10 +162,76 @@ export class TransportationRailwayRouteDetailService {
     TransportationRailwayRouteDetailService.name,
   );
 
+  private readonly stationBoundsCache = new Map<
+    string,
+    { expiresAt: number; stations: RailwayStationRecord[] }
+  >();
+  private readonly stationBoundsCacheInflight = new Map<
+    string,
+    Promise<RailwayStationRecord[]>
+  >();
+  private readonly stationBoundsCacheTtlMs = 5 * 60 * 1000;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly beaconPool: HydrolineBeaconPoolService,
   ) {}
+
+  private buildStationBoundsCacheKey(
+    server: BeaconServerRecord,
+    dimensionContext: string | null,
+  ) {
+    return `${server.id}:${server.railwayMod}:${dimensionContext ?? ''}`;
+  }
+
+  private async fetchStationsWithBoundsCached(
+    server: BeaconServerRecord,
+    dimensionContext: string | null,
+  ): Promise<RailwayStationRecord[]> {
+    const cacheKey = this.buildStationBoundsCacheKey(server, dimensionContext);
+    const now = Date.now();
+    const cached = this.stationBoundsCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.stations;
+    }
+
+    const inflight = this.stationBoundsCacheInflight.get(cacheKey);
+    if (inflight) {
+      return inflight;
+    }
+
+    const promise = (async () => {
+      const storedStations = await this.fetchStationsFromStorage(
+        server,
+        dimensionContext,
+      );
+      let stations = storedStations.filter((station) =>
+        this.stationHasBounds(station),
+      );
+
+      // Some datasets may not persist dimensionContext on stations.
+      // Fall back to scanning all stations for the server when the scoped query yields nothing.
+      if (dimensionContext && !stations.length) {
+        const storedStationsAll = await this.fetchStationsFromStorage(
+          server,
+          null,
+        );
+        stations = storedStationsAll.filter((station) =>
+          this.stationHasBounds(station),
+        );
+      }
+      this.stationBoundsCache.set(cacheKey, {
+        expiresAt: now + this.stationBoundsCacheTtlMs,
+        stations,
+      });
+      return stations;
+    })().finally(() => {
+      this.stationBoundsCacheInflight.delete(cacheKey);
+    });
+
+    this.stationBoundsCacheInflight.set(cacheKey, promise);
+    return promise;
+  }
 
   async getRouteDetail(
     routeId: string,
@@ -203,12 +270,24 @@ export class TransportationRailwayRouteDetailService {
 
     const orderedPlatformIds = normalizeIdList(routeRecord.platform_ids ?? []);
 
-    const dimensionContextForGeometry = this.resolveRouteDimensionContext(
+    const selectedPlatforms = await this.fetchPlatformsByIds(
+      server,
+      orderedPlatformIds,
+    );
+    const platforms = this.buildPlatformsMap(selectedPlatforms);
+
+    let dimensionContextForGeometry = this.resolveRouteDimensionContext(
       normalizedRoute,
       routeEntity.dimensionContext ?? null,
       query.dimension ?? null,
       server.railwayMod,
     );
+
+    if (!dimensionContextForGeometry) {
+      dimensionContextForGeometry =
+        selectedPlatforms.find((p) => Boolean(p.dimension_context))
+          ?.dimension_context ?? null;
+    }
 
     normalizedRoute.previewSvg = await this.buildRoutePreviewSvg({
       server,
@@ -216,12 +295,6 @@ export class TransportationRailwayRouteDetailService {
       baseKey: this.buildRouteBaseKey(routeRecord),
       primaryRouteId: normalizeId(routeRecord.id) ?? normalizedRouteId,
     });
-
-    const selectedPlatforms = await this.fetchPlatformsByIds(
-      server,
-      orderedPlatformIds,
-    );
-    const platforms = this.buildPlatformsMap(selectedPlatforms);
 
     normalizedRoute.platformCount = orderedPlatformIds.length;
     if (!normalizedRoute.dimension) {
@@ -1399,6 +1472,11 @@ export class TransportationRailwayRouteDetailService {
   ): RailwayPlatformRecord | null {
     return {
       id: normalizeId(payload['id']) ?? row.entityId,
+      dimension_context:
+        readString(payload['dimension_context']) ??
+        readString(payload['dimensionContext']) ??
+        row.dimensionContext ??
+        null,
       name: readString(payload['name']) ?? row.name ?? null,
       color: toNumber(payload['color']) ?? row.color ?? null,
       transport_mode:
@@ -2441,32 +2519,41 @@ export class TransportationRailwayRouteDetailService {
     stations: RailwayStationRecord[];
   }> {
     const resolvedMap = new Map(stationMap);
-    // Optimization: Do not fetch all stations. Rely on the provided stationMap (which should contain stations referenced by ID).
-    // If we need geometry matching for platforms without station_id, we would need to fetch all stations, but that is too slow.
-    /*
-    if (dimensionContext) {
-      const storedStations = await this.fetchStationsFromStorage(
-        server,
-        dimensionContext,
-      );
-      for (const station of storedStations) {
-        const key = normalizeId(station.id);
-        if (key && !resolvedMap.has(key)) {
-          resolvedMap.set(key, station);
-        }
-      }
-    }
-    */
-    const stationList = Array.from(resolvedMap.values()).filter((station) =>
-      this.stationHasBounds(station),
+
+    const needsBoundsMatching = platforms.some(
+      (platform) => !normalizeId(platform.station_id),
     );
+    const cachedStations = needsBoundsMatching
+      ? await this.fetchStationsWithBoundsCached(server, dimensionContext)
+      : [];
+    const cachedStationMap = new Map(
+      cachedStations
+        .map((station) => {
+          const key = normalizeId(station.id);
+          return key ? ([key, station] as const) : null;
+        })
+        .filter((entry): entry is readonly [string, RailwayStationRecord] =>
+          Boolean(entry),
+        ),
+    );
+
+    const stationList = (
+      cachedStations.length
+        ? [...Array.from(resolvedMap.values()), ...cachedStations]
+        : Array.from(resolvedMap.values())
+    ).filter((station) => this.stationHasBounds(station));
+
     const platformStations = new Map<string, RailwayStationRecord | null>();
     for (const platform of platforms) {
       const platformId = normalizeId(platform.id);
       if (!platformId) continue;
       const directId = normalizeId(platform.station_id);
       const directStation =
-        directId != null ? (resolvedMap.get(directId) ?? null) : null;
+        directId != null
+          ? (resolvedMap.get(directId) ??
+            cachedStationMap.get(directId) ??
+            null)
+          : null;
       const station =
         directStation ?? this.matchStationByBounds(platform, stationList);
       if (station) {
@@ -2510,6 +2597,11 @@ export class TransportationRailwayRouteDetailService {
     if (pos2) points.push({ x: pos2.x, z: pos2.z });
     const center = this.computePlatformCenter(platform);
     if (center) points.push(center);
+
+    const reference = center ?? (pos1 ? { x: pos1.x, z: pos1.z } : null);
+    let nearest: { station: RailwayStationRecord; distSq: number } | null =
+      null;
+
     for (const station of stations) {
       if (!this.stationHasBounds(station)) {
         continue;
@@ -2517,6 +2609,27 @@ export class TransportationRailwayRouteDetailService {
       if (points.some((point) => this.isPointInsideStation(point, station))) {
         return station;
       }
+
+      if (reference) {
+        const stationCenter = this.computeStationCenter(station);
+        if (stationCenter) {
+          const dx = stationCenter.x - reference.x;
+          const dz = stationCenter.z - reference.z;
+          const distSq = dx * dx + dz * dz;
+          if (!nearest || distSq < nearest.distSq) {
+            nearest = { station, distSq };
+          }
+        }
+      }
+    }
+
+    if (
+      nearest &&
+      nearest.distSq <=
+        NEAREST_STATION_MAX_DISTANCE_BLOCKS *
+          NEAREST_STATION_MAX_DISTANCE_BLOCKS
+    ) {
+      return nearest.station;
     }
     return null;
   }

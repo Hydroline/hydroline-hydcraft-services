@@ -24,6 +24,25 @@ export type SystemStop = {
   color?: number | null
 }
 
+export type SystemPlatform = {
+  id: string
+  name: string
+  position: RailwayGeometryPoint
+  color?: number | null
+}
+
+function bindRouteHoverLabel(polyline: L.Polyline, label: string) {
+  const text = label.trim()
+  if (!text) return
+  polyline.bindTooltip(text, {
+    permanent: false,
+    sticky: true,
+    direction: 'top',
+    offset: L.point(0, -8),
+    className: 'railway-route-hover-label',
+  })
+}
+
 function toHexColor(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) return DEFAULT_COLOR
   return `#${(value >>> 0).toString(16).padStart(6, '0')}`
@@ -35,6 +54,7 @@ export class RailwaySystemMap {
   private stopLayer: L.LayerGroup | null = null
   private zoomHandler: (() => void) | null = null
   private stops: SystemStop[] = []
+  private platforms: SystemPlatform[] = []
 
   constructor() {
     this.controller = createHydcraftDynmapMap()
@@ -45,7 +65,7 @@ export class RailwaySystemMap {
     const map = this.controller.getLeafletInstance()
     if (map) {
       this.zoomHandler = () => {
-        this.renderStops(map, this.stops)
+        this.renderStops(map)
       }
       map.on('zoomend', this.zoomHandler)
     }
@@ -67,12 +87,18 @@ export class RailwaySystemMap {
     }
   }
 
-  drawRoutes(routes: SystemRoutePath[], stops: SystemStop[], autoFocus = true) {
+  drawRoutes(
+    routes: SystemRoutePath[],
+    stops: SystemStop[],
+    platforms: SystemPlatform[],
+    autoFocus = true,
+  ) {
     this.stops = stops
+    this.platforms = platforms
     this.clearRoutes()
     const map = this.controller.getLeafletInstance()
     if (!map || !(map as any)._loaded) {
-      map?.whenReady(() => this.drawRoutes(routes, stops, autoFocus))
+      map?.whenReady(() => this.drawRoutes(routes, stops, platforms, autoFocus))
       return
     }
 
@@ -91,6 +117,11 @@ export class RailwaySystemMap {
           opacity: 0.85,
           className: 'railway-system-route-polyline',
         }).addTo(map)
+
+        if (route.label) {
+          bindRouteHoverLabel(polyline, route.label)
+        }
+
         this.polylines.push(polyline)
         const polyBounds = polyline.getBounds()
         bounds = bounds ? bounds.extend(polyBounds) : polyBounds
@@ -101,15 +132,30 @@ export class RailwaySystemMap {
       map.fitBounds(bounds, { padding: [32, 32] })
     }
 
-    this.renderStops(map, stops)
+    this.renderStops(map)
   }
 
-  private renderStops(map: L.Map, stops: SystemStop[]) {
+  private renderStops(map: L.Map) {
     if (this.stopLayer) {
       map.removeLayer(this.stopLayer)
     }
     const layer = L.layerGroup()
+    const zoom = map.getZoom()
+    // Follow StationDetail behavior: zoomed-out shows station stops; zoomed-in shows platforms.
+    // Dynmap/Leaflet zoom range is limited; use level 3 as the switch point.
+    const showPlatforms = zoom >= 3
 
+    if (showPlatforms) {
+      this.renderPlatformsLayer(layer, this.platforms)
+    } else {
+      this.renderStationsLayer(layer, this.stops)
+    }
+
+    layer.addTo(map)
+    this.stopLayer = layer
+  }
+
+  private renderStationsLayer(layer: L.LayerGroup, stops: SystemStop[]) {
     stops.forEach((stop) => {
       const latlng = this.controller.toLatLng({
         x: stop.position.x,
@@ -146,15 +192,45 @@ export class RailwaySystemMap {
 
       marker.bindTooltip(stop.name, {
         permanent: true,
-        direction: 'top',
+        // Prevent labels from being clipped by the map container (overflow-hidden)
+        // when zoomed out and markers are near the viewport edge.
+        direction: 'auto',
         offset: L.point(0, -8),
         className: 'railway-station-label',
       })
 
       marker.addTo(layer)
     })
-    layer.addTo(map)
-    this.stopLayer = layer
+  }
+
+  private renderPlatformsLayer(
+    layer: L.LayerGroup,
+    platforms: SystemPlatform[],
+  ) {
+    platforms.forEach((platform) => {
+      const latlng = this.controller.toLatLng({
+        x: platform.position.x,
+        z: platform.position.z,
+      })
+      if (!latlng) return
+
+      const marker = L.circleMarker(latlng, {
+        radius: 3,
+        stroke: false,
+        fill: true,
+        fillColor: '#ffffff',
+        fillOpacity: 0.95,
+      })
+
+      marker.bindTooltip(platform.name, {
+        permanent: true,
+        direction: 'auto',
+        offset: L.point(0, -5),
+        className: 'railway-station-label-small',
+      })
+
+      marker.addTo(layer)
+    })
   }
 
   private clearRoutes() {

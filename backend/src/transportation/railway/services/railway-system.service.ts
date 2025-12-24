@@ -179,6 +179,10 @@ export class TransportationRailwaySystemService {
         ? buildPublicUrl(`/attachments/public/${system.logoAttachmentId}`)
         : null,
       serverId: system.serverId,
+      server: {
+        id: system.serverId,
+        name: serverNameMap.get(system.serverId) ?? system.serverId,
+      },
       dimensionContext: system.dimensionContext ?? null,
       routes,
       routeDetails: routeDetails.filter((item) => item !== null),

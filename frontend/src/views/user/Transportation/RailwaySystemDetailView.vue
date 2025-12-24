@@ -154,15 +154,17 @@ onMounted(() => {
   <div class="space-y-6">
     <div class="flex flex-col gap-1">
       <p class="text-sm uppercase text-slate-500">铁路线路系统信息</p>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-2">
         <img
           v-if="system?.logoUrl"
           :src="system.logoUrl"
           :alt="system.name"
-          class="h-12 w-12 rounded-2xl object-cover"
+          class="h-16 w-16 rounded-xl object-cover"
         />
         <div>
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
+          <h1
+            class="flex items-center gap-1 text-4xl font-semibold text-slate-900 dark:text-white"
+          >
             {{ system?.name }}
           </h1>
           <p class="text-sm text-slate-500">
@@ -302,7 +304,7 @@ onMounted(() => {
                 <div class="flex justify-between">
                   <span>所属服务端</span>
                   <span class="text-slate-900 dark:text-white">{{
-                    system.serverId
+                    system.server?.name || system.serverId
                   }}</span>
                 </div>
               </div>
@@ -356,7 +358,7 @@ onMounted(() => {
                       dimension: detail.dimension ?? undefined,
                     },
                   }"
-                  class="flex items-center justify-between py-3 first:pt-0 last:pb-0 hover:underline"
+                  class="flex items-center justify-between py-3 first:pt-0 last:pb-0 group"
                 >
                   <div class="flex items-center gap-3">
                     <div
@@ -370,7 +372,9 @@ onMounted(() => {
                       }"
                     ></div>
                     <div>
-                      <div class="font-medium text-slate-900 dark:text-white">
+                      <div
+                        class="font-medium text-slate-900 dark:text-white group-hover:underline"
+                      >
                         {{ detail.route.name?.split('||')[0].split('|')[0] }}
                       </div>
                       <div class="text-xs text-slate-500">
@@ -385,7 +389,7 @@ onMounted(() => {
                   </div>
                   <UIcon
                     name="i-lucide-chevron-right"
-                    class="h-4 w-4 text-slate-400"
+                    class="h-4 w-4 text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white"
                   />
                 </RouterLink>
               </div>

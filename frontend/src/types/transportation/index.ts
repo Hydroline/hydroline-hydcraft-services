@@ -256,6 +256,7 @@ export interface RailwaySystemDetail {
   logoAttachmentId: string | null
   logoUrl: string | null
   serverId: string
+  server?: { id: string; name: string }
   dimensionContext: string | null
   routes: RailwaySystemRouteSummary[]
   routeDetails?: RailwayRouteDetail[]

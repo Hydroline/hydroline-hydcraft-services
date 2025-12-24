@@ -38,6 +38,7 @@ export type RailwayStationRecord = {
 
 export type RailwayPlatformRecord = {
   id?: unknown;
+  dimension_context?: string | null;
   name?: string | null;
   color?: number | null;
   transport_mode?: string | null;
