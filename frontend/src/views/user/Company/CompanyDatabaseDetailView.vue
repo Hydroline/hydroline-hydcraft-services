@@ -50,16 +50,16 @@ onMounted(() => {
 
 <template>
   <section class="space-y-6">
-    <div class="flex items-center justify-between gap-4">
-      <UButton
-        color="primary"
-        variant="ghost"
-        @click="router.push({ name: 'company.database' })"
-      >
-        <UIcon name="i-lucide-arrow-left" />
-        返回工商数据库
-      </UButton>
-    </div>
+    <UButton
+      size="sm"
+      class="absolute left-4 top-6 md:top-10"
+      variant="ghost"
+      color="primary"
+      @click="router.push({ name: 'company.database' })"
+    >
+      <UIcon name="i-lucide-arrow-left" />
+      返回工商数据库
+    </UButton>
 
     <div
       class="rounded-2xl border border-slate-200/70 bg-white/90 p-6 dark:border-slate-800/60 dark:bg-slate-900/70"

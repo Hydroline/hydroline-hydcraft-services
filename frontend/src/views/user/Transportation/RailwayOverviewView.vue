@@ -108,7 +108,6 @@ const canManageFeatured = computed(() =>
 )
 
 const settingsModalOpen = ref(false)
-const quickActionOpen = ref(false)
 const activeFeaturedTab = ref<'route' | 'station' | 'depot'>('route')
 const searchTerm = ref('')
 const searchLoading = ref(false)
@@ -213,12 +212,10 @@ function buildRecentDetailLink(item: RailwayRecentUpdateItem) {
 
 function goCreateSystem() {
   router.push({ name: 'transportation.railway.system.create' })
-  quickActionOpen.value = false
 }
 
 function goEditFacilities() {
   router.push({ name: 'transportation.railway.facilities' })
-  quickActionOpen.value = false
 }
 
 function getRoutePlatformCount(item: RailwayFeaturedItem) {
@@ -608,24 +605,39 @@ onBeforeUnmount(() => {
   <div class="space-y-8">
     <div class="absolute right-4 top-6 md:top-10 flex items-center gap-2 z-10">
       <UButton
-        color="primary"
-        variant="solid"
-        size="sm"
-        class="shadow-md"
-        @click="quickActionOpen = true"
-      >
-        <UIcon name="i-lucide-plus" class="w-4.5 h-4.5" />
-      </UButton>
-      <UButton
         v-if="canManageFeatured"
-        color="neutral"
-        class="hover:opacity-70 transition duration-200 cursor-pointer"
-        variant="ghost"
-        size="sm"
+        color="primary"
+        class="p-1"
+        variant="soft"
+        size="xs"
         @click="settingsModalOpen = true"
       >
         <UIcon name="i-lucide-settings" class="w-4.5 h-4.5" />
       </UButton>
+
+      <UTooltip text="新建铁路线路系统">
+        <UButton
+          color="primary"
+          variant="soft"
+          size="xs"
+          class="p-1"
+          @click="goCreateSystem"
+        >
+          <UIcon name="i-lucide-plus" class="w-4.5 h-4.5" />
+        </UButton>
+      </UTooltip>
+
+      <UTooltip text="编辑铁路设施">
+        <UButton
+          color="primary"
+          variant="soft"
+          size="xs"
+          class="p-1"
+          @click="goEditFacilities"
+        >
+          <UIcon name="i-lucide-edit" class="w-4.5 h-4.5" />
+        </UButton>
+      </UTooltip>
     </div>
 
     <section class="space-y-4">
@@ -1049,34 +1061,6 @@ onBeforeUnmount(() => {
         </Transition>
       </div>
     </section>
-
-    <UModal
-      :open="quickActionOpen"
-      @update:open="(value: boolean) => (quickActionOpen = value)"
-      :ui="{ width: 'w-full max-w-sm' }"
-    >
-      <template #title>添加信息</template>
-      <template #body>
-        <div class="space-y-3">
-          <UButton
-            color="primary"
-            variant="soft"
-            class="w-full"
-            @click="goCreateSystem"
-          >
-            添加信息（新建线路系统）
-          </UButton>
-          <UButton
-            color="neutral"
-            variant="soft"
-            class="w-full"
-            @click="goEditFacilities"
-          >
-            编辑设施
-          </UButton>
-        </div>
-      </template>
-    </UModal>
 
     <UModal
       :open="settingsModalOpen"

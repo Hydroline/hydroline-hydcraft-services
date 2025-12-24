@@ -222,6 +222,7 @@ onMounted(() => {
       </div>
       <UButton
         size="sm"
+        class="absolute left-4 top-6 md:top-10"
         variant="ghost"
         icon="i-lucide-arrow-left"
         @click="router.push({ name: 'transportation.railway' })"

@@ -134,6 +134,7 @@ onMounted(() => {
         <UIcon name="i-lucide-arrow-left" />
         返回仪表盘
       </UButton>
+
       <div class="flex flex-wrap items-center gap-3">
         <USelectMenu
           v-model="filters.typeId"
