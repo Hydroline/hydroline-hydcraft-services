@@ -143,7 +143,7 @@ onMounted(() => {
 
     <div v-if="loading" class="text-sm text-slate-500">正在加载…</div>
 
-    <div v-else class="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div v-else class="flex flex-col gap-6">
       <div
         class="rounded-xl border border-slate-200/70 bg-white p-4 dark:border-slate-800/70 dark:bg-slate-900"
       >

@@ -115,3 +115,21 @@
 - [ ] 验证公司库检索与显示链路（仅用公司 ID）
 - [ ] 验证系统创建（同名线路筛选）与地图多线路展示
 - [ ] 验证编辑设施批量修改是否正确写入
+
+## 9. 近期变更与补充
+
+### 背景介绍
+- 为了让首页统计卡片真正反映数据库状态，需要把“全服铁路线路系统数”纳入概览接口并将页面和路由与系统列表/详情联通。
+- 站点/车厂/线路详情页暂时只做信息展示，避免点击“运营/建设单位”弹出编辑窗口，编辑操作仅留在专门的设施编辑页。
+- 统计和系统页面已存在，当前重点是让它们可访问（router 已添加）并确保数据来源真实；同时保持面板布局与其它模块一致。
+
+### Requirements
+- 概览接口必须返回 `systems` 数据，`RailwayOverviewView` 用 `stats.systems` 取值，并通过 RouterLink 跳转到 `transportation.railway.systems`。
+- 车厂、站点、线路详情页展示的绑定信息必须只读，无加号/弹窗，仅设施编辑页可以开编辑弹窗。
+- 所有配套 API（overview、binding stats）必须在英文/国际化环境下保持一致，构建通过 `pnpm -C backend build` 。
+
+### Todolist
+- [x] 后端概览接口新增 `systems` 统计，并在返回对象中反映。
+- [x] 前端类型和 `RailwayOverviewView` 使用刚返回的 `systems` 字段替换 `0` 值；相关 RouterLink 已连接到系统列表。
+- [x] `RailwayDepotDetailView` 渲染绑定信息的组件设为不可编辑，避免在详情页误触 UModal。
+- [x] 运行 `pnpm -C backend build` 确保后端编译通过，保持英文输出。

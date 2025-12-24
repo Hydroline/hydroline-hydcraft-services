@@ -42,6 +42,7 @@ export interface RailwayOverviewStats {
   stations: number
   depots: number
   operatorCompanies: number
+  systems: number
 }
 
 export interface RailwayOverview {

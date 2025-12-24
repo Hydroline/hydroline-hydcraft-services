@@ -20,9 +20,19 @@ defineProps<{
   <div class="space-y-3">
     <h3 class="text-lg text-slate-600 dark:text-slate-300">基本信息</h3>
     <div
-      class="grid gap-3 rounded-xl border border-slate-200/60 bg-white px-4 py-3 dark:border-slate-800/60 dark:bg-slate-700/60"
+      class="grid gap-2 rounded-xl border border-slate-200/60 bg-white px-4 py-3 dark:border-slate-800/60 dark:bg-slate-700/60"
     >
       <div class="grid gap-2 text-sm text-slate-600 dark:text-slate-300">
+        <RailwayCompanyBindingSection
+          entity-type="ROUTE"
+          :entity-id="detail.route.id"
+          :server-id="detail.server.id"
+          :railway-type="detail.railwayType"
+          :dimension="detail.dimension"
+          :operator-company-ids="operatorCompanyIds"
+          :builder-company-ids="builderCompanyIds"
+        />
+
         <div class="flex justify-between">
           <span>线路 ID</span>
           <span class="font-mono text-slate-900 dark:text-white">
@@ -86,16 +96,6 @@ defineProps<{
           </span>
         </div>
       </div>
-
-      <RailwayCompanyBindingSection
-        entity-type="ROUTE"
-        :entity-id="detail.route.id"
-        :server-id="detail.server.id"
-        :railway-type="detail.railwayType"
-        :dimension="detail.dimension"
-        :operator-company-ids="operatorCompanyIds"
-        :builder-company-ids="builderCompanyIds"
-      />
 
       <div v-if="systems?.length" class="pt-2 border-t border-slate-200/70">
         <p class="text-xs font-semibold text-slate-500 uppercase">

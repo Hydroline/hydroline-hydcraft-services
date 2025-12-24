@@ -119,6 +119,7 @@ export type OverviewStats = {
   stations: number;
   depots: number;
   operatorCompanies: number;
+  systems: number;
 };
 
 export type OverviewLatest = {

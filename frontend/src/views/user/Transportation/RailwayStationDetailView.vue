@@ -632,48 +632,52 @@ onUnmounted(() => {
       <section class="grid gap-4 lg:grid-cols-2">
         <div>
           <h3 class="text-lg text-slate-600 dark:text-slate-300">基本信息</h3>
-          <dl
-            class="mt-3 space-y-2 text-sm rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60"
+          <div
+            class="mt-3 space-y-3 rounded-xl border border-slate-200/60 bg-white px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:bg-slate-700/60 dark:text-slate-300"
           >
-            <div class="flex justify-between gap-4">
-              <dt>站点 ID</dt>
-              <dd class="font-mono text-slate-900 dark:text-white">
-                {{ detail.station.id }}
-              </dd>
-            </div>
-            <div class="flex justify-between gap-4">
-              <dt>所属服务端</dt>
-              <dd class="text-slate-900 dark:text-white">
-                {{ detail.server.name }}
-              </dd>
-            </div>
-            <div class="flex justify-between gap-4">
-              <dt>区域</dt>
-              <dd class="text-slate-900 dark:text-white">
-                {{ detail.station.zone ?? '—' }}
-              </dd>
-            </div>
-            <div class="flex justify-between gap-4">
-              <dt>最后更新</dt>
-              <dd class="text-slate-900 dark:text-white">
-                {{
-                  detail.metadata.lastUpdated
-                    ? new Date(detail.metadata.lastUpdated).toLocaleString()
-                    : '—'
-                }}
-              </dd>
-            </div>
-          </dl>
+            <dl class="space-y-2">
+              <RailwayCompanyBindingSection
+                entity-type="STATION"
+                :entity-id="detail.station.id"
+                :server-id="detail.server.id"
+                :railway-type="detail.railwayType"
+                :dimension="
+                  detail.station.dimension ?? params.dimension ?? null
+                "
+                :operator-company-ids="detail.operatorCompanyIds"
+                :builder-company-ids="detail.builderCompanyIds"
+              />
 
-          <RailwayCompanyBindingSection
-            entity-type="STATION"
-            :entity-id="detail.station.id"
-            :server-id="detail.server.id"
-            :railway-type="detail.railwayType"
-            :dimension="detail.station.dimension ?? params.dimension ?? null"
-            :operator-company-ids="detail.operatorCompanyIds"
-            :builder-company-ids="detail.builderCompanyIds"
-          />
+              <div class="flex justify-between gap-4">
+                <dt>站点 ID</dt>
+                <dd class="font-mono text-slate-900 dark:text-white">
+                  {{ detail.station.id }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt>所属服务端</dt>
+                <dd class="text-slate-900 dark:text-white">
+                  {{ detail.server.name }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt>区域</dt>
+                <dd class="text-slate-900 dark:text-white">
+                  {{ detail.station.zone ?? '—' }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt>最后更新</dt>
+                <dd class="text-slate-900 dark:text-white">
+                  {{
+                    detail.metadata.lastUpdated
+                      ? new Date(detail.metadata.lastUpdated).toLocaleString()
+                      : '—'
+                  }}
+                </dd>
+              </div>
+            </dl>
+          </div>
 
           <div class="mt-6 space-y-3">
             <div

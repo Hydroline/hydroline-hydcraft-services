@@ -265,26 +265,32 @@ onMounted(async () => {
     </div>
 
     <UModal v-model="bindingModalOpen">
-      <div class="p-4 space-y-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-base font-semibold text-slate-800">
-            {{ selectedItem?.name || selectedItem?.id || '设施绑定' }}
-          </h3>
-          <UButton size="2xs" variant="ghost" @click="bindingModalOpen = false">
-            关闭
-          </UButton>
+      <template #content>
+        <div class="p-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold text-slate-800">
+              {{ selectedItem?.name || selectedItem?.id || '设施绑定' }}
+            </h3>
+            <UButton
+              size="2xs"
+              variant="ghost"
+              @click="bindingModalOpen = false"
+            >
+              关闭
+            </UButton>
+          </div>
+          <RailwayCompanyBindingSection
+            v-if="selectedItem"
+            :entity-type="activeType.toUpperCase()"
+            :entity-id="selectedItem.id"
+            :server-id="selectedItem.server.id"
+            :railway-type="selectedItem.railwayType"
+            :dimension="selectedItem.dimension ?? null"
+            :operator-company-ids="selectedBindings.operatorCompanyIds"
+            :builder-company-ids="selectedBindings.builderCompanyIds"
+          />
         </div>
-        <RailwayCompanyBindingSection
-          v-if="selectedItem"
-          :entity-type="activeType.toUpperCase()"
-          :entity-id="selectedItem.id"
-          :server-id="selectedItem.server.id"
-          :railway-type="selectedItem.railwayType"
-          :dimension="selectedItem.dimension ?? null"
-          :operator-company-ids="selectedBindings.operatorCompanyIds"
-          :builder-company-ids="selectedBindings.builderCompanyIds"
-        />
-      </div>
+      </template>
     </UModal>
   </div>
 </template>

@@ -12,6 +12,7 @@ const props = defineProps<{
   dimension?: string | null
   operatorCompanyIds?: string[]
   builderCompanyIds?: string[]
+  editable?: boolean
 }>()
 
 const bindingStore = useTransportationRailwayBindingsStore()
@@ -58,12 +59,12 @@ async function syncBindings(nextOperators: string[], nextBuilders: string[]) {
     builderCompanyIds.value = payload.builderCompanyIds
     toast.add({
       title: '已更新绑定信息',
-      color: 'green',
+      color: 'success',
     })
   } catch (error) {
     toast.add({
       title: error instanceof Error ? error.message : '更新失败',
-      color: 'red',
+      color: 'error',
     })
   } finally {
     submitting.value = false
@@ -80,18 +81,16 @@ async function updateBuilders(next: string[]) {
 </script>
 
 <template>
-  <div class="mt-4 space-y-3">
-    <CompanyBindingField
-      label="运营单位"
-      :company-ids="operatorCompanyIds"
-      :allow-edit="allowEdit && !submitting"
-      @update="updateOperators"
-    />
-    <CompanyBindingField
-      label="建设单位"
-      :company-ids="builderCompanyIds"
-      :allow-edit="allowEdit && !submitting"
-      @update="updateBuilders"
-    />
-  </div>
+  <CompanyBindingField
+    label="运营单位"
+    :company-ids="operatorCompanyIds"
+    :allow-edit="allowEdit && !submitting"
+    @update="updateOperators"
+  />
+  <CompanyBindingField
+    label="建设单位"
+    :company-ids="builderCompanyIds"
+    :allow-edit="allowEdit && !submitting"
+    @update="updateBuilders"
+  />
 </template>

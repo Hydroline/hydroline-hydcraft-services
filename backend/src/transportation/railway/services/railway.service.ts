@@ -52,9 +52,12 @@ export class TransportationRailwayService {
   ) {}
 
   async getOverview() {
-    const [featuredItems, servers] = await Promise.all([
+    const systemCountPromise = this.prisma.transportationRailwaySystem.count();
+
+    const [featuredItems, servers, systemCount] = await Promise.all([
       this.listFeaturedItems(),
       this.listBeaconServers(),
+      systemCountPromise,
     ]);
 
     const stats: OverviewStats = {
@@ -63,6 +66,7 @@ export class TransportationRailwayService {
       stations: 0,
       depots: 0,
       operatorCompanies: 0,
+      systems: systemCount,
     };
     const latest: OverviewLatest = {
       depots: [],

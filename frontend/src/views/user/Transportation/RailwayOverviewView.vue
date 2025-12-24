@@ -41,6 +41,7 @@ const stats = computed(
       stations: 0,
       depots: 0,
       operatorCompanies: 0,
+      systems: 0,
     },
 )
 const recommendations = computed(() => overview.value?.recommendations ?? [])
@@ -719,7 +720,7 @@ onBeforeUnmount(() => {
           </div>
         </RouterLink>
 
-        <RouterLink :to="{ name: 'transportation.railway.depots' }">
+        <RouterLink :to="{ name: 'transportation.railway.systems' }">
           <div
             class="rounded-xl px-4 py-3 bg-white border border-slate-200/60 dark:border-slate-800/60 dark:bg-slate-700/60 shadow-[0_4px_16px_var(--color-neutral-50)] dark:shadow-[0_4px_16px_var(--color-neutral-900)] hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer transition duration-250"
           >
@@ -729,7 +730,7 @@ onBeforeUnmount(() => {
             <div
               class="text-2xl font-semibold text-slate-800 dark:text-slate-300"
             >
-              0
+              {{ stats.systems }}
             </div>
           </div>
         </RouterLink>

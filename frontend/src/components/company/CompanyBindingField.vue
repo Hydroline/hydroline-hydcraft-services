@@ -92,93 +92,94 @@ function resolveCompanyLogo(companyId: string) {
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div>
     <div class="flex items-center justify-between gap-2">
-      <span class="text-sm text-slate-600 dark:text-slate-300">
+      <span class="inline-flex items-center gap-1">
         {{ label }}
-      </span>
-      <UButton
-        v-if="allowEdit"
-        size="2xs"
-        variant="ghost"
-        icon="i-lucide-plus"
-        @click="modalOpen = true"
-      >
-        添加
-      </UButton>
-    </div>
 
-    <div class="flex flex-wrap gap-2">
-      <div
-        v-for="companyId in orderedCompanyIds"
-        :key="companyId"
-        class="flex items-center gap-2 rounded-full border border-slate-200/70 bg-white px-3 py-1 text-xs text-slate-700 shadow-sm dark:border-slate-800/70 dark:bg-slate-700/60 dark:text-slate-200"
-      >
-        <img
-          v-if="resolveCompanyLogo(companyId)"
-          :src="resolveCompanyLogo(companyId)"
-          :alt="resolveCompanyName(companyId)"
-          class="h-4 w-4 rounded-full object-cover"
-        />
-        <span>{{ resolveCompanyName(companyId) }}</span>
-        <button
+        <UButton
+          class="rounded-full p-1"
           v-if="allowEdit"
-          type="button"
-          class="text-slate-400 hover:text-slate-700 dark:hover:text-white"
-          @click="removeCompany(companyId)"
+          variant="soft"
+          size="xs"
+          @click="modalOpen = true"
         >
-          <UIcon name="i-lucide-x" class="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <span
-        v-if="orderedCompanyIds.length === 0"
-        class="text-xs text-slate-400"
-      >
-        暂无绑定
+          <UIcon name="i-lucide-plus" class="h-3 w-3" />
+        </UButton>
+      </span>
+      <span class="text-slate-900 dark:text-white">
+        <span v-if="orderedCompanyIds.length === 0"> 暂无绑定</span>
+
+        <div v-else class="flex flex-wrap gap-2 text-xs">
+          <div
+            v-for="companyId in orderedCompanyIds"
+            :key="companyId"
+            class="flex items-center gap-2 rounded-full border border-slate-200/70 bg-white px-3 py-1 text-slate-700 shadow-sm dark:border-slate-800/70 dark:bg-slate-700/60 dark:text-slate-200"
+          >
+            <img
+              v-if="resolveCompanyLogo(companyId)"
+              :src="resolveCompanyLogo(companyId) ?? undefined"
+              :alt="resolveCompanyName(companyId)"
+              class="h-4 w-4 rounded-full object-cover"
+            />
+            <span>{{ resolveCompanyName(companyId) }}</span>
+            <button
+              v-if="allowEdit"
+              type="button"
+              class="text-slate-400 hover:text-slate-700 dark:hover:text-white"
+              @click="removeCompany(companyId)"
+            >
+              <UIcon name="i-lucide-x" class="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
       </span>
     </div>
 
-    <UModal v-model="modalOpen">
-      <div class="p-4 space-y-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-base font-semibold text-slate-800">
-            选择{{ label }}
-          </h3>
-          <UButton size="2xs" variant="ghost" @click="modalOpen = false">
-            关闭
-          </UButton>
-        </div>
+    <UModal v-model:open="modalOpen">
+      <template #content>
+        <div class="p-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold text-slate-800">
+              选择{{ label }}
+            </h3>
+            <UButton size="xs" variant="ghost" @click="modalOpen = false">
+              关闭
+            </UButton>
+          </div>
 
-        <USelectMenu
-          v-model="selectedCompanyId"
-          v-model:search-term="searchTerm"
-          :items="searchOptions"
-          :loading="searchLoading"
-          searchable
-          value-key="id"
-          label-key="name"
-          placeholder="搜索公司"
-        >
-          <template #option="{ item }">
-            <div class="flex flex-col">
-              <span class="text-sm text-slate-900">{{ item.name }}</span>
-              <span class="text-xs text-slate-500">
-                {{ item.summary || '暂无简介' }}
-              </span>
-            </div>
-          </template>
-        </USelectMenu>
-
-        <div class="flex justify-end">
-          <UButton
-            color="primary"
-            :disabled="!selectedCompanyId"
-            @click="addSelectedCompany"
+          <USelectMenu
+            v-model="selectedCompanyId"
+            v-model:search-term="searchTerm"
+            :items="searchOptions"
+            :loading="searchLoading"
+            searchable
+            value-key="id"
+            label-key="name"
+            placeholder="搜索公司"
+            class="w-full"
           >
-            添加
-          </UButton>
+            <template #option="{ item }">
+              <div class="flex flex-col">
+                <span class="text-sm text-slate-900">{{ item.name }}</span>
+                <span class="text-xs text-slate-500">
+                  {{ item.summary || '暂无简介' }}
+                </span>
+              </div>
+            </template>
+          </USelectMenu>
+
+          <div class="flex justify-end">
+            <UButton
+              color="primary"
+              :disabled="!selectedCompanyId"
+              @click="addSelectedCompany"
+            >
+              添加
+            </UButton>
+          </div>
         </div>
-      </div>
+      </template>
     </UModal>
   </div>
 </template>

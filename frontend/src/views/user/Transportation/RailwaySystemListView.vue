@@ -1,61 +1,39 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { AnimatePresence, Motion } from 'motion-v'
-import { useTransportationRailwayBindingsStore } from '@/stores/transportation/railwayBindings'
-import { resolveCompaniesByIds } from '@/utils/company/company-lib'
-import type { CompanyModel } from '@/types/company'
-import type { RailwayCompanyBindingStatItem } from '@/types/transportation'
+import { useTransportationRailwaySystemsStore } from '@/stores/transportation/railwaySystems'
 
+const systemsStore = useTransportationRailwaySystemsStore()
 const router = useRouter()
-const bindingStore = useTransportationRailwayBindingsStore()
-
-const bindingType = ref<'OPERATOR' | 'BUILDER'>('OPERATOR')
-const loading = ref(false)
-const stats = ref<RailwayCompanyBindingStatItem[]>([])
-const companyMap = ref<Record<string, CompanyModel>>({})
 
 const page = ref(1)
-const pageSize = ref(20)
-const pageInput = ref('1')
+const pageSize = ref(10)
+const loading = ref(false)
+const systemsResponse = ref(
+  null as null | ReturnType<typeof systemsStore.fetchSystems>,
+)
 const renderToken = ref(0)
 
-const tabs = [
-  { label: '运营单位', value: 'OPERATOR' },
-  { label: '建设单位', value: 'BUILDER' },
-]
-
-const emptyText = computed(() =>
-  bindingType.value === 'OPERATOR'
-    ? '暂无运营单位绑定记录'
-    : '暂无建设单位绑定记录',
-)
+const pageInput = ref('1')
 
 const pagination = computed(() => {
-  const total = stats.value.length
-  const pageCount = Math.max(1, Math.ceil(total / pageSize.value))
+  const data = systemsResponse.value
   return {
-    total,
-    page: page.value,
-    pageSize: pageSize.value,
-    pageCount,
+    total: data?.total ?? 0,
+    page: data?.page ?? page.value,
+    pageSize: data?.pageSize ?? pageSize.value,
+    pageCount: Math.max(data?.pageCount ?? 1, 1),
   }
 })
 
-const pagedStats = computed(() => {
-  const start = (page.value - 1) * pageSize.value
-  return stats.value.slice(start, start + pageSize.value)
-})
-
-async function fetchStats() {
+async function loadSystems() {
   loading.value = true
   try {
-    const result = await bindingStore.fetchCompanyStats(bindingType.value)
-    stats.value = result
-    const ids = result.map((item) => item.companyId)
-    companyMap.value = await resolveCompaniesByIds(ids)
-    page.value = 1
-    pageInput.value = '1'
+    systemsResponse.value = await systemsStore.fetchSystems({
+      page: page.value,
+      pageSize: pageSize.value,
+    })
     renderToken.value += 1
   } finally {
     loading.value = false
@@ -67,31 +45,19 @@ function goToPage(nextPage: number) {
   if (safe === page.value) return
   page.value = safe
   pageInput.value = String(safe)
-  renderToken.value += 1
+  void loadSystems()
 }
 
-function openCompany(companyId: string) {
+function openSystem(systemId: string) {
   router.push({
-    name: 'transportation.railway.company',
-    params: { companyId },
-    query: { bindingType: bindingType.value },
+    name: 'transportation.railway.system.detail',
+    params: { systemId },
   })
 }
 
-function companyName(companyId: string) {
-  return companyMap.value[companyId]?.name ?? '未知公司'
-}
-
 onMounted(() => {
-  void fetchStats()
+  void loadSystems()
 })
-
-watch(
-  () => bindingType.value,
-  () => {
-    void fetchStats()
-  },
-)
 </script>
 
 <template>
@@ -99,10 +65,11 @@ watch(
     <div class="flex items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-          铁路运营 / 建设单位统计
+          全服铁路线路系统
         </h1>
       </div>
       <UButton
+        v-if="systemsResponse"
         size="sm"
         class="absolute left-4 top-6 md:top-10"
         variant="ghost"
@@ -110,19 +77,6 @@ watch(
         @click="router.push({ name: 'transportation.railway' })"
       >
         返回概览
-      </UButton>
-    </div>
-
-    <div class="flex items-center gap-2">
-      <UButton
-        v-for="tab in tabs"
-        :key="tab.value"
-        size="sm"
-        :variant="bindingType === tab.value ? 'solid' : 'ghost'"
-        :color="bindingType === tab.value ? 'primary' : 'neutral'"
-        @click="bindingType = tab.value as typeof bindingType"
-      >
-        {{ tab.label }}
       </UButton>
     </div>
 
@@ -137,15 +91,15 @@ watch(
             class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400"
           >
             <tr>
-              <th class="px-4 py-3">单位</th>
-              <th class="px-4 py-3">线路</th>
-              <th class="px-4 py-3">车站</th>
-              <th class="px-4 py-3">车厂</th>
-              <th class="px-4 py-3">线路系统</th>
-              <th class="px-4 py-3">总计</th>
+              <th class="px-4 py-3">名称</th>
+              <th class="px-4 py-3">服务端</th>
+              <th class="px-4 py-3">线路数</th>
+              <th class="px-4 py-3">更新时间</th>
+              <th class="px-4 py-3">操作</th>
             </tr>
           </thead>
-          <tbody v-if="stats.length === 0">
+
+          <tbody v-if="(systemsResponse?.items?.length ?? 0) === 0">
             <Motion
               as="tr"
               :initial="{ opacity: 0, filter: 'blur(10px)' }"
@@ -154,9 +108,9 @@ watch(
             >
               <td
                 class="px-4 py-6 text-center text-sm text-slate-500"
-                colspan="6"
+                colspan="5"
               >
-                {{ loading ? '正在加载…' : emptyText }}
+                {{ loading ? '正在加载…' : '暂无线路系统' }}
               </td>
             </Motion>
           </tbody>
@@ -169,27 +123,33 @@ watch(
           >
             <AnimatePresence>
               <Motion
-                v-for="item in pagedStats"
-                :key="`${renderToken}::${bindingType}::${item.companyId}`"
+                v-for="item in systemsResponse?.items ?? []"
+                :key="`${renderToken}::${item.id}`"
                 as="tr"
                 :initial="{ opacity: 0, filter: 'blur(10px)', y: 4 }"
                 :animate="{ opacity: 1, filter: 'blur(0px)', y: 0 }"
                 :exit="{ opacity: 0, filter: 'blur(10px)', y: -4 }"
                 :transition="{ duration: 0.3 }"
-                class="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/60 cursor-pointer"
-                @click="openCompany(item.companyId)"
+                class="border-t border-slate-100 dark:border-slate-800"
               >
-                <td class="px-4 py-3 text-slate-900 dark:text-white">
-                  {{ companyName(item.companyId) }}
+                <td class="px-4 py-3">
+                  <div class="text-slate-900 dark:text-white">
+                    {{ item.name }}
+                  </div>
+                  <span class="text-xs text-slate-400">{{
+                    item.englishName || '—'
+                  }}</span>
                 </td>
-                <td class="px-4 py-3">{{ item.routes }}</td>
-                <td class="px-4 py-3">{{ item.stations }}</td>
-                <td class="px-4 py-3">{{ item.depots }}</td>
-                <td class="px-4 py-3">{{ item.systems }}</td>
-                <td
-                  class="px-4 py-3 font-semibold text-slate-900 dark:text-white"
-                >
-                  {{ item.total }}
+                <td class="px-4 py-3">{{ item.serverId }}</td>
+                <td class="px-4 py-3">{{ item.routeCount }}</td>
+                <td class="px-4 py-3">{{ item.updatedAt }}</td>
+                <td class="px-4 py-3">
+                  <UButton
+                    size="2xs"
+                    variant="ghost"
+                    @click="openSystem(item.id)"
+                    >查看</UButton
+                  >
                 </td>
               </Motion>
             </AnimatePresence>

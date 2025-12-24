@@ -309,10 +309,7 @@ onMounted(async () => {
         <Motion
           v-else
           as="tbody"
-          :animate="{
-            opacity: loading ? 0.75 : 1,
-            filter: loading ? 'blur(1px)' : 'blur(0px)',
-          }"
+          :animate="{ opacity: 1, filter: 'blur(0px)' }"
           :transition="{ duration: 0.3 }"
         >
           <AnimatePresence>
@@ -378,12 +375,28 @@ onMounted(async () => {
           </AnimatePresence>
         </Motion>
       </table>
+
+      <Transition
+        enter-active-class="transition-opacity duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-200"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="loading"
+          class="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/60 backdrop-blur-[1px] dark:bg-slate-900/30"
+        >
+          <UIcon
+            name="i-lucide-loader-2"
+            class="h-5 w-5 animate-spin text-slate-400"
+          />
+        </div>
+      </Transition>
     </section>
 
-    <div
-      v-if="pagination.pageCount > 1"
-      class="flex items-center justify-between text-sm text-slate-500"
-    >
+    <div class="flex items-center justify-between text-sm text-slate-500">
       <span>
         共 {{ pagination.total }} 条，{{ pagination.page }}/{{
           pagination.pageCount
