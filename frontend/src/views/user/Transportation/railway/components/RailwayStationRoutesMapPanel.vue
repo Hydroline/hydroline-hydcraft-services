@@ -496,18 +496,47 @@ watch(
 }
 
 .railway-platform-arrow-icon {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  transform-origin: 50% 50%;
+}
+
+.railway-platform-arrow-head {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translate(-50%, 0);
   width: 0;
   height: 0;
   border-left: 7px solid transparent;
   border-right: 7px solid transparent;
   border-bottom: 12px solid #ffffff;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
-  transform-origin: 50% 65%;
+}
+
+.railway-platform-arrow-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
 .dark .railway-platform-arrow-icon {
+  filter: none;
+}
+
+.dark .railway-platform-arrow-head {
   border-bottom-color: #f1f5f9;
-  filter: drop-shadow(0 2px 4px rgba(2, 6, 23, 0.8));
+}
+
+.dark .railway-platform-arrow-dot {
+  background: #f1f5f9;
+  box-shadow: 0 1px 4px rgba(2, 6, 23, 0.55);
 }
 
 .railway-map-container .leaflet-tile-pane {

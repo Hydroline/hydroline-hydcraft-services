@@ -62,7 +62,6 @@ export class RailwayStationRoutesMap {
     { a: RailwayGeometryPoint; b: RailwayGeometryPoint }
   >()
   private stopVersion = 0
-  private lastStopRenderKey: string | null = null
   private zoomHandler: (() => void) | null = null
   private pendingDraw: DrawOptions | null = null
 
@@ -96,6 +95,7 @@ export class RailwayStationRoutesMap {
         this.syncSecondaryPolylines()
       }
       map.on('zoomend', this.zoomHandler)
+      map.on('moveend', this.zoomHandler)
       map.whenReady(() => {
         this.commitPendingDraw()
       })
@@ -135,7 +135,6 @@ export class RailwayStationRoutesMap {
       if (!first || !last) continue
       this.platformSegmentByPlatformId.set(platformId, { a: first, b: last })
     }
-    this.lastStopRenderKey = null
 
     const stationFillColor = toHexColor(options.stationFillColor ?? null)
     const stationPolygon = options.stationPolygon ?? null
@@ -232,7 +231,6 @@ export class RailwayStationRoutesMap {
   setStops(stops: RailwayRouteDetail['stops'] = []) {
     this.stops = stops ?? []
     this.stopVersion += 1
-    this.lastStopRenderKey = null
     this.renderStops()
   }
 
@@ -359,31 +357,10 @@ export class RailwayStationRoutesMap {
 
     const zoom = map.getZoom()
     const showPlatforms = zoom >= STOP_ZOOM_SWITCH
-    const candidateStops = showPlatforms ? this.platformStops : this.stops
-    const stopsToRender = candidateStops.length
-      ? candidateStops
-      : showPlatforms
-        ? this.stops
-        : this.platformStops
-
-    if (!stopsToRender.length) {
-      this.clearStopLayer()
-      this.lastStopRenderKey = null
-      return
-    }
-
-    const markerMode = this.stopRenderConfig.markerMode
-    if (markerMode === 'none') return
 
     const labelZoomThreshold = this.stopRenderConfig.labelZoomThreshold
     const shouldRender =
       labelZoomThreshold == null ? true : zoom >= labelZoomThreshold
-
-    const renderKey = `${shouldRender ? 'on' : 'off'}:${this.stopVersion}:${this.platformStopVersion}:${showPlatforms ? 'p' : 's'}`
-    if (this.lastStopRenderKey === renderKey) {
-      return
-    }
-    this.lastStopRenderKey = renderKey
 
     if (!shouldRender) {
       this.clearStopLayer()
@@ -391,14 +368,42 @@ export class RailwayStationRoutesMap {
     }
 
     this.clearStopLayer()
-
     const layer = L.layerGroup()
-    for (let index = 0; index < stopsToRender.length; index += 1) {
-      const stop = stopsToRender[index]
+
+    if (showPlatforms) {
+      this.renderStopList(layer, this.platformStops, true, map)
+
+      const currentStationIds = new Set(
+        this.platformStops.map((s) => s.stationId).filter(Boolean),
+      )
+      const otherStops = this.stops.filter(
+        (s) => !s.stationId || !currentStationIds.has(s.stationId),
+      )
+      this.renderStopList(layer, otherStops, false, map)
+    } else {
+      const stops = this.stops.length ? this.stops : this.platformStops
+      this.renderStopList(layer, stops, false, map)
+    }
+
+    layer.addTo(map)
+    this.stopLayer = layer
+  }
+
+  private renderStopList(
+    layer: L.LayerGroup,
+    stops: RailwayRouteDetail['stops'],
+    isPlatformStyle: boolean,
+    map: L.Map,
+  ) {
+    const markerMode = this.stopRenderConfig.markerMode
+    if (!isPlatformStyle && markerMode === 'none') return
+
+    for (let index = 0; index < stops.length; index += 1) {
+      const stop = stops[index]
       const position = stop?.position
       if (!position) continue
 
-      const rawLabel = showPlatforms
+      const rawLabel = isPlatformStyle
         ? stop.platformName || stop.platformId
         : stop.stationName ||
           stop.stationId ||
@@ -409,25 +414,31 @@ export class RailwayStationRoutesMap {
 
       const center = this.toLatLng(position)
 
-      const marker = showPlatforms
-        ? this.createPlatformArrowMarker({ map, stop, center })
-        : markerMode === 'circle'
-          ? L.circleMarker(center, {
-              radius: 3,
-              stroke: false,
-              fill: true,
-              fillColor: '#ffffff',
-              fillOpacity: 0.95,
-              interactive: false,
-            })
-          : L.marker(center, {
-              interactive: false,
-              opacity: 0,
-            })
+      let marker: L.Layer
+
+      if (isPlatformStyle) {
+        marker = this.createPlatformArrowMarker({ map, stop, center })
+      } else {
+        if (markerMode === 'circle') {
+          marker = L.circleMarker(center, {
+            radius: 3,
+            stroke: false,
+            fill: true,
+            fillColor: '#ffffff',
+            fillOpacity: 0.95,
+            interactive: false,
+          })
+        } else {
+          marker = L.marker(center, {
+            interactive: false,
+            opacity: 0,
+          })
+        }
+      }
 
       marker.bindTooltip(labelText, {
         permanent: true,
-        className: showPlatforms
+        className: isPlatformStyle
           ? 'railway-station-label-small'
           : 'railway-station-label',
         direction: LABEL_POSITIONS[index % LABEL_POSITIONS.length].direction,
@@ -436,9 +447,6 @@ export class RailwayStationRoutesMap {
 
       marker.addTo(layer)
     }
-
-    layer.addTo(map)
-    this.stopLayer = layer
   }
 
   private createPlatformArrowMarker(input: {
@@ -446,31 +454,12 @@ export class RailwayStationRoutesMap {
     stop: RailwayRouteDetail['stops'][number]
     center: L.LatLng
   }) {
-    const platformId = input.stop?.platformId
-    let rotationDeg = 0
-    if (platformId) {
-      const segment = this.platformSegmentByPlatformId.get(platformId)
-      if (segment) {
-        const aLatLng = this.toLatLng(segment.a)
-        const bLatLng = this.toLatLng(segment.b)
-        const a = input.map.latLngToLayerPoint(aLatLng)
-        const b = input.map.latLngToLayerPoint(bLatLng)
-        const dx = b.x - a.x
-        const dy = b.y - a.y
-        if (dx !== 0 || dy !== 0) {
-          const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
-          // screen coords: +y is down; make 0deg point up
-          rotationDeg = angleDeg + 90
-        }
-      }
-    }
-
     return L.marker(input.center, {
       icon: L.divIcon({
         className: 'railway-platform-arrow',
-        html: `<div class="railway-platform-arrow-icon" style="transform: rotate(${rotationDeg}deg)"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
+        html: `<div class="railway-platform-arrow-icon"><span class="railway-platform-arrow-dot"></span></div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
       }),
       interactive: false,
       keyboard: false,
