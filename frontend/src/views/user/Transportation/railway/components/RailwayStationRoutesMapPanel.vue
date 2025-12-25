@@ -119,6 +119,7 @@ const routeGroups = computed(() => {
     color: group.color ?? null,
     paths: group.paths ?? [],
     label: (group.displayName || group.key || '').trim() || null,
+    key: group.key ?? null,
   }))
 })
 
@@ -144,6 +145,7 @@ const routeStops = computed<StopWithColor[]>(() => {
         position: { x: item.x, z: item.z },
         bounds: null,
         color: group.color,
+        groupKey: group.key ?? null,
       })
     }
   }

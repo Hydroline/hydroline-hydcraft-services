@@ -11,12 +11,14 @@ import type {
 
 export type StopWithColor = RailwayRouteDetail['stops'][number] & {
   color?: number | null
+  groupKey?: string | null
 }
 
 type RouteGroup = {
   color?: number | null
   paths: RailwayGeometryPoint[][]
   label?: string | null
+  key?: string | null
 }
 
 type DrawOptions = {
@@ -33,8 +35,7 @@ type DrawOptions = {
 }
 
 const defaultColor = '#0ea5e9'
-const STATION_AREA_ZOOM = 2
-const STOP_ZOOM_SWITCH = 3
+const STOP_ZOOM_SWITCH = 2
 const ROUTE_POLYLINE_CLASS = 'railway-route-polyline'
 const SECONDARY_POLYLINE_CLASS = 'railway-secondary-polyline'
 
@@ -56,6 +57,8 @@ function toHexColor(value: number | null | undefined) {
 export class RailwayStationRoutesMap {
   private controller: DynmapMapController
   private routePolylines: L.Polyline[] = []
+  private routePolylineEndpointsByGroupKey = new Map<string, RailwayGeometryPoint[]>()
+  private routePolylineEndpointsAll: RailwayGeometryPoint[] = []
   private stationPolygonLayer: L.Layer | null = null
   private secondaryPolylines: L.Polyline[] = []
   private stopLayer: L.LayerGroup | null = null
@@ -114,7 +117,12 @@ export class RailwayStationRoutesMap {
 
   draw(options: DrawOptions) {
     const map = this.controller.getLeafletInstance()
-    if (!map || !map['_loaded']) {
+    const loaded = map
+      ? '_loaded' in map
+        ? Boolean((map as unknown as { _loaded?: boolean })._loaded)
+        : true
+      : false
+    if (!map || !loaded) {
       this.pendingDraw = options
       return
     }
@@ -159,13 +167,28 @@ export class RailwayStationRoutesMap {
     }
 
     const routeGroups = options.routeGroups ?? []
+    this.routePolylineEndpointsByGroupKey.clear()
+    this.routePolylineEndpointsAll = []
+
     for (const group of routeGroups) {
       const color = toHexColor(group.color ?? null)
       const groupLabel = group.label?.trim()
+      const groupKey = group.key ?? null
+
+      const groupEndpoints = this.getPolylineEndpoints(group.paths ?? [])
+      if (groupKey) {
+        this.routePolylineEndpointsByGroupKey.set(groupKey, groupEndpoints)
+      }
+      this.routePolylineEndpointsAll = this.dedupeEndpoints([
+        ...this.routePolylineEndpointsAll,
+        ...groupEndpoints,
+      ])
+
       for (const path of group.paths ?? []) {
         if (!path?.length) continue
         const latlngs = this.toLatLngPath(path)
         if (!latlngs.length) continue
+
         const polyline = L.polyline(latlngs, {
           color,
           weight: 4,
@@ -193,7 +216,7 @@ export class RailwayStationRoutesMap {
       color: '#ffffff',
       weight: 4,
       opacity: 0.98,
-      zoomThreshold: 3,
+      zoomThreshold: STOP_ZOOM_SWITCH,
     }
 
     for (const seg of platformSegments) {
@@ -305,7 +328,7 @@ export class RailwayStationRoutesMap {
     stationPolygon: RailwayGeometryPoint[] | null
     routeGroups: RouteGroup[]
     platformSegments: RailwayGeometryPoint[][]
-  }) {
+  }): L.LatLngBounds | null {
     const map = this.controller.getLeafletInstance()
     if (!map) return null
 
@@ -377,22 +400,28 @@ export class RailwayStationRoutesMap {
     this.clearStopLayer()
     const layer = L.layerGroup()
 
-    if (showPlatforms) {
-      this.renderStopList(layer, this.platformStops, true, map)
-
-      const currentStationIds = new Set(
-        this.platformStops.map((s) => s.stationId).filter(Boolean),
-      )
-      if (this.currentStationId) {
-        currentStationIds.add(this.currentStationId)
-      }
-      const otherStops = this.stops.filter(
-        (s) => !s.stationId || !currentStationIds.has(s.stationId),
-      )
-      this.renderStopList(layer, otherStops, false, map)
+    if (this.stops.length) {
+      // Always render route stops with terminal snapping, even when zoomed out.
+      this.renderRouteStopGroups(layer)
     } else {
-      const stops = this.stops.length ? this.stops : this.platformStops
-      this.renderStopList(layer, stops, false, map)
+      // Fallback: no route-map stops, render whatever we have.
+      this.renderStopList(layer, this.platformStops, false, map)
+    }
+
+    if (showPlatforms) {
+
+      const platformSources = this.platformStops.length
+        ? this.platformStops
+        : this.stops.filter(
+            (stop) =>
+              stop.stationId && this.currentStationId
+                ? stop.stationId === this.currentStationId
+                : false,
+          )
+
+      if (platformSources.length) {
+        this.renderStopList(layer, platformSources, true, map)
+      }
     }
 
     layer.addTo(map)
@@ -459,6 +488,257 @@ export class RailwayStationRoutesMap {
 
       marker.addTo(layer)
     }
+  }
+
+  private renderRouteStopGroups(layer: L.LayerGroup) {
+    const markerMode = this.stopRenderConfig.markerMode
+    if (markerMode === 'none') return
+
+    const groups = new Map<string, StopWithColor[]>()
+    for (const stop of this.stops) {
+      const key = (stop.groupKey ?? '__default') as string
+      const list = groups.get(key)
+      if (list) list.push(stop)
+      else groups.set(key, [stop])
+    }
+
+    let globalIndex = 0
+    for (const [key, groupStops] of groups) {
+      const endpoints =
+        key !== '__default'
+          ? this.routePolylineEndpointsByGroupKey.get(key) ??
+            this.routePolylineEndpointsAll
+          : this.routePolylineEndpointsAll
+
+      const terminals = this.getTerminalStopIndicesWithPosition(groupStops)
+
+      for (let index = 0; index < groupStops.length; index += 1) {
+        const stop = groupStops[index]
+
+        const rawLabel =
+          stop.stationName ||
+          stop.stationId ||
+          stop.platformName ||
+          stop.platformId
+        const labelText = (rawLabel || '').split('|')[0]
+        if (!labelText) continue
+
+        const position = this.getStopMarkerPosition(
+          index,
+          stop,
+          groupStops,
+          terminals,
+          endpoints ?? [],
+        )
+        if (!position) continue
+
+        const center = this.toLatLng(position)
+        if (!center) continue
+
+        let marker: L.Layer
+        if (markerMode === 'circle') {
+          const colorHex = toHexColor(stop.color)
+          marker = L.circleMarker(center, {
+            radius: 7,
+            color: colorHex,
+            weight: 3,
+            fill: true,
+            fillColor: '#ffffff',
+            fillOpacity: 1,
+            interactive: false,
+          })
+        } else {
+          marker = L.marker(center, {
+            interactive: false,
+            opacity: 0,
+          })
+        }
+
+        marker.bindTooltip(labelText, {
+          permanent: true,
+          className: 'railway-station-label',
+          direction: LABEL_POSITIONS[globalIndex % LABEL_POSITIONS.length]
+            .direction,
+          offset: LABEL_POSITIONS[globalIndex % LABEL_POSITIONS.length].offset,
+        })
+
+        marker.addTo(layer)
+        globalIndex += 1
+      }
+    }
+  }
+
+  private getPolylineEndpoints(paths: RailwayGeometryPoint[][]) {
+    const endpoints: RailwayGeometryPoint[] = []
+    for (const path of paths) {
+      if (!path?.length) continue
+      endpoints.push(path[0])
+      endpoints.push(path[path.length - 1])
+    }
+    return this.dedupeEndpoints(endpoints)
+  }
+
+  private dedupeEndpoints(points: RailwayGeometryPoint[]) {
+    if (!points.length) return []
+    const result: RailwayGeometryPoint[] = []
+    for (const point of points) {
+      const exists = result.some(
+        (p) => Math.abs(p.x - point.x) < 1e-3 && Math.abs(p.z - point.z) < 1e-3,
+      )
+      if (!exists) {
+        result.push(point)
+      }
+    }
+    return result
+  }
+
+  private pickNearestEndpoint(
+    target: RailwayGeometryPoint,
+    endpoints: RailwayGeometryPoint[],
+  ) {
+    if (!endpoints.length) return null
+    let best = endpoints[0]
+    let bestDist = Number.POSITIVE_INFINITY
+    for (const point of endpoints) {
+      const dx = point.x - target.x
+      const dz = point.z - target.z
+      const dist = dx * dx + dz * dz
+      if (dist < bestDist) {
+        bestDist = dist
+        best = point
+      }
+    }
+    return best
+  }
+
+  private pickNearestDirectionalEndpoint(
+    target: RailwayGeometryPoint,
+    direction: RailwayGeometryPoint,
+    endpoints: RailwayGeometryPoint[],
+    options?: {
+      maxSnapDistance?: number
+      minAlignment?: number
+    },
+  ) {
+    if (!endpoints.length) return null
+    const len = Math.hypot(direction.x, direction.z)
+    if (!Number.isFinite(len) || len < 1e-6) {
+      return this.pickNearestEndpoint(target, endpoints)
+    }
+
+    const vx = direction.x / len
+    const vz = direction.z / len
+    const maxSnapDistance = options?.maxSnapDistance ?? 2000
+    const maxDist2 = maxSnapDistance * maxSnapDistance
+    const minAlignment = options?.minAlignment ?? 0.2
+
+    let best: RailwayGeometryPoint | null = null
+    let bestDist2 = Number.POSITIVE_INFINITY
+
+    for (const point of endpoints) {
+      const dx = point.x - target.x
+      const dz = point.z - target.z
+      const dist2 = dx * dx + dz * dz
+      if (dist2 > maxDist2) continue
+
+      const dist = Math.sqrt(dist2)
+      const forward = dx * vx + dz * vz
+      if (forward <= 0) continue
+
+      const alignment = forward / (dist + 1e-6)
+      if (alignment < minAlignment) continue
+
+      if (dist2 < bestDist2) {
+        best = point
+        bestDist2 = dist2
+      }
+    }
+
+    return best
+  }
+
+  private getNearestNeighborPosition(
+    stops: StopWithColor[],
+    index: number,
+    step: 1 | -1,
+  ) {
+    for (let i = index + step; i >= 0 && i < stops.length; i += step) {
+      const pos = stops[i]?.position
+      if (pos) return pos
+    }
+    return null
+  }
+
+  private getTerminalStopIndicesWithPosition(stops: StopWithColor[]): {
+    first: number
+    last: number
+  } | null {
+    if (!stops.length) return null
+    let first: number | null = null
+    let last: number | null = null
+    for (let index = 0; index < stops.length; index += 1) {
+      if (stops[index]?.position) {
+        first = index
+        break
+      }
+    }
+    for (let index = stops.length - 1; index >= 0; index -= 1) {
+      if (stops[index]?.position) {
+        last = index
+        break
+      }
+    }
+    if (first == null || last == null) return null
+    return { first, last }
+  }
+
+  private getStopMarkerPosition(
+    index: number,
+    stop: StopWithColor,
+    stops: StopWithColor[],
+    terminals: { first: number; last: number } | null,
+    endpoints: RailwayGeometryPoint[],
+  ): RailwayGeometryPoint | null {
+    if (!stop.position) return null
+
+    const isFirst = terminals != null && index === terminals.first
+    const isLast = terminals != null && index === terminals.last
+    if (!isFirst && !isLast) return stop.position
+    if (!endpoints.length) return stop.position
+
+    const neighbor = this.getNearestNeighborPosition(
+      stops,
+      index,
+      isFirst ? 1 : -1,
+    )
+    const direction = neighbor
+      ? {
+          x: stop.position.x - neighbor.x,
+          z: stop.position.z - neighbor.z,
+        }
+      : { x: 0, z: 0 }
+
+    const MAX_TERMINAL_SNAP_DISTANCE = 10000
+
+    const directional = this.pickNearestDirectionalEndpoint(
+      stop.position,
+      direction,
+      endpoints,
+      { maxSnapDistance: MAX_TERMINAL_SNAP_DISTANCE },
+    )
+    if (directional) return directional
+
+    const nearest = this.pickNearestEndpoint(stop.position, endpoints)
+    if (!nearest) return stop.position
+
+    const dx = nearest.x - stop.position.x
+    const dz = nearest.z - stop.position.z
+    const dist2 = dx * dx + dz * dz
+    if (dist2 <= MAX_TERMINAL_SNAP_DISTANCE * MAX_TERMINAL_SNAP_DISTANCE) {
+      return nearest
+    }
+
+    return stop.position
   }
 
   private createPlatformArrowMarker(input: {
