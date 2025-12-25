@@ -12,6 +12,7 @@ import type {
 export type StopWithColor = RailwayRouteDetail['stops'][number] & {
   color?: number | null
   groupKey?: string | null
+  snap?: boolean
 }
 
 type RouteGroup = {
@@ -701,6 +702,8 @@ export class RailwayStationRoutesMap {
     endpoints: RailwayGeometryPoint[],
   ): RailwayGeometryPoint | null {
     if (!stop.position) return null
+
+    if (stop.snap === false) return stop.position
 
     const isFirst = terminals != null && index === terminals.first
     const isLast = terminals != null && index === terminals.last
