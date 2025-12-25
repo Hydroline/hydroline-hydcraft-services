@@ -223,6 +223,7 @@ export type RailwayStationDetailResult = {
   mergedRoutes?: NormalizedRoute[];
   operatorCompanyIds: string[];
   builderCompanyIds: string[];
+  stations?: NormalizedEntity[];
   metadata: {
     lastUpdated: number | null;
   };

@@ -135,8 +135,8 @@ const routeStops = computed<RailwayRouteDetail['stops']>(() => {
         order: order++,
         platformId: item.stationId ?? item.label,
         platformName: item.label,
-        stationId: item.stationId ?? '',
-        stationName: item.label,
+        stationId: item.stationId ?? null,
+        stationName: item.stationName ?? null,
         dwellTime: null,
         position: { x: item.x, z: item.z },
         bounds: null,
@@ -254,6 +254,7 @@ async function draw() {
     routeGroups: routeGroups.value,
     platformSegments: platformSegments.value,
     stops: routeStops.value.length ? routeStops.value : stops.value,
+    platformStops: stops.value,
     focusZoom: 4,
     autoFocus: props.autoFocus,
   })
@@ -486,6 +487,27 @@ watch(
 .dark .railway-route-hover-label {
   color: #f1f5f9;
   text-shadow: 0 1px 2px rgba(2, 6, 23, 0.85);
+}
+
+.railway-platform-arrow.leaflet-div-icon {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.railway-platform-arrow-icon {
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 12px solid #ffffff;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+  transform-origin: 50% 65%;
+}
+
+.dark .railway-platform-arrow-icon {
+  border-bottom-color: #f1f5f9;
+  filter: drop-shadow(0 2px 4px rgba(2, 6, 23, 0.8));
 }
 
 .railway-map-container .leaflet-tile-pane {

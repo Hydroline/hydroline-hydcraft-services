@@ -625,6 +625,54 @@ export class TransportationRailwayRouteDetailService {
       }
     }
     const mergedRoutes = this.mergeRoutesForDisplay(routes);
+
+    // Fetch related stations for the map (routes context)
+    const relatedPlatformIds = new Set<string>();
+    for (const route of routes) {
+      const payload = route.payload || {};
+      const pIds = payload['platform_ids'] || payload['platformIds'];
+      if (Array.isArray(pIds)) {
+        for (const pid of pIds) {
+          const normalized = normalizeId(pid);
+          if (normalized) relatedPlatformIds.add(normalized);
+        }
+      }
+    }
+
+    const relatedPlatforms = await this.fetchPlatformsByIds(
+      server,
+      Array.from(relatedPlatformIds),
+    );
+
+    // Resolve stations for related platforms (Spatial Lookup)
+    // We fetch all stations for the server to perform bounds checking
+    const allStations = await this.fetchStationsWithBoundsCached(server, null);
+    const relatedStationsMap = new Map<string, RailwayStationRecord>();
+
+    for (const platform of relatedPlatforms) {
+      // 1. Try direct station_id if available
+      const sid = normalizeId(platform.station_id);
+      if (sid) {
+        const match = allStations.find((s) => s.id === sid);
+        if (match) {
+          relatedStationsMap.set(match.id as string, match);
+          continue;
+        }
+      }
+
+      // 2. Spatial lookup
+      const match = allStations.find((s) =>
+        this.platformInsideStationBounds(platform, s),
+      );
+      if (match) {
+        relatedStationsMap.set(match.id as string, match);
+      }
+    }
+
+    const normalizedRelatedStations = Array.from(
+      relatedStationsMap.values(),
+    ).map((s) => this.normalizeStationRecord(s, server));
+
     const bindings = await this.fetchCompanyBindingsForEntity({
       entityType: TransportationRailwayBindingEntityType.STATION,
       entityId: normalizedStationId,
@@ -640,6 +688,7 @@ export class TransportationRailwayRouteDetailService {
       platforms: platformDetails,
       routes,
       mergedRoutes,
+      stations: normalizedRelatedStations,
       operatorCompanyIds: bindings.operatorCompanyIds,
       builderCompanyIds: bindings.builderCompanyIds,
       metadata: {

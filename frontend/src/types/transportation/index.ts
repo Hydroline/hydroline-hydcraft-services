@@ -189,6 +189,7 @@ export interface RailwayStationRouteMapGroup {
     x: number
     z: number
     label: string
+    stationName?: string | null
   }>
 }
 
