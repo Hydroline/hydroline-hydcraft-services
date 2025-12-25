@@ -57,7 +57,10 @@ function toHexColor(value: number | null | undefined) {
 export class RailwayStationRoutesMap {
   private controller: DynmapMapController
   private routePolylines: L.Polyline[] = []
-  private routePolylineEndpointsByGroupKey = new Map<string, RailwayGeometryPoint[]>()
+  private routePolylineEndpointsByGroupKey = new Map<
+    string,
+    RailwayGeometryPoint[]
+  >()
   private routePolylineEndpointsAll: RailwayGeometryPoint[] = []
   private stationPolygonLayer: L.Layer | null = null
   private secondaryPolylines: L.Polyline[] = []
@@ -409,14 +412,12 @@ export class RailwayStationRoutesMap {
     }
 
     if (showPlatforms) {
-
       const platformSources = this.platformStops.length
         ? this.platformStops
-        : this.stops.filter(
-            (stop) =>
-              stop.stationId && this.currentStationId
-                ? stop.stationId === this.currentStationId
-                : false,
+        : this.stops.filter((stop) =>
+            stop.stationId && this.currentStationId
+              ? stop.stationId === this.currentStationId
+              : false,
           )
 
       if (platformSources.length) {
@@ -506,8 +507,8 @@ export class RailwayStationRoutesMap {
     for (const [key, groupStops] of groups) {
       const endpoints =
         key !== '__default'
-          ? this.routePolylineEndpointsByGroupKey.get(key) ??
-            this.routePolylineEndpointsAll
+          ? (this.routePolylineEndpointsByGroupKey.get(key) ??
+            this.routePolylineEndpointsAll)
           : this.routePolylineEndpointsAll
 
       const terminals = this.getTerminalStopIndicesWithPosition(groupStops)
@@ -557,8 +558,8 @@ export class RailwayStationRoutesMap {
         marker.bindTooltip(labelText, {
           permanent: true,
           className: 'railway-station-label',
-          direction: LABEL_POSITIONS[globalIndex % LABEL_POSITIONS.length]
-            .direction,
+          direction:
+            LABEL_POSITIONS[globalIndex % LABEL_POSITIONS.length].direction,
           offset: LABEL_POSITIONS[globalIndex % LABEL_POSITIONS.length].offset,
         })
 

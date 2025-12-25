@@ -291,7 +291,7 @@ function handleHeroImageErrored() {
       >
         <div
           v-if="!uiStore.previewMode"
-          class="bg-image relative block h-full w-full select-none overflow-hidden text-left focus:outline-none"
+          class="bg-image-mobile lg:bg-image relative block h-full w-full select-none overflow-hidden text-left focus:outline-none"
         >
           <Motion
             v-if="activeHeroImage"
@@ -497,7 +497,7 @@ function handleHeroImageErrored() {
           >
             <h1 class="drop-shadow-sm">
               <HydrolineTextBold
-                class="h-28 text-slate-600 dark:text-slate-300"
+                class="h-24 lg:h-28 text-slate-600 dark:text-slate-300"
               />
             </h1>
 
@@ -593,5 +593,36 @@ function handleHeroImageErrored() {
     );
   mask-composite: intersect;
   -webkit-mask-composite: destination-in;
+}
+
+.bg-image-mobile {
+  mask: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 1) 40%,
+    rgba(255, 255, 255, 0.25) 70%,
+    transparent 95%
+  );
+  mask-composite: intersect;
+  -webkit-mask-composite: destination-in;
+}
+
+@media (min-width: 1024px) {
+  .lg\:bg-image {
+    mask:
+      linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 1) 40%,
+        rgba(255, 255, 255, 0.25) 70%,
+        transparent 95%
+      ),
+      linear-gradient(
+        to right,
+        transparent 1%,
+        rgba(255, 255, 255, 1) 10% 90%,
+        transparent 99%
+      );
+    mask-composite: intersect;
+    -webkit-mask-composite: destination-in;
+  }
 }
 </style>

@@ -254,7 +254,7 @@ const routerPush = (path: string) => {
               <Motion
                 :key="headerVariant"
                 as="div"
-                class="flex items-center justify-center"
+                class="hidden md:flex items-center justify-center"
                 :initial="{ opacity: 0, filter: 'blur(4px)' }"
                 :animate="{ opacity: 1, filter: 'blur(0px)' }"
                 :exit="{ opacity: 0, filter: 'blur(4px)' }"
@@ -357,6 +357,21 @@ const routerPush = (path: string) => {
             @click="openLogin"
             >登录</UButton
           >
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            class="flex md:hidden h-9 w-9 justify-center items-center rounded-full hover:bg-accented/70 active:bg-accented/70"
+            @click="uiStore.previewMode = !uiStore.previewMode"
+            icon-only
+          >
+            <UIcon
+              name="i-lucide-play"
+              class="h-6 w-6"
+              v-if="!uiStore.previewMode"
+            />
+            <UIcon name="i-lucide-pause" class="h-6 w-6" v-else />
+          </UButton>
           <UTooltip text="消息中心（开发中）">
             <UButton
               disabled

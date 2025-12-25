@@ -18,25 +18,17 @@ const props = withDefaults(
     menuOpen: boolean
     mainNav: NavItem[]
     currentPath: string
-    showBrandHeader?: boolean
     closeOnNavigate?: boolean
     zIndexClass?: string
   }>(),
   {
-    showBrandHeader: true,
     closeOnNavigate: true,
     zIndexClass: 'z-50',
   },
 )
 
-const {
-  menuOpen,
-  mainNav,
-  currentPath,
-  showBrandHeader,
-  closeOnNavigate,
-  zIndexClass,
-} = toRefs(props)
+const { menuOpen, mainNav, currentPath, closeOnNavigate, zIndexClass } =
+  toRefs(props)
 
 const router = useRouter()
 
@@ -108,29 +100,7 @@ const handleNavigate = () => {
       class="fixed inset-y-0 left-0 w-72 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:bg-slate-950/95 lg:hidden"
       :class="[zIndexClass]"
     >
-      <div class="mb-6 flex items-center justify-between">
-        <div v-if="showBrandHeader" class="flex items-center gap-2">
-          <HydrolineSvg class="h-6 text-primary-500" />
-          <span class="font-bold">HydCraft</span>
-        </div>
-        <div v-else class="flex-1"></div>
-        <Motion
-          as="div"
-          :while-tap="{ scale: 0.9, rotate: -8 }"
-          :while-hover="{ scale: 1.08 }"
-          :transition="{ type: 'spring', stiffness: 420, damping: 30 }"
-          class="flex"
-        >
-          <UButton
-            icon="i-lucide-x"
-            variant="ghost"
-            size="xs"
-            class="flex justify-center items-center h-9 w-9"
-            @click="handleClose"
-          />
-        </Motion>
-      </div>
-      <nav>
+      <nav class="mt-10">
         <AnimatePresence
           name="mobile-sidebar-link"
           as="div"
