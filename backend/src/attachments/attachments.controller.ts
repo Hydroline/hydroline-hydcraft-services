@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -9,14 +10,13 @@ import {
   Query,
   Req,
   Res,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
   NotFoundException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response, Request } from 'express';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { AttachmentsService } from './attachments.service';
 import { QueryAttachmentsDto } from './dto/query-attachments.dto';
 import { CreateAttachmentDto } from './dto/create-attachment.dto';
@@ -30,9 +30,7 @@ import { UpdateFolderDto } from './dto/update-folder.dto';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import { GenerateShareTokenDto } from './dto/generate-share-token.dto';
-import type { StoredUploadedFile } from './uploaded-file.interface';
-
-const multer = require('multer');
+import { parseSingleFileMultipart } from '../lib/multipart/parse-single-file-multipart';
 
 @ApiTags('附件管理')
 @Controller('attachments')
@@ -51,20 +49,39 @@ export class AttachmentsController {
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.ASSETS_MANAGE_ATTACHMENTS)
   @Post()
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: multer.memoryStorage(),
-      limits: { fileSize: 64 * 1024 * 1024 },
-    }),
-  )
   @ApiBearerAuth()
   @ApiOperation({ summary: '上传附件' })
-  async upload(
-    @Req() req: Request,
-    @UploadedFile() file: StoredUploadedFile,
-    @Body() body: CreateAttachmentDto,
-  ) {
-    return this.attachmentsService.uploadAttachment(req.user!.id, file, body);
+  async upload(@Req() req: Request) {
+    const { fields, file } = await parseSingleFileMultipart(req, {
+      fileFieldName: 'file',
+      maxFileSizeBytes: 64 * 1024 * 1024,
+    });
+
+    const dto = plainToInstance(CreateAttachmentDto, fields, {
+      enableImplicitConversion: false,
+    });
+    const errors = await validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      forbidUnknownValues: true,
+    });
+    if (errors.length > 0) {
+      const first = errors[0];
+      const message =
+        (first.constraints && Object.values(first.constraints)[0]) ||
+        'Invalid request';
+      throw new BadRequestException(message);
+    }
+
+    return this.attachmentsService.uploadAttachmentStream(
+      req.user!.id,
+      {
+        originalName: file.filename,
+        mimeType: file.mimeType,
+        stream: file.stream,
+      },
+      dto,
+    );
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)

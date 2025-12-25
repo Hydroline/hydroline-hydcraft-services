@@ -8,16 +8,14 @@ import {
   Post,
   Query,
   Req,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '../auth/auth.guard';
 import { OptionalAuthGuard } from '../auth/optional-auth.guard';
 import { CompanyService } from './company.service';
+import { parseSingleFileMultipart } from '../lib/multipart/parse-single-file-multipart';
 import {
   CompanyDirectoryQueryDto,
   CompanyResolveDto,
@@ -36,9 +34,6 @@ import {
   CreateCompanyApplicationDto,
   UpdateCompanyProfileDto,
 } from './dto/company.dto';
-import type { StoredUploadedFile } from '../attachments/uploaded-file.interface';
-
-const multer = require('multer');
 
 @ApiTags('公司系统')
 @Controller('companies')
@@ -243,21 +238,19 @@ export class CompanyController {
 
   @Patch(':id/logo')
   @UseGuards(AuthGuard)
-  @UseInterceptors(
-    FileInterceptor('logo', {
-      storage: multer.memoryStorage(),
-      limits: { fileSize: 10 * 1024 * 1024 },
-    }),
-  )
   @ApiBearerAuth()
   @ApiOperation({ summary: '上传公司 Logo' })
-  async uploadLogo(
-    @Param('id') id: string,
-    @UploadedFile() file: StoredUploadedFile,
-    @Req() req: Request,
-  ) {
+  async uploadLogo(@Param('id') id: string, @Req() req: Request) {
     const userId = this.requireUserId(req);
-    return this.companyService.updateCompanyLogo(id, userId, file);
+    const { file } = await parseSingleFileMultipart(req, {
+      fileFieldName: 'logo',
+      maxFileSizeBytes: 10 * 1024 * 1024,
+    });
+    return this.companyService.updateCompanyLogoStream(id, userId, {
+      originalName: file.filename,
+      mimeType: file.mimeType,
+      stream: file.stream,
+    });
   }
 
   @Patch(':id/logo/attachment')

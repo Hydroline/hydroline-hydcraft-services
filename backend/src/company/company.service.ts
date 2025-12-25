@@ -48,7 +48,7 @@ import {
   DEFAULT_COMPANY_WORKFLOW_DEFINITION,
 } from './company.constants';
 import { AttachmentsService } from '../attachments/attachments.service';
-import { buildPublicUrl } from '../lib/shared/url';
+import type { UploadedStreamFile } from '../attachments/attachments.service';
 import type { StoredUploadedFile } from '../attachments/uploaded-file.interface';
 import { ConfigService } from '../config/config.service';
 import {
@@ -421,6 +421,13 @@ export class CompanyService implements OnModuleInit {
       },
     });
 
+    const legalRepAvatarUrlMap =
+      await this.attachmentsService.resolvePublicUrlsByIds(
+        companies.map(
+          (company) => company.legalRepresentative?.avatarAttachmentId,
+        ),
+      );
+
     return companies.map((company) => ({
       id: company.id,
       name: company.name,
@@ -441,9 +448,9 @@ export class CompanyService implements OnModuleInit {
             displayName:
               company.legalRepresentative.profile?.displayName ?? null,
             avatarUrl: company.legalRepresentative.avatarAttachmentId
-              ? buildPublicUrl(
-                  `/attachments/public/${company.legalRepresentative.avatarAttachmentId}`,
-                )
+              ? (legalRepAvatarUrlMap.get(
+                  company.legalRepresentative.avatarAttachmentId,
+                ) ?? null)
               : null,
           }
         : null,
@@ -568,8 +575,8 @@ export class CompanyService implements OnModuleInit {
     const stats = this.calculateDashboardStats(companies);
     return {
       stats,
-      companies: companies.map((company) =>
-        this.serializeCompany(company, userId),
+      companies: await Promise.all(
+        companies.map((company) => this.serializeCompany(company, userId)),
       ),
     };
   }
@@ -611,7 +618,9 @@ export class CompanyService implements OnModuleInit {
       page,
       pageSize,
       pageCount: Math.max(Math.ceil(total / pageSize), 1),
-      items: items.map((company) => this.serializeCompany(company)),
+      items: await Promise.all(
+        items.map((company) => this.serializeCompany(company)),
+      ),
     };
   }
 
@@ -628,7 +637,9 @@ export class CompanyService implements OnModuleInit {
       },
       include: companyInclude,
     });
-    return companies.map((company) => this.serializeCompany(company));
+    return Promise.all(
+      companies.map((company) => this.serializeCompany(company)),
+    );
   }
 
   async getCompanyDetail(id: string, viewerId?: string | null) {
@@ -1187,6 +1198,55 @@ export class CompanyService implements OnModuleInit {
     return this.serializeCompany(updated, userId);
   }
 
+  async updateCompanyLogoStream(
+    companyId: string,
+    userId: string,
+    file: UploadedStreamFile,
+  ) {
+    await this.assertMemberPermission(companyId, userId, 'EDIT_COMPANY');
+    if (!file) {
+      throw new BadRequestException('Logo file is required');
+    }
+    const company = await this.findCompanyOrThrow(companyId);
+
+    const attachment = await this.attachmentsService.uploadAttachmentStream(
+      userId,
+      file,
+      {
+        name: `${company.slug}-logo`,
+        isPublic: true,
+        metadata: {
+          scope: 'company-logo',
+          companyId,
+        },
+      },
+    );
+
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        logoAttachmentId: attachment.id,
+        updatedById: userId,
+      },
+      include: companyInclude,
+    });
+
+    if (
+      company.logoAttachmentId &&
+      company.logoAttachmentId !== attachment.id
+    ) {
+      try {
+        await this.attachmentsService.deleteAttachment(
+          company.logoAttachmentId,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to clean old logo: ${error}`);
+      }
+    }
+
+    return this.serializeCompany(updated, userId);
+  }
+
   async updateCompanyLogoAttachment(
     companyId: string,
     userId: string,
@@ -1424,7 +1484,9 @@ export class CompanyService implements OnModuleInit {
       total,
       page,
       pageSize,
-      items: items.map((company) => this.serializeCompany(company)),
+      items: await Promise.all(
+        items.map((company) => this.serializeCompany(company)),
+      ),
     };
   }
 
@@ -1953,7 +2015,10 @@ export class CompanyService implements OnModuleInit {
     };
   }
 
-  private serializeCompany(company: CompanyWithRelations, viewerId?: string) {
+  private async serializeCompany(
+    company: CompanyWithRelations,
+    viewerId?: string,
+  ) {
     const settings = this.parseCompanySettings(company.settings ?? null);
     const viewerMember = viewerId
       ? company.members.find(
@@ -1977,6 +2042,18 @@ export class CompanyService implements OnModuleInit {
       memberPermissions.includes('VIEW_DASHBOARD') ||
       memberPermissions.includes('MANAGE_MEMBERS') ||
       memberPermissions.includes('EDIT_COMPANY');
+
+    const attachmentUrlMap =
+      await this.attachmentsService.resolvePublicUrlsByIds([
+        company.logoAttachmentId,
+        company.legalRepresentative?.avatarAttachmentId,
+        ...company.members.map((member) => member.user?.avatarAttachmentId),
+      ]);
+
+    const logoUrl = company.logoAttachmentId
+      ? (attachmentUrlMap.get(company.logoAttachmentId) ?? null)
+      : null;
+
     return {
       id: company.id,
       name: company.name,
@@ -1984,9 +2061,7 @@ export class CompanyService implements OnModuleInit {
       summary: company.summary,
       description: company.description,
       logoAttachmentId: company.logoAttachmentId,
-      logoUrl: company.logoAttachmentId
-        ? buildPublicUrl(`/attachments/public/${company.logoAttachmentId}`)
-        : null,
+      logoUrl,
       status: company.status,
       visibility: company.visibility,
       category: company.category,
@@ -2022,9 +2097,7 @@ export class CompanyService implements OnModuleInit {
               email: member.user.email,
               displayName: member.user.profile?.displayName ?? null,
               avatarUrl: member.user.avatarAttachmentId
-                ? buildPublicUrl(
-                    `/attachments/public/${member.user.avatarAttachmentId}`,
-                  )
+                ? (attachmentUrlMap.get(member.user.avatarAttachmentId) ?? null)
                 : null,
             }
           : null,

@@ -7,7 +7,6 @@ import {
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '../config/config.service';
 import { AttachmentsService } from '../attachments/attachments.service';
-import { buildPublicUrl } from '../lib/shared/url';
 import {
   DEFAULT_PORTAL_HOME_CONFIG,
   PORTAL_CARD_REGISTRY,
@@ -412,9 +411,16 @@ export class PortalConfigService {
         );
         return null;
       }
+
+      const imageUrl = await this.attachmentsService.resolvePublicUrl(
+        attachment.id,
+      );
+      if (!imageUrl) {
+        return null;
+      }
       return {
         id: item.id,
-        imageUrl: buildPublicUrl(`/attachments/public/${attachment.id}`),
+        imageUrl,
         description: item.description ?? null,
         title: item.title ?? null,
         subtitle: item.subtitle ?? null,

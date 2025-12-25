@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,9 +8,7 @@ import {
   Post,
   Query,
   Req,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -40,9 +37,9 @@ import { ResetUserPasswordDto } from '../dto/reset-user-password.dto';
 import { UpdateAuthmeBindingAdminDto } from '../dto/update-authme-binding-admin.dto';
 import { AssignPermissionLabelsDto } from '../dto/assign-permission-labels.dto';
 import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from '../../attachments/attachments.service';
 import { enrichUserAvatar } from '../helpers/user-avatar.helper';
+import { parseSingleFileMultipart } from '../../lib/multipart/parse-single-file-multipart';
 import {
   AddPhoneContactDto,
   UpdatePhoneContactDto,
@@ -175,16 +172,11 @@ export class UsersController {
     },
   })
   @RequirePermissions(PERMISSIONS.AUTH_MANAGE_USERS)
-  @UseInterceptors(
-    FileInterceptor('avatar', { limits: { fileSize: 8 * 1024 * 1024 } }),
-  )
-  async updateUserAvatar(
-    @Param('userId') userId: string,
-    @UploadedFile() file: any,
-  ) {
-    if (!file) {
-      throw new BadRequestException('Missing avatar file');
-    }
+  async updateUserAvatar(@Param('userId') userId: string, @Req() req: Request) {
+    const { file } = await parseSingleFileMultipart(req, {
+      fileFieldName: 'avatar',
+      maxFileSizeBytes: 8 * 1024 * 1024,
+    });
 
     const existingUser = await this.usersService.getSessionUser(userId);
     const previousAvatarAttachmentId =
@@ -193,11 +185,15 @@ export class UsersController {
     const avatarFolder =
       await this.attachmentsService.resolveUserAvatarFolder(userId);
 
-    const attachment = await this.attachmentsService.uploadAttachment(
+    const attachment = await this.attachmentsService.uploadAttachmentStream(
       userId,
-      file,
       {
-        name: file.originalname,
+        originalName: file.filename,
+        mimeType: file.mimeType,
+        stream: file.stream,
+      },
+      {
+        name: file.filename,
         folderId: avatarFolder?.id ?? null,
         description: 'User avatar',
         isPublic: true,

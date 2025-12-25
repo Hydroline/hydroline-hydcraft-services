@@ -154,7 +154,7 @@ import type {
   PreferredRailCurve,
 } from '../../types/railway-graph.types';
 import { MtrRouteFinder } from '../../../../lib/mtr/mtr-route-finder';
-import { buildPublicUrl } from '../../../../lib/shared/url';
+import { AttachmentsService } from '../../../../attachments/attachments.service';
 
 @Injectable()
 export class TransportationRailwayRouteDetailService {
@@ -175,6 +175,7 @@ export class TransportationRailwayRouteDetailService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly beaconPool: HydrolineBeaconPoolService,
+    private readonly attachmentsService: AttachmentsService,
   ) {}
 
   private buildStationBoundsCacheKey(
@@ -895,8 +896,8 @@ export class TransportationRailwayRouteDetailService {
           if (!Array.isArray(raw)) continue;
           const points = raw
             .map((entry) => ({
-              x: Number((entry as any)?.x),
-              z: Number((entry as any)?.z),
+              x: Number(entry?.x),
+              z: Number(entry?.z),
             }))
             .filter(
               (point): point is { x: number; z: number } =>
@@ -1978,8 +1979,8 @@ export class TransportationRailwayRouteDetailService {
           if (Array.isArray(first)) {
             const points = first
               .map((entry) => ({
-                x: Number((entry as any)?.x),
-                z: Number((entry as any)?.z),
+                x: Number(entry?.x),
+                z: Number(entry?.z),
               }))
               .filter(
                 (point): point is { x: number; z: number } =>
@@ -3391,13 +3392,17 @@ export class TransportationRailwayRouteDetailService {
         include: { system: true },
       });
 
+    const logoUrlMap = await this.attachmentsService.resolvePublicUrlsByIds(
+      systemRoutes.map((item) => item.system.logoAttachmentId),
+    );
+
     return systemRoutes.map((item) => ({
       id: item.system.id,
       name: item.system.name,
       englishName: item.system.englishName ?? null,
       logoAttachmentId: item.system.logoAttachmentId ?? null,
       logoUrl: item.system.logoAttachmentId
-        ? buildPublicUrl(`/attachments/public/${item.system.logoAttachmentId}`)
+        ? (logoUrlMap.get(item.system.logoAttachmentId) ?? null)
         : null,
     }));
   }

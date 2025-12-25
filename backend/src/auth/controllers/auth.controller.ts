@@ -11,9 +11,6 @@ import {
   Res,
   UnauthorizedException,
   UseGuards,
-  UploadedFile,
-  UseInterceptors,
-  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -32,10 +29,9 @@ import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { AuthGuard } from '../auth.guard';
 import { buildRequestContext } from '../helpers/request-context.helper';
 import { IpLocationService } from '../../lib/ip2region/ip-location.service';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from '../../attachments/attachments.service';
 import { enrichUserAvatar } from '../helpers/user-avatar.helper';
-import { UpdateAvatarResponseDto } from '../dto/update-avatar.dto';
+import { parseSingleFileMultipart } from '../../lib/multipart/parse-single-file-multipart';
 import { ChangePasswordWithCodeDto } from '../dto/change-password-with-code.dto';
 import { CreateMinecraftProfileDto } from '../dto/create-minecraft-profile.dto';
 import { UpdateMinecraftProfileDto } from '../dto/update-minecraft-profile.dto';
@@ -44,14 +40,7 @@ import {
   AddPhoneContactDto,
   UpdatePhoneContactDto,
 } from '../dto/phone-contact.dto';
-import {
-  IsBoolean,
-  IsEmail,
-  IsOptional,
-  IsString,
-  Matches,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsString, Matches, MinLength } from 'class-validator';
 
 class PublicForgotPasswordDto {
   @IsEmail({}, { message: 'Email must be an email' })
@@ -452,7 +441,7 @@ export class AuthController {
     if (!userAny || typeof userAny !== 'object') {
       return { user: null };
     }
-    const sessionToken = req.sessionToken as string | undefined;
+    const sessionToken = req.sessionToken;
     const cacheKey = sessionToken
       ? this.buildSessionResponseCacheKey(sessionToken)
       : null;
@@ -792,11 +781,6 @@ export class AuthController {
 
   @Patch('me/avatar')
   @UseGuards(AuthGuard)
-  @UseInterceptors(
-    FileInterceptor('avatar', {
-      limits: { fileSize: 8 * 1024 * 1024 },
-    }),
-  )
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -812,17 +796,16 @@ export class AuthController {
     },
   })
   @ApiOperation({ summary: '更新当前用户头像（上传附件）' })
-  async updateCurrentUserAvatar(
-    @Req() req: Request,
-    @UploadedFile() file: any,
-  ): Promise<{ user: any }> {
+  async updateCurrentUserAvatar(@Req() req: Request): Promise<{ user: any }> {
     const userId = req.user?.id;
     if (!userId) {
       throw new UnauthorizedException('Invalid session');
     }
-    if (!file) {
-      throw new BadRequestException('Missing avatar file');
-    }
+
+    const { file } = await parseSingleFileMultipart(req, {
+      fileFieldName: 'avatar',
+      maxFileSizeBytes: 8 * 1024 * 1024,
+    });
 
     const existingUser = await this.usersService.getSessionUser(userId);
     const previousAvatarAttachmentId =
@@ -831,11 +814,15 @@ export class AuthController {
     const avatarFolder =
       await this.attachmentsService.resolveUserAvatarFolder(userId);
 
-    const attachment = await this.attachmentsService.uploadAttachment(
+    const attachment = await this.attachmentsService.uploadAttachmentStream(
       userId,
-      file,
       {
-        name: file.originalname,
+        originalName: file.filename,
+        mimeType: file.mimeType,
+        stream: file.stream,
+      },
+      {
+        name: file.filename,
         folderId: avatarFolder?.id ?? null,
         description: 'User avatar',
         isPublic: true,

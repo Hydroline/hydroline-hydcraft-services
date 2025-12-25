@@ -22,9 +22,14 @@
     "db:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "seed:portal-home": "ts-node --transpile-only scripts/seed-portal-home.ts"
+    "seed:portal-home": "ts-node --transpile-only scripts/seed-portal-home.ts",
+    "attachments:migrate:local-to-s3": "ts-node --transpile-only scripts/attachments-migrate-local-to-s3.ts",
+    "attachments:migrate:s3-to-local": "ts-node --transpile-only scripts/attachments-migrate-s3-to-local.ts",
+    "attachments:test-s3": "ts-node --transpile-only scripts/test-s3-connection.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.958.0",
+    "@aws-sdk/lib-storage": "^3.958.0",
     "@nestjs/cache-manager": "^3.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
@@ -34,6 +39,7 @@
     "@prisma/client": "^6.18.0",
     "bcryptjs": "^3.0.2",
     "better-auth": "^1.3.34",
+    "busboy": "^1.6.0",
     "cache-manager": "^7.2.5",
     "cache-manager-redis-yet": "^5.1.5",
     "class-transformer": "^0.5.1",
@@ -62,6 +68,7 @@
     "@swc/cli": "^0.6.0",
     "@swc/core": "^1.10.7",
     "@types/bcryptjs": "^3.0.0",
+    "@types/busboy": "^1.5.4",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.10",

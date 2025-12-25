@@ -11,8 +11,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AttachmentsService } from '../../../attachments/attachments.service';
-import type { StoredUploadedFile } from '../../../attachments/uploaded-file.interface';
-import { buildPublicUrl } from '../../../lib/shared/url';
+import type { UploadedStreamFile } from '../../../attachments/attachments.service';
 import {
   RailwaySystemCreateDto,
   RailwaySystemListQueryDto,
@@ -111,6 +110,10 @@ export class TransportationRailwaySystemService {
       PERMISSIONS.TRANSPORTATION_RAILWAY_SYSTEM_MANAGE,
     );
 
+    const logoUrlMap = await this.attachmentsService.resolvePublicUrlsByIds(
+      items.map((item) => item.logoAttachmentId),
+    );
+
     return {
       total,
       page,
@@ -127,7 +130,7 @@ export class TransportationRailwaySystemService {
           englishName: item.englishName ?? null,
           logoAttachmentId: item.logoAttachmentId ?? null,
           logoUrl: item.logoAttachmentId
-            ? buildPublicUrl(`/attachments/public/${item.logoAttachmentId}`)
+            ? (logoUrlMap.get(item.logoAttachmentId) ?? null)
             : null,
           serverId: item.serverId,
           dimensionContext: item.dimensionContext ?? null,
@@ -165,6 +168,10 @@ export class TransportationRailwaySystemService {
       .map((item) => this.normalizeRoute(item.route, serverNameMap))
       .filter((route): route is RailwaySystemRouteSummary => Boolean(route));
 
+    const logoUrl = await this.attachmentsService.resolvePublicUrl(
+      system.logoAttachmentId ?? null,
+    );
+
     const bindings = await this.bindingService.getBindings({
       entityType: 'SYSTEM',
       entityId: system.id,
@@ -195,9 +202,7 @@ export class TransportationRailwaySystemService {
       name: system.name,
       englishName: system.englishName ?? null,
       logoAttachmentId: system.logoAttachmentId ?? null,
-      logoUrl: system.logoAttachmentId
-        ? buildPublicUrl(`/attachments/public/${system.logoAttachmentId}`)
-        : null,
+      logoUrl,
       serverId: system.serverId,
       server: {
         id: system.serverId,
@@ -265,14 +270,16 @@ export class TransportationRailwaySystemService {
       .map((item) => this.normalizeRoute(item.route, serverNameMap))
       .filter((route): route is RailwaySystemRouteSummary => Boolean(route));
 
+    const logoUrl = await this.attachmentsService.resolvePublicUrl(
+      system.logoAttachmentId ?? null,
+    );
+
     return {
       id: system.id,
       name: system.name,
       englishName: system.englishName ?? null,
       logoAttachmentId: system.logoAttachmentId ?? null,
-      logoUrl: system.logoAttachmentId
-        ? buildPublicUrl(`/attachments/public/${system.logoAttachmentId}`)
-        : null,
+      logoUrl,
       serverId: system.serverId,
       dimensionContext: system.dimensionContext ?? null,
       routes,
@@ -365,10 +372,11 @@ export class TransportationRailwaySystemService {
     return detail;
   }
 
-  async updateSystemLogo(user: any, id: string, file: StoredUploadedFile) {
-    if (!file) {
-      throw new BadRequestException('Logo file is required');
-    }
+  async updateSystemLogoStream(
+    user: any,
+    id: string,
+    file: UploadedStreamFile,
+  ) {
     const system = await this.prisma.transportationRailwaySystem.findUnique({
       where: { id },
     });
@@ -404,7 +412,7 @@ export class TransportationRailwaySystemService {
       });
     }
 
-    const attachment = await this.attachmentsService.uploadAttachment(
+    const attachment = await this.attachmentsService.uploadAttachmentStream(
       user.id,
       file,
       {
@@ -439,9 +447,9 @@ export class TransportationRailwaySystemService {
     return {
       id: updated.id,
       logoAttachmentId: updated.logoAttachmentId ?? null,
-      logoUrl: updated.logoAttachmentId
-        ? buildPublicUrl(`/attachments/public/${updated.logoAttachmentId}`)
-        : null,
+      logoUrl: await this.attachmentsService.resolvePublicUrl(
+        updated.logoAttachmentId ?? null,
+      ),
     };
   }
 
@@ -655,7 +663,7 @@ export class TransportationRailwaySystemService {
 
       let effect = 'ALLOW';
       if (p?.metadata && typeof p.metadata === 'object') {
-        const meta = p.metadata as any;
+        const meta = p.metadata;
         if (meta.effect?.toUpperCase() === 'DENY') {
           effect = 'DENY';
         }

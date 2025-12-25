@@ -410,8 +410,8 @@ export class TransportationRailwayListService {
                   if (!Array.isArray(raw)) continue;
                   const points = raw
                     .map((entry) => ({
-                      x: Number((entry as any)?.x),
-                      z: Number((entry as any)?.z),
+                      x: Number(entry?.x),
+                      z: Number(entry?.z),
                     }))
                     .filter(
                       (point): point is { x: number; z: number } =>
@@ -665,8 +665,8 @@ export class TransportationRailwayListService {
               if (!Array.isArray(raw)) continue;
               const points = raw
                 .map((entry) => ({
-                  x: Number((entry as any)?.x),
-                  z: Number((entry as any)?.z),
+                  x: Number(entry?.x),
+                  z: Number(entry?.z),
                 }))
                 .filter(
                   (point): point is { x: number; z: number } =>

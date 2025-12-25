@@ -9,24 +9,19 @@ import {
   Post,
   Query,
   Req,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { AuthGuard } from '../../../auth/auth.guard';
 import { OptionalAuthGuard } from '../../../auth/optional-auth.guard';
-import type { StoredUploadedFile } from '../../../attachments/uploaded-file.interface';
 import { TransportationRailwaySystemService } from '../services/railway-system.service';
 import {
   RailwaySystemCreateDto,
   RailwaySystemListQueryDto,
   RailwaySystemUpdateDto,
 } from '../../dto/railway-system.dto';
-
-const multer = require('multer');
+import { parseSingleFileMultipart } from '../../../lib/multipart/parse-single-file-multipart';
 
 @ApiTags('交通系统 - 铁路线路系统')
 @Controller('transportation/railway/systems')
@@ -87,21 +82,19 @@ export class TransportationRailwaySystemController {
 
   @Patch(':id/logo')
   @UseGuards(AuthGuard)
-  @UseInterceptors(
-    FileInterceptor('logo', {
-      storage: multer.memoryStorage(),
-      limits: { fileSize: 10 * 1024 * 1024 },
-    }),
-  )
   @ApiBearerAuth()
   @ApiOperation({ summary: '上传线路系统 Logo' })
-  async uploadLogo(
-    @Param('id') id: string,
-    @UploadedFile() file: StoredUploadedFile,
-    @Req() req: Request,
-  ) {
+  async uploadLogo(@Param('id') id: string, @Req() req: Request) {
     const user = this.requireUser(req);
-    return this.railwaySystemService.updateSystemLogo(user, id, file);
+    const { file } = await parseSingleFileMultipart(req, {
+      fileFieldName: 'logo',
+      maxFileSizeBytes: 10 * 1024 * 1024,
+    });
+    return this.railwaySystemService.updateSystemLogoStream(user, id, {
+      originalName: file.filename,
+      mimeType: file.mimeType,
+      stream: file.stream,
+    });
   }
 
   @Delete(':id')

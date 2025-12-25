@@ -8,7 +8,7 @@ This backend application serves as the data and logic hub for the entire platfor
 
 The system is designed around a modular architecture. Key capabilities include a comprehensive **Authentication System** that bridges web accounts with Minecraft player identities (AuthMe/OAuth). The **Transportation Module** manages railway data and snapshots, while the **Company Module** handles organization structures and assets.
 
-It also features deep **Minecraft Integration**, capable of monitoring server status, synchronizing chat in real-time, and managing player permissions via LuckPerms integration. The **Attachments Service** handles file uploads to S3-compatible storage, ensuring assets like images and documents are securely managed.
+It also features deep **Minecraft Integration**, capable of monitoring server status, synchronizing chat in real-time, and managing player permissions via LuckPerms integration. The **Attachments Service** handles file uploads to local filesystem or S3-compatible storage (e.g. Tencent COS), configurable via environment variables.
 
 ## Technology Stack
 

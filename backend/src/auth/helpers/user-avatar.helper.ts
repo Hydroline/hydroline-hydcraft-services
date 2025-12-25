@@ -1,5 +1,4 @@
 import { AttachmentsService } from '../../attachments/attachments.service';
-import { buildPublicUrl } from '../../lib/shared/url';
 
 type MaybeUser = Record<string, unknown> & {
   avatarAttachmentId?: string | null;
@@ -48,10 +47,9 @@ export async function enrichUserAvatar<T extends MaybeUser>(
     }
   }
 
-  const avatarUrl =
-    isPublic && effectiveAttachmentId
-      ? buildPublicUrl(`/attachments/public/${effectiveAttachmentId}`)
-      : null;
+  const avatarUrl = isPublic
+    ? await attachmentsService.resolvePublicUrl(effectiveAttachmentId)
+    : null;
 
   const profile = user?.profile
     ? { ...user.profile, avatarUrl }

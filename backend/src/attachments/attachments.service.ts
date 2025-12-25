@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,10 +12,13 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import { promises as fs, createReadStream } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { dirname, extname, join, resolve, isAbsolute } from 'node:path';
+import { extname, join } from 'node:path';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { PrismaService } from '../prisma/prisma.service';
+import { buildPublicUrl } from '../lib/shared/url';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
 import { CreateAttachmentDto } from './dto/create-attachment.dto';
@@ -24,6 +28,10 @@ import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import { GenerateShareTokenDto } from './dto/generate-share-token.dto';
 import type { StoredUploadedFile } from './uploaded-file.interface';
+import { ATTACHMENT_STORAGE } from './storage/attachment-storage.token';
+import type { AttachmentStorage } from './storage/attachment-storage.interface';
+import { readAttachmentsStorageConfig } from './storage/attachments-storage.config';
+import { LocalAttachmentStorage } from './storage/local-attachment.storage';
 
 const ATTACHMENT_RELATIONS = {
   folder: {
@@ -89,18 +97,137 @@ type AttachmentSummary = {
   publicUrl: string | null;
 };
 
+export type UploadedStreamFile = {
+  originalName: string;
+  mimeType: string;
+  stream: Readable;
+};
+
 @Injectable()
 export class AttachmentsService implements OnModuleInit {
   private readonly logger = new Logger(AttachmentsService.name);
-  private readonly uploadRoot: string;
   private readonly attachmentIncludes = ATTACHMENT_RELATIONS;
+  private readonly storageConfig = readAttachmentsStorageConfig();
+  private readonly isLocalStorage: boolean;
 
-  constructor(private readonly prisma: PrismaService) {
-    this.uploadRoot = this.resolveUploadRoot();
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(ATTACHMENT_STORAGE) private readonly storage: AttachmentStorage,
+  ) {
+    this.isLocalStorage = storage instanceof LocalAttachmentStorage;
   }
 
   async onModuleInit() {
-    await fs.mkdir(this.uploadRoot, { recursive: true });
+    if (this.isLocalStorage) {
+      await fs.mkdir(LocalAttachmentStorage.resolveRootDir(), {
+        recursive: true,
+      });
+    }
+  }
+
+  private buildDirectUrlForKey(storageKey: string): string | null {
+    if (this.storageConfig.deliveryMode === 'proxy') {
+      return null;
+    }
+
+    const configuredBase = this.storageConfig.publicBaseUrl?.trim();
+    if (configuredBase) {
+      return new URL(
+        storageKey.replace(/^\/+/, ''),
+        configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`,
+      ).toString();
+    }
+
+    const fromStorage = this.storage.getPublicUrl?.(storageKey) ?? null;
+    return fromStorage;
+  }
+
+  private buildProxyUrlForAttachmentId(attachmentId: string): string {
+    return buildPublicUrl(`/attachments/public/${attachmentId}`);
+  }
+
+  async resolvePublicUrl(
+    attachmentId: string | null | undefined,
+  ): Promise<string | null> {
+    if (!attachmentId) {
+      return null;
+    }
+
+    const attachment = await this.prisma.attachment.findUnique({
+      where: { id: attachmentId },
+      select: {
+        id: true,
+        storageKey: true,
+        deletedAt: true,
+        isPublic: true,
+      },
+    });
+
+    if (!attachment || attachment.deletedAt || !attachment.isPublic) {
+      return null;
+    }
+
+    const exists = await this.storage.headObject(attachment.storageKey);
+    if (!exists.exists) {
+      return null;
+    }
+
+    const direct = this.buildDirectUrlForKey(attachment.storageKey);
+    if (direct) {
+      return direct;
+    }
+    return this.buildProxyUrlForAttachmentId(attachment.id);
+  }
+
+  async resolvePublicUrlsByIds(
+    attachmentIds: Array<string | null | undefined>,
+  ): Promise<Map<string, string>> {
+    const ids = Array.from(
+      new Set(
+        attachmentIds.filter(
+          (id): id is string => typeof id === 'string' && id.length > 0,
+        ),
+      ),
+    );
+    const result = new Map<string, string>();
+    if (ids.length === 0) {
+      return result;
+    }
+
+    const records = await this.prisma.attachment.findMany({
+      where: {
+        id: { in: ids },
+        deletedAt: null,
+        isPublic: true,
+      },
+      select: { id: true, storageKey: true },
+    });
+
+    const concurrency = 10;
+    let index = 0;
+    const workers = Array.from({
+      length: Math.min(concurrency, records.length),
+    }).map(async () => {
+      while (index < records.length) {
+        const current = records[index++];
+        try {
+          const head = await this.storage.headObject(current.storageKey);
+          if (!head.exists) {
+            continue;
+          }
+          const direct = this.buildDirectUrlForKey(current.storageKey);
+          result.set(
+            current.id,
+            direct ?? this.buildProxyUrlForAttachmentId(current.id),
+          );
+        } catch {
+          // ignore resolution failure
+        }
+      }
+    });
+
+    await Promise.all(workers);
+    return result;
   }
 
   async listFolders() {
@@ -360,7 +487,9 @@ export class AttachmentsService implements OnModuleInit {
 
     const pageCount = Math.max(Math.ceil(total / pageSize), 1);
     return {
-      items: attachments.map((item) => this.serializeAttachment(item)),
+      items: await Promise.all(
+        attachments.map((item) => this.serializeAttachmentAsync(item)),
+      ),
       pagination: {
         total,
         page,
@@ -411,7 +540,9 @@ export class AttachmentsService implements OnModuleInit {
       take,
       include: this.attachmentIncludes,
     });
-    return attachments.map((item) => this.serializeAttachment(item));
+    return await Promise.all(
+      attachments.map((item) => this.serializeAttachmentAsync(item)),
+    );
   }
 
   async searchUserAttachments(
@@ -459,13 +590,70 @@ export class AttachmentsService implements OnModuleInit {
       take,
       include: this.attachmentIncludes,
     });
-    return attachments.map((item) => this.serializeAttachment(item));
+    return await Promise.all(
+      attachments.map((item) => this.serializeAttachmentAsync(item)),
+    );
   }
 
   async uploadAttachment(
     userId: string,
     file: StoredUploadedFile | undefined,
     dto: CreateAttachmentDto,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
+    const streamFile: UploadedStreamFile = {
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      stream: Readable.from(file.buffer),
+    };
+
+    return this.uploadAttachmentStream(userId, streamFile, dto, {
+      contentLength: file.size,
+    });
+  }
+
+  private async putObjectWithHash(params: {
+    key: string;
+    mimeType: string;
+    stream: Readable;
+    contentLength?: number;
+  }): Promise<{ hash: string; size: number }> {
+    const hash = createHash('sha256');
+    let size = 0;
+
+    const hashing = new Transform({
+      transform: (chunk, _encoding, callback) => {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        size += buffer.length;
+        hash.update(buffer);
+        callback(null, buffer);
+      },
+    });
+
+    const putPromise = this.storage.putObject({
+      key: params.key,
+      contentType: params.mimeType,
+      contentLength: params.contentLength,
+      body: hashing,
+    });
+
+    await pipeline(params.stream, hashing);
+    await putPromise;
+
+    return {
+      hash: hash.digest('hex'),
+      size,
+    };
+  }
+
+  async uploadAttachmentStream(
+    userId: string,
+    file: UploadedStreamFile | undefined,
+    dto: CreateAttachmentDto,
+    options?: { contentLength?: number },
   ) {
     if (!file) {
       throw new BadRequestException('File is required');
@@ -524,20 +712,21 @@ export class AttachmentsService implements OnModuleInit {
     );
 
     const normalizedOriginalName =
-      this.normalizeAttachmentName(file.originalname) ||
-      file.originalname ||
+      this.normalizeAttachmentName(file.originalName) ||
+      file.originalName ||
       'attachment';
-    const buffer = file.buffer;
-    const hash = createHash('sha256').update(buffer).digest('hex');
     const ext = extname(normalizedOriginalName) || '';
     const randomName = `${Date.now()}-${randomUUID()}${ext}`;
     const storageKey = folder
       ? join(folder.path, randomName)
       : join('root', randomName);
-    const physicalPath = join(this.uploadRoot, storageKey);
 
-    await fs.mkdir(dirname(physicalPath), { recursive: true });
-    await fs.writeFile(physicalPath, buffer);
+    const stored = await this.putObjectWithHash({
+      key: storageKey.replace(/\\/g, '/'),
+      mimeType: file.mimeType,
+      stream: file.stream,
+      contentLength: options?.contentLength,
+    });
 
     const attachment = await this.prisma.attachment.create({
       data: {
@@ -552,10 +741,10 @@ export class AttachmentsService implements OnModuleInit {
           normalizedOriginalName,
         originalName: normalizedOriginalName,
         fileName: randomName,
-        mimeType: file.mimetype,
-        size: file.size,
+        mimeType: file.mimeType,
+        size: stored.size,
         storageKey: storageKey.replace(/\\/g, '/'),
-        hash,
+        hash: stored.hash,
         isPublic: resolvedVisibility.isPublic,
         visibilityMode: visibilityInput.mode,
         visibilityRoles: visibilityInput.roles,
@@ -577,7 +766,7 @@ export class AttachmentsService implements OnModuleInit {
       },
     });
 
-    return this.serializeAttachment(attachment);
+    return await this.serializeAttachmentAsync(attachment);
   }
 
   async updateAttachment(
@@ -699,7 +888,7 @@ export class AttachmentsService implements OnModuleInit {
       include: this.attachmentIncludes,
     });
 
-    return this.serializeAttachment(updated);
+    return await this.serializeAttachmentAsync(updated);
   }
 
   async deleteAttachment(attachmentId: string) {
@@ -712,9 +901,27 @@ export class AttachmentsService implements OnModuleInit {
     if (attachment.deletedAt) {
       return;
     }
-    await this.prisma.attachment.update({
-      where: { id: attachmentId },
-      data: { deletedAt: new Date() },
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.attachment.update({
+        where: { id: attachmentId },
+        data: { deletedAt: new Date() },
+      });
+
+      await tx.user.updateMany({
+        where: { avatarAttachmentId: attachmentId },
+        data: { avatarAttachmentId: null },
+      });
+
+      await tx.company.updateMany({
+        where: { logoAttachmentId: attachmentId },
+        data: { logoAttachmentId: null },
+      });
+
+      await tx.transportationRailwaySystem.updateMany({
+        where: { logoAttachmentId: attachmentId },
+        data: { logoAttachmentId: null },
+      });
     });
   }
 
@@ -806,7 +1013,7 @@ export class AttachmentsService implements OnModuleInit {
       });
 
       if (existing) {
-        return this.serializeAttachment(existing);
+        return await this.serializeAttachmentAsync(existing);
       }
     } catch (error) {
       if (
@@ -837,9 +1044,13 @@ export class AttachmentsService implements OnModuleInit {
     const storageKey = folder
       ? join(folder.path, randomName)
       : join('seed', randomName);
-    const physicalPath = join(this.uploadRoot, storageKey);
-    await fs.mkdir(dirname(physicalPath), { recursive: true });
-    await fs.writeFile(physicalPath, buffer);
+
+    await this.storage.putObject({
+      key: storageKey.replace(/\\/g, '/'),
+      contentType: this.detectMimeType(ext),
+      contentLength: buffer.length,
+      body: Readable.from(buffer),
+    });
 
     let tags =
       params.tagKeys && params.tagKeys.length > 0
@@ -909,7 +1120,7 @@ export class AttachmentsService implements OnModuleInit {
       },
     });
 
-    return this.serializeAttachment(attachment);
+    return await this.serializeAttachmentAsync(attachment);
   }
 
   private async resolveSystemUser() {
@@ -994,17 +1205,18 @@ export class AttachmentsService implements OnModuleInit {
   }
 
   async openAttachmentStream(attachment: { storageKey: string }) {
-    const filePath = this.getPhysicalPath(attachment.storageKey);
     try {
-      await fs.access(filePath);
-    } catch {
-      throw new NotFoundException('Attachment file missing on disk');
+      const head = await this.storage.headObject(attachment.storageKey);
+      if (!head.exists) {
+        throw new NotFoundException('Attachment file missing in storage');
+      }
+      return await this.storage.getObjectStream(attachment.storageKey);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new NotFoundException('Attachment file missing in storage');
     }
-    return createReadStream(filePath);
-  }
-
-  private getPhysicalPath(storageKey: string) {
-    return join(this.uploadRoot, storageKey);
   }
 
   private serializeAttachment(
@@ -1089,9 +1301,30 @@ export class AttachmentsService implements OnModuleInit {
         name: tag.tag.name,
       })),
       publicUrl: visibilityState.isPublic
-        ? `/attachments/public/${attachment.id}`
+        ? (this.buildDirectUrlForKey(attachment.storageKey) ??
+          this.buildProxyUrlForAttachmentId(attachment.id))
         : null,
     };
+  }
+
+  private async serializeAttachmentAsync(
+    attachment: AttachmentWithRelations,
+  ): Promise<AttachmentSummary> {
+    const summary = this.serializeAttachment(attachment);
+    if (!summary.publicUrl) {
+      return summary;
+    }
+
+    try {
+      const head = await this.storage.headObject(attachment.storageKey);
+      if (!head.exists) {
+        return { ...summary, publicUrl: null };
+      }
+    } catch {
+      return { ...summary, publicUrl: null };
+    }
+
+    return summary;
   }
 
   private normalizeAttachmentName(input: string | null | undefined): string {
@@ -1137,16 +1370,12 @@ export class AttachmentsService implements OnModuleInit {
   }
 
   private async ensurePhysicalDirectory(pathFragment: string) {
-    const dir = join(this.uploadRoot, pathFragment);
-    await fs.mkdir(dir, { recursive: true });
-  }
-
-  private resolveUploadRoot() {
-    const envValue = process.env.ATTACHMENTS_DIR?.trim();
-    if (envValue && envValue.length > 0) {
-      return isAbsolute(envValue) ? envValue : resolve(process.cwd(), envValue);
+    if (!this.isLocalStorage) {
+      return;
     }
-    return resolve(process.cwd(), '..', 'uploads');
+    await (this.storage as LocalAttachmentStorage).ensureDirectory(
+      pathFragment,
+    );
   }
 
   private normalizeStringList(input?: string[]): string[] {

@@ -20,7 +20,6 @@ import { AuthmeLookupService } from '../authme/authme-lookup.service';
 import type { AuthmeUser } from '../authme/authme.interfaces';
 import { LuckpermsService } from '../luckperms/luckperms.service';
 import { LuckpermsLookupService } from '../luckperms/luckperms-lookup.service';
-import { buildPublicUrl } from '../lib/shared/url';
 import { buildPagination } from '../lib/shared/pagination';
 import { normalizeIpAddress } from '../lib/ip2region/ip-normalizer';
 import type { LuckpermsPlayer } from '../luckperms/luckperms.interfaces';
@@ -554,14 +553,9 @@ export class PlayerService {
     let avatarUrl: string | null = null;
     if (user.avatarAttachmentId) {
       try {
-        const attachment = await this.attachmentsService.getAttachmentOrThrow(
+        avatarUrl = await this.attachmentsService.resolvePublicUrl(
           user.avatarAttachmentId,
         );
-        if (attachment.isPublic) {
-          avatarUrl = buildPublicUrl(
-            `/attachments/public/${user.avatarAttachmentId}`,
-          );
-        }
       } catch {
         avatarUrl = null;
       }
@@ -2237,11 +2231,9 @@ export class PlayerService {
   ) {
     if (attachmentId) {
       try {
-        const attachment =
-          await this.attachmentsService.getAttachmentOrThrow(attachmentId);
-        if (attachment.isPublic) {
-          return buildPublicUrl(`/attachments/public/${attachmentId}`);
-        }
+        const resolved =
+          await this.attachmentsService.resolvePublicUrl(attachmentId);
+        if (resolved) return resolved;
       } catch {
         // ignore
       }
