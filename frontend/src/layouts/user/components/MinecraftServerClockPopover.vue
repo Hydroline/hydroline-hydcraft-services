@@ -306,7 +306,7 @@ function serverOnlinePercent(item: PublicServerStatusItem) {
     :ui="{ content: 'z-[40000]' }"
   >
     <div
-      class="absolute top-[calc(100%+0.5rem)] left-1/2 -translate-x-1/2 md:translate-0 md:static flex items-center gap-2 font-mono rounded-full border border-slate-300/50 md:border-slate-200 px-3 py-1.5 text-xs text-slate-500 dark:border-slate-700 md:dark:border-slate-700 bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent md:hover:bg-slate-200/40 md:dark:hover:bg-slate-700/40 transition duration-300 cursor-pointer"
+      class="absolute top-[calc(100%+0.375rem)] left-1/2 -translate-x-1/2 md:translate-0 md:static flex items-center gap-2 font-mono rounded-full border border-slate-300/50 md:border-slate-200 px-3 py-1.5 text-xs text-slate-500 dark:border-slate-700 md:dark:border-slate-700 bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent md:hover:bg-slate-200/40 md:dark:hover:bg-slate-700/40 transition duration-300 cursor-pointer"
     >
       <div
         ref="serversHeaderContainer"

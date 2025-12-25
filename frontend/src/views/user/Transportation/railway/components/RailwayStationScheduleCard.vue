@@ -27,6 +27,7 @@ const error = ref<string | null>(null)
 const schedule = ref<ScheduleItem[]>([])
 const now = ref(Date.now())
 const failCount = ref(0)
+const emptyCount = ref(0)
 
 const expanded = ref(false)
 const contentRef = ref<HTMLElement | null>(null)
@@ -34,6 +35,28 @@ let lastContentHeight: number | null = null
 
 let timerInterval: number | null = null
 let pollingInterval: number | null = null
+
+function debounce(fn: Function, delay: number) {
+  let timeoutId: ReturnType<typeof setTimeout>
+  return (...args: any[]) => {
+    clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => fn(...args), delay)
+  }
+}
+
+const startPolling = () => {
+  stopPolling()
+  pollingInterval = window.setInterval(() => {
+    fetchSchedule(true)
+  }, 5000)
+}
+
+const stopPolling = () => {
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    pollingInterval = null
+  }
+}
 
 const fetchSchedule = async (isPolling = false) => {
   if (!isPolling) loading.value = true
@@ -47,41 +70,63 @@ const fetchSchedule = async (isPolling = false) => {
     schedule.value = data
     failCount.value = 0
     error.value = null
+
+    if (data.length === 0) {
+      emptyCount.value++
+      if (isPolling && emptyCount.value > 2) {
+        stopPolling()
+      }
+    } else {
+      emptyCount.value = 0
+    }
+
+    return true
   } catch (e) {
     console.error(e)
     failCount.value++
-    if (!isPolling || failCount.value > 5) {
+    if (!isPolling || failCount.value > 2) {
       error.value = '时刻表加载失败'
+      if (isPolling) stopPolling()
     }
+    return false
   } finally {
     if (!isPolling) loading.value = false
   }
 }
 
+const handleRefresh = debounce(async () => {
+  stopPolling()
+  const success = await fetchSchedule(false)
+  if (success) {
+    startPolling()
+  }
+}, 1000)
+
 watch(
   () => [props.stationId, props.serverId, props.railwayType],
-  () => {
-    fetchSchedule()
+  async () => {
+    stopPolling()
+    const success = await fetchSchedule()
+    if (success) startPolling()
   },
 )
 
-onMounted(() => {
-  fetchSchedule()
+onMounted(async () => {
+  const success = await fetchSchedule()
+  if (success) {
+    startPolling()
+  }
 
   const updateTimer = () => {
     now.value = Date.now()
     timerInterval = requestAnimationFrame(updateTimer)
   }
   timerInterval = requestAnimationFrame(updateTimer)
-
-  pollingInterval = window.setInterval(() => {
-    fetchSchedule(true)
-  }, 5000)
 })
 
 onUnmounted(() => {
   if (timerInterval) cancelAnimationFrame(timerInterval)
-  if (pollingInterval) clearInterval(pollingInterval)
+  stopPolling()
 })
 
 function colorToHex(value: number | null | undefined) {
@@ -190,14 +235,15 @@ watch(
       class="flex items-center justify-between text-lg text-slate-600 dark:text-slate-300"
     >
       时刻表
-      <span class="ml-2 text-xs text-slate-400 dark:text-slate-500">
-        实时数据
-        <UIcon
-          v-if="loading && schedule.length > 0"
-          name="i-lucide-loader-2"
-          class="ml-1 inline-block h-3 w-3 animate-spin"
-        />
-      </span>
+      <UButton
+        icon="i-lucide-refresh-cw"
+        size="xs"
+        variant="ghost"
+        :loading="loading"
+        @click="handleRefresh"
+      >
+        刷新
+      </UButton>
     </h3>
 
     <div

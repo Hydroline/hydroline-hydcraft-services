@@ -226,7 +226,7 @@ const routerPush = (path: string) => {
     >
       <header
         data-user-shell-header
-        class="sticky top-0 z-40000 grid h-16 grid-cols-[1fr_auto_1fr] items-center px-4 border-b transition-all duration-300"
+        class="sticky top-0 z-40000 grid h-16 grid-cols-2 lg:grid-cols-[1fr_auto_1fr] items-center px-4 border-b transition-all duration-300"
         :class="{
           'backdrop-blur-xl bg-white/60 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800':
             !isMainPage || isScrolled,
@@ -248,7 +248,7 @@ const routerPush = (path: string) => {
           <MinecraftServerClockPopover />
         </div>
 
-        <div class="flex items-center justify-center text-center">
+        <div class="hidden lg:flex items-center justify-center text-center">
           <div class="flex items-center justify-center">
             <AnimatePresence mode="wait">
               <Motion
@@ -296,82 +296,141 @@ const routerPush = (path: string) => {
         </div>
 
         <div class="flex items-center justify-end gap-2">
-          <div v-if="authStore.isAuthenticated">
-            <UPopover
-              :popper="{ placement: 'bottom-end' }"
-              :ui="{ content: 'z-[40000]' }"
+          <AnimatePresence mode="popLayout" :initial="false">
+            <Motion
+              v-if="authStore.isAuthenticated"
+              key="authenticated"
+              :initial="{ opacity: 0, scale: 0.92, width: 0 }"
+              :animate="{ opacity: 1, scale: 1, width: 'auto' }"
+              :exit="{ opacity: 0, scale: 0.92, width: 0 }"
+              :transition="{
+                type: 'spring',
+                stiffness: 360,
+                damping: 24,
+                opacity: { duration: 0.2 },
+              }"
+              class="overflow-hidden"
+            >
+              <UPopover
+                :popper="{ placement: 'bottom-end' }"
+                :ui="{ content: 'z-[40000]' }"
+              >
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  class="flex items-center gap-2 rounded-full px-2 py-1 text-sm hover:bg-accented/70 active:bg-accented/70"
+                >
+                  <span
+                    class="hidden text-slate-700 dark:text-slate-200 sm:block"
+                  >
+                    {{ userDisplayLabel }}
+                  </span>
+                  <UserAvatar
+                    :src="userAvatarUrl"
+                    :name="userDisplayLabel"
+                    size="sm"
+                  />
+                </UButton>
+                <template #content="{ close }">
+                  <div class="w-48 space-y-2 p-2">
+                    <div
+                      v-for="(group, index) in userDropdownItems"
+                      :key="index"
+                      class="space-y-1"
+                    >
+                      <button
+                        v-for="item in group"
+                        :key="item.label"
+                        type="button"
+                        class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                        :class="
+                          item.label === '退出登录'
+                            ? 'text-red-600 dark:text-red-300'
+                            : 'text-slate-600 dark:text-slate-200'
+                        "
+                        @click="handleDropdownItemClick(item.click, close)"
+                      >
+                        <UIcon :name="item.icon" class="text-base h-4 w-4" />
+                        <span>{{ item.label }}</span>
+                      </button>
+                      <hr
+                        v-if="index < userDropdownItems.length - 1"
+                        class="border-slate-200/70 dark:border-slate-700/70"
+                      />
+                    </div>
+                  </div>
+                </template>
+              </UPopover>
+            </Motion>
+            <Motion
+              v-else
+              key="guest"
+              :initial="{ opacity: 0, scale: 0.92, width: 0 }"
+              :animate="{ opacity: 1, scale: 1, width: 'auto' }"
+              :exit="{ opacity: 0, scale: 0.92, width: 0 }"
+              :transition="{
+                type: 'spring',
+                stiffness: 360,
+                damping: 24,
+                opacity: { duration: 0.2 },
+              }"
+              class="overflow-hidden"
+            >
+              <UButton
+                color="neutral"
+                variant="link"
+                class="rounded-full"
+                @click="openLogin"
+                >登录</UButton
+              >
+            </Motion>
+          </AnimatePresence>
+          <AnimatePresence :initial="false">
+            <Motion
+              v-if="headerVariant === 'title'"
+              key="preview-toggle"
+              :initial="{ opacity: 0, scale: 0.92, width: 0 }"
+              :animate="{ opacity: 1, scale: 1, width: 'auto' }"
+              :exit="{ opacity: 0, scale: 0.92, width: 0 }"
+              :transition="{
+                type: 'spring',
+                stiffness: 360,
+                damping: 24,
+                opacity: { duration: 0.2 },
+              }"
+              class="block md:hidden overflow-hidden"
             >
               <UButton
                 color="neutral"
                 variant="ghost"
                 size="xs"
-                class="flex items-center gap-2 rounded-full px-2 py-1 text-sm hover:bg-accented/70 active:bg-accented/70"
+                class="flex md:hidden h-9 w-9 justify-center items-center rounded-full hover:bg-accented/70 active:bg-accented/70"
+                @click="uiStore.previewMode = !uiStore.previewMode"
+                icon-only
               >
-                <span
-                  class="hidden text-slate-700 dark:text-slate-200 sm:block"
-                >
-                  {{ userDisplayLabel }}
-                </span>
-                <UserAvatar
-                  :src="userAvatarUrl"
-                  :name="userDisplayLabel"
-                  size="sm"
-                />
-              </UButton>
-              <template #content="{ close }">
-                <div class="w-48 space-y-2 p-2">
-                  <div
-                    v-for="(group, index) in userDropdownItems"
-                    :key="index"
-                    class="space-y-1"
+                <AnimatePresence mode="wait">
+                  <Motion
+                    :key="uiStore.previewMode ? 'pause' : 'play'"
+                    :initial="{ opacity: 0, filter: 'blur(4px)' }"
+                    :animate="{ opacity: 1, filter: 'blur(0px)' }"
+                    :exit="{ opacity: 0, filter: 'blur(4px)' }"
+                    :transition="{ duration: 0.2 }"
+                    class="flex items-center justify-center"
                   >
-                    <button
-                      v-for="item in group"
-                      :key="item.label"
-                      type="button"
-                      class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-slate-100 dark:hover:bg-slate-800"
-                      :class="
-                        item.label === '退出登录'
-                          ? 'text-red-600 dark:text-red-300'
-                          : 'text-slate-600 dark:text-slate-200'
+                    <UIcon
+                      :name="
+                        !uiStore.previewMode
+                          ? 'i-lucide-play'
+                          : 'i-lucide-pause'
                       "
-                      @click="handleDropdownItemClick(item.click, close)"
-                    >
-                      <UIcon :name="item.icon" class="text-base h-4 w-4" />
-                      <span>{{ item.label }}</span>
-                    </button>
-                    <hr
-                      v-if="index < userDropdownItems.length - 1"
-                      class="border-slate-200/70 dark:border-slate-700/70"
+                      class="h-5 w-5"
                     />
-                  </div>
-                </div>
-              </template>
-            </UPopover>
-          </div>
-          <UButton
-            v-else
-            color="neutral"
-            variant="link"
-            class="rounded-full"
-            @click="openLogin"
-            >登录</UButton
-          >
-          <UButton
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            class="flex md:hidden h-9 w-9 justify-center items-center rounded-full hover:bg-accented/70 active:bg-accented/70"
-            @click="uiStore.previewMode = !uiStore.previewMode"
-            icon-only
-          >
-            <UIcon
-              name="i-lucide-play"
-              class="h-6 w-6"
-              v-if="!uiStore.previewMode"
-            />
-            <UIcon name="i-lucide-pause" class="h-6 w-6" v-else />
-          </UButton>
+                  </Motion>
+                </AnimatePresence>
+              </UButton>
+            </Motion>
+          </AnimatePresence>
           <UTooltip text="消息中心（开发中）">
             <UButton
               disabled
@@ -392,7 +451,7 @@ const routerPush = (path: string) => {
         :menu-open="menuOpen"
         :main-nav="mainNav"
         :current-path="route.path"
-        z-index-class="z-100"
+        z-index-class="z-99999"
         :show-brand-header="false"
         :close-on-navigate="false"
         @close="menuOpen = false"

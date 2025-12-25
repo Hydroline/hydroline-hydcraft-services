@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import dayjs from 'dayjs'
 import PlayerGameStatsPanel from './PlayerGameStatsPanel.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 import type {
   PlayerAuthmeProfileResponse,
   PlayerStatsResponse,
@@ -61,6 +63,8 @@ const groupDisplayList = computed(() => {
   }
   return names
 })
+
+const linkedUser = computed(() => profile.value?.linkedUser)
 
 const primaryLuckperms = computed(() => groupDisplayList.value[0] ?? null)
 
@@ -137,6 +141,21 @@ const noop = () => {
               位置
             </template>
           </span>
+        </div>
+        <div v-if="linkedUser" class="flex justify-between items-center">
+          <span class="text-slate-500 dark:text-slate-500">关联用户</span>
+          <RouterLink
+            :to="`/user/${linkedUser.id}`"
+            class="flex items-center gap-2 text-base font-semibold text-slate-600 hover:text-primary dark:text-slate-300 dark:hover:text-primary-400"
+          >
+            <UserAvatar
+              :src="linkedUser.avatarUrl"
+              :name="linkedUser.displayName"
+              size="sm"
+              class="!h-6 !w-6 !text-xs"
+            />
+            <span>{{ linkedUser.displayName }}</span>
+          </RouterLink>
         </div>
       </div>
     </div>
