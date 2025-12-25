@@ -216,6 +216,7 @@ const routerPush = (path: string) => {
       :menu-open="menuOpen"
       :main-nav="mainNav"
       :current-path="route.path"
+      z-index-class="z-50000"
       @close="menuOpen = false"
     />
 
@@ -446,16 +447,6 @@ const routerPush = (path: string) => {
           <ThemeToggle />
         </div>
       </header>
-
-      <MobileSidebar
-        :menu-open="menuOpen"
-        :main-nav="mainNav"
-        :current-path="route.path"
-        z-index-class="z-99999"
-        :show-brand-header="false"
-        :close-on-navigate="false"
-        @close="menuOpen = false"
-      />
 
       <main class="pt-4 mb-8">
         <RouterView v-slot="{ Component, route }">

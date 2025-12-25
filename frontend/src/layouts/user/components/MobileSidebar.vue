@@ -20,15 +20,23 @@ const props = withDefaults(
     currentPath: string
     closeOnNavigate?: boolean
     zIndexClass?: string
+    showBrandHeader?: boolean
   }>(),
   {
     closeOnNavigate: true,
     zIndexClass: 'z-50',
+    showBrandHeader: true,
   },
 )
 
-const { menuOpen, mainNav, currentPath, closeOnNavigate, zIndexClass } =
-  toRefs(props)
+const {
+  menuOpen,
+  mainNav,
+  currentPath,
+  closeOnNavigate,
+  zIndexClass,
+  showBrandHeader,
+} = toRefs(props)
 
 const router = useRouter()
 
@@ -176,6 +184,7 @@ onUnmounted(() => {
           </RouterLink>
         </nav>
         <div
+          v-if="showBrandHeader"
           class="text-xs text-center tracking-widest font-semibold text-slate-500 dark:text-slate-400"
         >
           HYDROLINE HYDCRAFT
