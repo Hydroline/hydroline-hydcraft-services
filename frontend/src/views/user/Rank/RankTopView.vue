@@ -89,7 +89,7 @@ const leaderboardMetrics: Array<{
   },
   {
     field: 'mtrBalance',
-    label: 'MTR 余额',
+    label: '交通余额',
     description: '交通余额',
   },
   {

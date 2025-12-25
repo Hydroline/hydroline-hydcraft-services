@@ -28,7 +28,6 @@ const sortField = ref<SortField>('walkDistance')
 const sortOrder = ref<SortOrder>(SortOrder.DESC)
 const selectedServerId = ref<string | undefined>(undefined)
 const syncJob = ref<RankSyncJobStatus | null>(null)
-const skipServerChange = ref(false)
 const syncTimer = ref<number | null>(null)
 const syncError = ref<string | null>(null)
 const SYNC_JOB_STORAGE_KEY = 'rank-sync-job-id'
@@ -54,12 +53,34 @@ const serverOptions = computed(() =>
     label: entry.displayName ?? entry.id,
   })),
 )
-const selectedServerName = computed(
-  () =>
+
+function normalizeServerId(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed ? trimmed : undefined
+  }
+  if (value && typeof value === 'object') {
+    const maybeId = (value as { id?: unknown }).id
+    if (typeof maybeId === 'string') {
+      const trimmed = maybeId.trim()
+      return trimmed ? trimmed : undefined
+    }
+  }
+  return undefined
+}
+
+const selectedServerLabel = computed(() => {
+  const normalized = normalizeServerId(selectedServerId.value)
+  const fromOptions = normalized
+    ? serverOptions.value.find((entry) => entry.id === normalized)?.label
+    : undefined
+  return (
+    fromOptions ??
     selectedServer.value?.displayName ??
     selectedServer.value?.id ??
-    '选择服务器',
-)
+    '选择服务器'
+  )
+})
 
 const syncStatusLabel = computed(() => {
   if (syncJob.value) {
@@ -145,12 +166,12 @@ async function loadData() {
     params.set('pageSize', String(pageSize.value))
     params.set('sortField', sortField.value)
     params.set('order', sortOrder.value)
-    if (selectedServerId.value) {
-      params.set('serverId', selectedServerId.value)
+    const serverId = normalizeServerId(selectedServerId.value)
+    if (serverId) {
+      params.set('serverId', serverId)
     }
     const data = await apiFetch<RankResponse>(`/rank?${params.toString()}`)
     response.value = data
-    skipServerChange.value = true
     selectedServerId.value = data.selectedServer.id
     page.value = data.pagination.page
     tableRefreshKey.value += 1
@@ -171,12 +192,8 @@ async function loadData() {
   }
 }
 
-function handleServerChange(value?: string | null) {
-  if (skipServerChange.value) {
-    skipServerChange.value = false
-    return
-  }
-  selectedServerId.value = value ?? undefined
+function handleServerChange(value?: unknown) {
+  selectedServerId.value = normalizeServerId(value)
   page.value = 1
   void loadData()
 }
@@ -306,7 +323,7 @@ onBeforeUnmount(() => {
     <div class="mt-6 flex items-center gap-2 w-full justify-between">
       <USelectMenu
         size="sm"
-        v-model="selectedServerId"
+        :model-value="selectedServerId"
         :items="serverOptions"
         value-key="id"
         label-key="label"
@@ -316,7 +333,7 @@ onBeforeUnmount(() => {
       >
         <template #default>
           <span class="pointer-events-none block truncate text-left">
-            {{ selectedServerName }}
+            {{ selectedServerLabel }}
           </span>
         </template>
       </USelectMenu>
