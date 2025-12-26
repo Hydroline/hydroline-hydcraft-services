@@ -44,6 +44,7 @@ jobs:
               rm -rf /app/backend-deploy
               pnpm --filter @hydroline/backend deploy --prod /app/backend-deploy
               cp -R /app/backend/dist /app/backend/prisma /app/backend/.env.sample /app/backend-deploy/
+              pnpm --dir /app/backend-deploy exec prisma generate
               tar -czf /app/backend-dist.tar.gz -C /app/backend-deploy dist prisma package.json node_modules .env.sample
             '
 
