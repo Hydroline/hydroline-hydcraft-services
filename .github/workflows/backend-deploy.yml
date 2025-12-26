@@ -21,13 +21,14 @@ jobs:
       BACKEND_SSH_KEY: ${{ secrets.BACKEND_DEPLOY_SSH_PRIVATE_KEY }}
       REMOTE_DEPLOY_PATH: ${{ secrets.BACKEND_REMOTE_DEPLOY_PATH || '/www/wwwroot/hydroline-hydcraft' }}
       REMOTE_TEMP_DIR: /tmp/backend-deploy-${{ github.run_id }}
+      PM2_APP_NAME: ${{ secrets.BACKEND_PM2_APP_NAME }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "pnpm"
 
       - name: Setup pnpm
@@ -41,8 +42,11 @@ jobs:
       - name: Build backend
         run: pnpm --filter @hydroline/backend build
 
-      - name: Package dist
-        run: tar -czf backend-dist.tar.gz -C backend dist
+      - name: Package backend artifact
+        run: |
+          tar -czf backend-dist.tar.gz \
+            -C backend dist prisma package.json .env.sample \
+            -C . pnpm-lock.yaml
 
       - name: Prepare remote SSH access
         run: |
@@ -64,6 +68,10 @@ jobs:
             mkdir -p "$REMOTE_TEMP_DIR"
             tar -xzf ~/backend-dist.tar.gz -C "$REMOTE_TEMP_DIR"
             rsync -a --delete --exclude='.env' "$REMOTE_TEMP_DIR/" "$REMOTE_DEPLOY_PATH/"
+            cd "$REMOTE_DEPLOY_PATH"
+            pm2 stop "$PM2_APP_NAME"
+            pnpm install --prod
+            pm2 restart "$PM2_APP_NAME"
             rm -rf "$REMOTE_TEMP_DIR"
             rm -f ~/backend-dist.tar.gz
           EOF
