@@ -8,6 +8,8 @@ import { AuthLoginDto } from '../dto/auth-login.dto';
 import { rethrowAuthmeError } from '../helpers/authme-error.helper';
 import { AuthmeService } from '../../authme/authme.service';
 import { buildRequestContext } from '../helpers/request-context.helper';
+import { AttachmentsService } from '../../attachments/attachments.service';
+import { enrichUserAvatar } from '../helpers/user-avatar.helper';
 
 class EmailCodeRequestDto {
   @IsEmail({}, { message: 'Email must be an email' })
@@ -20,6 +22,7 @@ export class ApiAuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly authmeService: AuthmeService,
+    private readonly attachmentsService: AttachmentsService,
   ) {}
 
   @Post('register')
@@ -35,9 +38,13 @@ export class ApiAuthController {
         buildRequestContext(req),
       );
       attachCookies(res, result.cookies);
+      const enrichedUser = await enrichUserAvatar(
+        this.attachmentsService,
+        result.user as any,
+      );
       return {
         tokens: result.tokens,
-        user: result.user,
+        user: enrichedUser,
       };
     } catch (error) {
       rethrowAuthmeError(error);
@@ -57,9 +64,13 @@ export class ApiAuthController {
         buildRequestContext(req),
       );
       attachCookies(res, result.cookies);
+      const enrichedUser = await enrichUserAvatar(
+        this.attachmentsService,
+        result.user as any,
+      );
       return {
         tokens: result.tokens,
-        user: result.user,
+        user: enrichedUser,
       };
     } catch (error) {
       rethrowAuthmeError(error);
