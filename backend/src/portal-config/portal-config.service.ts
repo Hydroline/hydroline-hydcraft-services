@@ -119,7 +119,17 @@ export class PortalConfigService {
   }
 
   async updateHeroSubtitle(subtitle: string, options: SaveOptions = {}) {
-    throw new BadRequestException('Hero subtitle is now per-background');
+    const trimmed = subtitle.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Hero subtitle cannot be empty');
+    }
+
+    const config = await this.getRawConfig();
+    config.hero.subtitle = trimmed;
+    await this.saveConfig(config, options);
+    return {
+      subtitle: config.hero.subtitle,
+    };
   }
 
   async addHeroBackground(
