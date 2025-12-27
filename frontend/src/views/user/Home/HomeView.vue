@@ -26,6 +26,11 @@ const scrollLockPosition = ref(0)
 const heroViewportHeight = ref<number | null>(null)
 const heroVisualViewport = ref<VisualViewport | null>(null)
 const isMobileViewport = ref(false)
+const heroPanPosition = ref(50)
+const heroPanActive = ref(false)
+const heroPanStartX = ref(0)
+const heroPanStartY = ref(0)
+const heroPanStartPosition = ref(50)
 
 const heroParallaxAnimatedOffset = computed(() => {
   if (uiStore.previewMode || !parallaxEnabled.value) {
@@ -100,6 +105,26 @@ const heroViewportStyle = computed<Record<string, string>>(() => {
   }
 })
 
+const heroPanStyle = computed<Record<string, string>>(() => {
+  if (!isMobileViewport.value || uiStore.previewMode) {
+    return {}
+  }
+  return {
+    objectPosition: `${heroPanPosition.value}% top`,
+    transition: heroPanActive.value ? 'none' : 'object-position 0.25s ease-out',
+  }
+})
+
+const heroPanStylePreview = computed<Record<string, string>>(() => {
+  if (!isMobileViewport.value || !uiStore.previewMode) {
+    return {}
+  }
+  return {
+    objectPosition: `${heroPanPosition.value}% top`,
+    transition: heroPanActive.value ? 'none' : 'object-position 0.25s ease-out',
+  }
+})
+
 function updateScrollState() {
   scrolled.value = window.scrollY > 80
   uiStore.setHeroInView(!scrolled.value)
@@ -145,6 +170,32 @@ function handleMouseMove(event: MouseEvent) {
 
   heroParallaxOffset.x = offsetX
   heroParallaxOffset.y = offsetY
+}
+
+function handleHeroPanStart(event: TouchEvent) {
+  if (!isMobileViewport.value) return
+  const touch = event.touches[0]
+  if (!touch) return
+  heroPanActive.value = true
+  heroPanStartX.value = touch.clientX
+  heroPanStartY.value = touch.clientY
+  heroPanStartPosition.value = heroPanPosition.value
+}
+
+function handleHeroPanMove(event: TouchEvent) {
+  if (!isMobileViewport.value || !heroPanActive.value) return
+  const touch = event.touches[0]
+  if (!touch) return
+  const deltaX = touch.clientX - heroPanStartX.value
+  const deltaY = touch.clientY - heroPanStartY.value
+  if (Math.abs(deltaX) <= Math.abs(deltaY)) return
+  event.preventDefault()
+  const next = heroPanStartPosition.value + deltaX * 0.1
+  heroPanPosition.value = Math.max(0, Math.min(100, next))
+}
+
+function handleHeroPanEnd() {
+  heroPanActive.value = false
 }
 
 function updateHeroMetadata() {
@@ -327,7 +378,11 @@ function handleHeroImageErrored() {
       >
         <div
           v-if="!uiStore.previewMode"
-          class="bg-image-mobile lg:bg-image relative block h-full w-full select-none overflow-hidden text-left focus:outline-none"
+          class="bg-image-mobile lg:bg-image hero-pan-area relative block h-full w-full select-none overflow-hidden text-left focus:outline-none"
+          @touchstart="handleHeroPanStart"
+          @touchmove="handleHeroPanMove"
+          @touchend="handleHeroPanEnd"
+          @touchcancel="handleHeroPanEnd"
         >
           <Motion
             v-if="activeHeroImage"
@@ -336,6 +391,7 @@ function handleHeroImageErrored() {
             :src="activeHeroImage as string"
             :alt="activeHeroDescription"
             class="block h-full w-full object-cover object-top select-none pointer-events-none"
+            :style="heroPanStyle"
             :initial="{
               opacity: 0,
               scale: 1.03,
@@ -372,6 +428,7 @@ function handleHeroImageErrored() {
             :src="fallbackHeroImage"
             :alt="activeHeroDescription || 'Hydroline Portal 背景图'"
             class="block h-full w-full object-cover object-top select-none pointer-events-none"
+            :style="heroPanStyle"
             :initial="{
               opacity: 0,
               scale: 1.03,
@@ -405,10 +462,14 @@ function handleHeroImageErrored() {
         <!-- 预览模式 -->
         <div
           v-else
-          class="relative block h-full w-full select-none overflow-hidden text-left focus:outline-none"
+          class="hero-pan-area relative block h-full w-full select-none overflow-hidden text-left focus:outline-none"
+          @touchstart="handleHeroPanStart"
+          @touchmove="handleHeroPanMove"
+          @touchend="handleHeroPanEnd"
+          @touchcancel="handleHeroPanEnd"
         >
           <div
-            class="absolute inset-0 z-1 flex flex-col items-center bg-[linear-gradient(0deg,white_5%,transparent_30%)] dark:bg-[linear-gradient(0deg,rgba(15,23,42,0.95)_5%,transparent_30%)] justify-end p-6 text-slate-900 dark:from-slate-950/95 dark:via-slate-950/60 dark:text-slate-100"
+            class="absolute inset-0 z-1 flex flex-col items-center bg-[linear-gradient(0deg,white_2%,transparent_40%)] dark:bg-[linear-gradient(0deg,rgba(15,23,42,0.95)_5%,transparent_30%)] justify-end p-6 text-slate-900 dark:from-slate-950/95 dark:via-slate-950/60 dark:text-slate-100"
           >
             <div class="w-full max-w-3xl text-center">
               <div
@@ -452,6 +513,16 @@ function handleHeroImageErrored() {
                   {{ activeHeroShootDate }}
                 </span>
               </div>
+              <div
+                v-if="isMobileViewport"
+                class="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-200/70 bg-white/80 px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-600/90 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-300/90"
+              >
+                <UIcon
+                  name="i-heroicons-arrows-right-left"
+                  class="h-3.5 w-3.5"
+                />
+                可左右滑动查看图片
+              </div>
             </div>
           </div>
 
@@ -462,6 +533,7 @@ function handleHeroImageErrored() {
             :src="activeHeroImage as string"
             :alt="activeHeroDescription"
             class="block h-full w-full object-cover object-top select-none pointer-events-none"
+            :style="heroPanStylePreview"
             :initial="{
               opacity: 0,
               scale: 1.03,
@@ -493,6 +565,7 @@ function handleHeroImageErrored() {
             :src="fallbackHeroImage"
             :alt="activeHeroDescription || 'Hydroline Portal 背景图'"
             class="block h-full w-full object-cover object-top select-none pointer-events-none"
+            :style="heroPanStylePreview"
             :initial="{
               opacity: 0,
               scale: 1.03,
@@ -551,28 +624,6 @@ function handleHeroImageErrored() {
             </Motion>
           </Motion>
 
-          <div class="flex flex-wrap items-center justify-center gap-4">
-            <UTooltip
-              v-for="(link, index) in navigationLinks"
-              :key="link.id"
-              :text="link.tooltip ?? link.label"
-            >
-              <UButton
-                :color="link.available ? 'primary' : 'neutral'"
-                variant="soft"
-                class="rounded-full px-6 py-2 text-sm"
-                :disabled="!link.available"
-                :href="link.url ?? undefined"
-                target="_blank"
-                rel="noreferrer"
-                @mouseenter="activateNavigation(index)"
-                @focusin="activateNavigation(index)"
-              >
-                {{ link.label }}
-              </UButton>
-            </UTooltip>
-          </div>
-
           <div v-if="showHeroIndicators" class="flex items-center gap-2">
             <span
               v-for="index in navigationLinks.length"
@@ -596,7 +647,7 @@ function handleHeroImageErrored() {
       v-show="!uiStore.previewMode"
       class="relative z-10 -mt-12 px-4 opacity-100"
     >
-      <div class="mx-auto flex w-full max-w-6xl flex-col gap-6"></div>
+      <div class="mx-auto w-full max-w-4xl gap-6 grid grid-cols-3"></div>
     </section>
   </div>
 </template>
@@ -622,6 +673,10 @@ function handleHeroImageErrored() {
   transition-duration: 0.3s;
   transition-timing-function: ease-out;
   will-change: height;
+}
+
+.hero-pan-area {
+  touch-action: pan-y;
 }
 
 .bg-image {
