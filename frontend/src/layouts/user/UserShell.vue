@@ -381,7 +381,7 @@ const routerPush = (path: string) => {
               <UButton
                 color="neutral"
                 variant="link"
-                class="rounded-full leading-[normal]"
+                class="rounded-full leading-[normal] whitespace-nowrap"
                 @click="openLogin"
                 >登录</UButton
               >

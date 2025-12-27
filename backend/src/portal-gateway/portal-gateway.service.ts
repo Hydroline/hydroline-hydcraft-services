@@ -10,6 +10,7 @@ import { PortalOwnershipOverview } from '../player/player.types';
 import { resolvePlayerPeriodStart } from '../player/player-period.util';
 import { AuthmeCacheService } from '../cache/authme-cache.service';
 import { LuckpermsCacheService } from '../cache/luckperms-cache.service';
+import { TransportationRailwayService } from '../transportation/railway/services/railway.service';
 import {
   DEFAULT_PORTAL_HOME_CONFIG,
   PORTAL_CARD_REGISTRY,
@@ -239,6 +240,7 @@ export class PortalGatewayService {
     private readonly playerService: PlayerService,
     private readonly authmeCache: AuthmeCacheService,
     private readonly luckpermsCache: LuckpermsCacheService,
+    private readonly transportationRailwayService: TransportationRailwayService,
   ) {}
 
   /**
@@ -292,7 +294,21 @@ export class PortalGatewayService {
       };
     }
 
-    // Return only hero plus empty placeholders to keep frontend shape stable.
+    const [railwayOverviewResult] = await Promise.allSettled([
+      this.transportationRailwayService.getOverview(),
+    ]);
+
+    const railwayStats =
+      railwayOverviewResult.status === 'fulfilled'
+        ? railwayOverviewResult.value.stats
+        : null;
+    if (railwayOverviewResult.status === 'rejected') {
+      this.logger.warn(
+        `Failed to load railway overview for home: ${String(railwayOverviewResult.reason)}`,
+      );
+    }
+
+    // Return hero plus overview payloads to keep frontend shape stable.
     return {
       hero: {
         subtitle: hero.subtitle,
@@ -300,6 +316,7 @@ export class PortalGatewayService {
       },
       navigation: [],
       cards: [],
+      railwayOverview: railwayStats ? { stats: railwayStats } : null,
     };
   }
 

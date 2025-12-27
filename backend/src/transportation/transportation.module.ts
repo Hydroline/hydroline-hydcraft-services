@@ -41,6 +41,6 @@ import { TransportationRailwayCompanyController } from './railway/controllers/ra
     TransportationRailwayBindingController,
     TransportationRailwayCompanyController,
   ],
-  exports: [TransportationRailwaySyncService],
+  exports: [TransportationRailwaySyncService, TransportationRailwayService],
 })
 export class TransportationModule {}

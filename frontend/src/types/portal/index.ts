@@ -1,3 +1,5 @@
+import type { RailwayOverview } from '@/types/transportation'
+
 export interface PortalHeroBackground {
   id: string
   imageUrl: string
@@ -30,6 +32,7 @@ export interface PortalHomeData {
   cards: PortalCardId[]
   dashboard?: PortalHomeDashboard
   serverCards?: PortalDashboardCard[]
+  railwayOverview?: { stats: RailwayOverview['stats'] } | null
 }
 
 export interface PortalDashboardCard {

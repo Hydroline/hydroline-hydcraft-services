@@ -7,6 +7,7 @@ import { MinecraftModule } from '../minecraft/minecraft.module';
 import { PlayerModule } from '../player/player.module';
 import { AuthModule } from '../auth/auth.module';
 import { CacheModule } from '../cache/cache.module';
+import { TransportationModule } from '../transportation/transportation.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CacheModule } from '../cache/cache.module';
     PlayerModule,
     AuthModule,
     CacheModule,
+    TransportationModule,
   ],
   controllers: [PortalGatewayController],
   providers: [PortalGatewayService],

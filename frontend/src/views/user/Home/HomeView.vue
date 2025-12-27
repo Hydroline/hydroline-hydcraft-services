@@ -7,6 +7,7 @@ import { Motion } from 'motion-v'
 import dayjs from 'dayjs'
 import HydrolineTextBold from '@/assets/resources/hydroline_text_bold.svg'
 import fallbackHeroImage from '@/assets/images/image_home_background_240730.webp'
+import FeatureCards from './components/FeatureCards.vue'
 
 const portalStore = usePortalStore()
 const uiStore = useUiStore()
@@ -31,6 +32,15 @@ const heroPanActive = ref(false)
 const heroPanStartX = ref(0)
 const heroPanStartY = ref(0)
 const heroPanStartPosition = ref(50)
+const numberFormatter = new Intl.NumberFormat('zh-CN')
+const railwayStatsText = computed(() => {
+  const stats = home.value?.railwayOverview?.stats
+  if (!stats) return ''
+  const routes = numberFormatter.format(stats.routes)
+  const stations = numberFormatter.format(stats.stations)
+  const depots = numberFormatter.format(stats.depots)
+  return `线路 ${routes}、车站 ${stations}、车厂 ${depots}`
+})
 
 const heroParallaxAnimatedOffset = computed(() => {
   if (uiStore.previewMode || !parallaxEnabled.value) {
@@ -645,9 +655,17 @@ function handleHeroImageErrored() {
 
     <section
       v-show="!uiStore.previewMode"
-      class="relative z-10 -mt-12 px-4 opacity-100"
+      class="relative z-10 pb-12 px-4 opacity-100"
     >
-      <div class="mx-auto w-full max-w-4xl gap-6 grid grid-cols-3"></div>
+      <Motion
+        v-if="homeLoaded"
+        as="div"
+        :initial="{ opacity: 0, filter: 'blur(8px)', y: 10 }"
+        :animate="{ opacity: 1, filter: 'blur(0px)', y: 0 }"
+        :transition="{ duration: 0.4, ease: 'easeOut' }"
+      >
+        <FeatureCards :railway-stats-text="railwayStatsText" />
+      </Motion>
     </section>
   </div>
 </template>
