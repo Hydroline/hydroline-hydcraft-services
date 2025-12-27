@@ -3,6 +3,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { existsSync } from 'fs';
 import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
 import * as nodemailer from 'nodemailer';
@@ -53,7 +54,7 @@ export class MailService {
     const pass = process.env.SMTP_PASS;
     const secureFlag = process.env.SMTP_SECURE;
     this.fromAddress = process.env.MAIL_FROM ?? 'no-reply@hydroline.local';
-    this.templateRoot = join(__dirname, 'templates');
+    this.templateRoot = this.resolveTemplateRoot();
 
     if (!host || !portRaw || !user || !pass) {
       this.logger.warn(
@@ -77,6 +78,16 @@ export class MailService {
       secure,
       auth: { user, pass },
     });
+  }
+
+  private resolveTemplateRoot() {
+    const candidates = [
+      join(__dirname, 'templates'),
+      join(__dirname, '..', '..', 'mail', 'templates'),
+      join(process.cwd(), 'src', 'mail', 'templates'),
+      join(process.cwd(), 'dist', 'mail', 'templates'),
+    ];
+    return candidates.find((dir) => existsSync(dir)) ?? candidates[0];
   }
 
   async sendMail(options: SendMailOptions) {

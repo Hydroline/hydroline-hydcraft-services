@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import type { Request } from 'express';
-import Busboy from 'busboy';
+import Busboy = require('busboy');
 import type { Readable } from 'node:stream';
 
 export type ParsedMultipartFile = {

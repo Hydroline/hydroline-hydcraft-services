@@ -27,15 +27,47 @@ const likeButtonDisabled = computed(() => {
   )
 })
 
-const primaryAuthmeIdentifier = computed(() =>
-  resolveBindingIdentifier(props.summary?.authmeBindings?.[0] ?? null),
+const primaryMinecraftProfile = computed(() => {
+  const profiles = props.summary?.minecraftProfiles ?? []
+  return profiles.find((profile) => profile.isPrimary) ?? profiles[0] ?? null
+})
+
+const primaryAuthmeBinding = computed(
+  () => props.summary?.authmeBindings?.[0] ?? null,
 )
+
+const primaryAuthmeIdentifier = computed(() =>
+  resolveBindingIdentifier(primaryAuthmeBinding.value),
+)
+
 const primaryAvatarUrl = computed(() => {
   const identifier = primaryAuthmeIdentifier.value
   if (!identifier) return null
   return `https://mc-heads.hydcraft.cn/avatar/${encodeURIComponent(
     identifier,
   )}/64`
+})
+
+const fallbackAvatarUrl = computed(() => {
+  return (
+    props.summary?.avatarUrl ??
+    props.summary?.image ??
+    primaryAvatarUrl.value ??
+    null
+  )
+})
+
+const displayName = computed(() => {
+  const summary = props.summary
+  if (!summary) return null
+  const name =
+    summary.displayName?.trim() ||
+    summary.name?.trim() ||
+    summary.email?.trim() ||
+    primaryMinecraftProfile.value?.nickname?.trim() ||
+    primaryAuthmeBinding.value?.realname?.trim() ||
+    primaryAuthmeBinding.value?.username?.trim()
+  return name || null
 })
 
 async function handleLikeToggle() {
@@ -76,19 +108,24 @@ async function handleLikeToggle() {
     <div class="flex flex-col gap-3">
       <div class="flex gap-2 select-none">
         <template v-if="props.summary">
-          <img
-            v-if="props.summary.avatarUrl"
-            :src="props.summary.avatarUrl"
-            :alt="props.summary.displayName ?? props.summary.email"
-            class="h-18 w-18 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
-          />
+          <div
+            class="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-700/60"
+          >
+            <img
+              v-if="fallbackAvatarUrl"
+              :src="fallbackAvatarUrl"
+              :alt="displayName ?? props.summary.email"
+              class="h-full w-full object-cover"
+            />
+            <UIcon v-else name="i-lucide-user-round" class="h-8 w-8" />
+          </div>
 
           <img
             v-if="primaryAvatarUrl"
             :src="primaryAvatarUrl"
             :alt="
               primaryAuthmeIdentifier ??
-              props.summary?.authmeBindings?.[0]?.username ??
+              primaryAuthmeBinding?.username ??
               'MC Avatar'
             "
             class="h-18 w-18 rounded-xl border border-slate-200 object-cover dark:border-slate-700 shadow"
@@ -127,25 +164,27 @@ async function handleLikeToggle() {
             <div>
               <span class="text-2xl">
                 {{
-                  props.summary.minecraftProfiles[0]?.nickname ||
-                  props.summary.authmeBindings[0]?.realname
+                  displayName ||
+                  primaryMinecraftProfile?.nickname ||
+                  primaryAuthmeBinding?.realname ||
+                  props.summary.email
                 }}
               </span>
               <span
                 class="mx-2 select-none"
                 v-if="
-                  props.summary.authmeBindings[0]?.realname &&
-                  props.summary.minecraftProfiles[0]?.nickname
+                  primaryAuthmeBinding?.realname &&
+                  primaryMinecraftProfile?.nickname
                 "
                 >/</span
               >
               <span
                 v-if="
-                  props.summary.authmeBindings[0]?.realname &&
-                  props.summary.minecraftProfiles[0]?.nickname
+                  primaryAuthmeBinding?.realname &&
+                  primaryMinecraftProfile?.nickname
                 "
               >
-                {{ props.summary.authmeBindings[0]?.realname }}
+                {{ primaryAuthmeBinding?.realname }}
               </span>
             </div>
 

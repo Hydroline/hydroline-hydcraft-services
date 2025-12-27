@@ -26,6 +26,7 @@ export class AuthRegisterDto {
   email?: string;
 
   @IsString()
+  @ValidateIf((dto: AuthRegisterDto) => dto.mode === 'EMAIL')
   @MaxLength(128)
   password!: string;
 

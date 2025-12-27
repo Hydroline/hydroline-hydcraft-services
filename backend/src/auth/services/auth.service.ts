@@ -879,27 +879,14 @@ export class AuthService {
     if (!email) {
       throw new BadRequestException('Email address cannot be empty');
     }
-    const result = await this.signInInternal({
-      email,
-      password: dto.password,
-      rememberMe: dto.rememberMe ?? false,
-    });
-
-    const userId = result.user.id;
-    await this.updateSessionMetadata(result.tokens.refreshToken, context);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        lastLoginAt: new Date(),
-        lastLoginIp: context.ip ?? null,
+    return this.signInInternal(
+      {
+        email,
+        password: dto.password,
+        rememberMe: dto.rememberMe ?? false,
       },
-    });
-
-    const user = await this.usersService.getSessionUser(userId);
-    return {
-      ...result,
-      user,
-    } satisfies AuthOperationResult;
+      context,
+    );
   }
 
   private async loginWithAuthme(dto: AuthLoginDto, context: RequestContext) {
@@ -910,13 +897,10 @@ export class AuthService {
     if (!dto.authmeId) {
       throw new BadRequestException('AuthMe account ID is required');
     }
-    if (!dto.password) {
-      throw new BadRequestException('Password is required');
-    }
 
     const authmeAccount = await this.authmeService.verifyCredentials(
       dto.authmeId,
-      dto.password,
+      dto.password ?? '',
     );
     const binding = await this.authmeBindingService.getBindingByUsernameLower(
       authmeAccount.username.toLowerCase(),
@@ -969,8 +953,6 @@ export class AuthService {
     });
     await this.assignDefaultRole(payload.user.id);
 
-    const { tokens, cookies } = this.extractTokens(result, payload.user.id);
-    await this.updateSessionMetadata(tokens.refreshToken, context);
     await this.prisma.user.update({
       where: { id: payload.user.id },
       data: {
@@ -981,20 +963,21 @@ export class AuthService {
           : {}),
       },
     });
-    const fullUser = await this.usersService.getSessionUser(payload.user.id);
-
-    return {
-      tokens,
-      user: fullUser,
-      cookies,
-    };
+    return this.createSessionForUser(
+      payload.user.id,
+      input.rememberMe ?? false,
+      context,
+    );
   }
 
-  private async signInInternal(input: {
-    email: string;
-    password: string;
-    rememberMe: boolean;
-  }): Promise<AuthOperationResult> {
+  private async signInInternal(
+    input: {
+      email: string;
+      password: string;
+      rememberMe: boolean;
+    },
+    context: RequestContext,
+  ): Promise<AuthOperationResult> {
     const headers = new Headers();
     const result = await auth.api
       .signInEmail({
@@ -1016,14 +999,11 @@ export class AuthService {
     if (!payload.user?.id) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const { tokens, cookies } = this.extractTokens(result, payload.user.id);
-    const user = await this.usersService.getSessionUser(payload.user.id);
-
-    return {
-      tokens,
-      user,
-      cookies,
-    };
+    return this.createSessionForUser(
+      payload.user.id,
+      input.rememberMe,
+      context,
+    );
   }
 
   async createOauthUser(

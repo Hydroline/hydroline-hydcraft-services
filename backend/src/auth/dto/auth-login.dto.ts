@@ -26,6 +26,7 @@ export class AuthLoginDto {
 
   @ValidateIf((dto: AuthLoginDto) => dto.mode !== 'EMAIL_CODE')
   @IsString()
+  @ValidateIf((dto: AuthLoginDto) => dto.mode === 'EMAIL')
   @MaxLength(128)
   password?: string;
 
