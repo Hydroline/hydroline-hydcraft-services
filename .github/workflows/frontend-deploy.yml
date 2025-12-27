@@ -53,9 +53,10 @@ jobs:
       - name: Sync dist to Tencent COS
         env:
           COS_BUCKET: ${{ secrets.COS_BUCKET }}
+          COS_ENDPOINT: ${{ secrets.COS_ENDPOINT }}
           COS_REGION: ${{ secrets.COS_REGION }}
           AWS_ACCESS_KEY_ID: ${{ secrets.COS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.COS_SECRET_ACCESS_KEY }}
         run: |
-          coscmd config -a "$AWS_ACCESS_KEY_ID" -s "$AWS_SECRET_ACCESS_KEY" -b "$COS_BUCKET" -r "$COS_REGION" -m 20 --retry 10 --timeout 120
+          coscmd config -a "$AWS_ACCESS_KEY_ID" -s "$AWS_SECRET_ACCESS_KEY" -b "$COS_BUCKET" -e "$COS_ENDPOINT" -m 20 --retry 10 --timeout 120
           coscmd upload -rs --delete --yes frontend/dist/ /
