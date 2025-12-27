@@ -60,6 +60,11 @@ export class AuthRegisterDto {
   minecraftNick?: string;
 
   @IsOptional()
+  @IsString()
+  @Length(32, 32)
+  inviteCode?: string;
+
+  @IsOptional()
   @IsBoolean()
   rememberMe?: boolean;
 }

@@ -46,6 +46,7 @@ const menuGroups = computed<MenuGroup[]>(() => [
     items: [
       { label: '用户信息', to: '/admin/users', icon: 'i-lucide-user-round' },
       { label: '玩家信息', to: '/admin/players', icon: 'i-lucide-users' },
+      { label: '邀请码', to: '/admin/invites', icon: 'i-lucide-key-round' },
       { label: 'RBAC 管理', to: '/admin/rbac', icon: 'i-lucide-shield-check' },
       {
         label: '验证管理',

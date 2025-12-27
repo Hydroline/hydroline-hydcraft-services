@@ -76,6 +76,8 @@ model User {
   transportationRailwayCompanyBindingsCreated TransportationRailwayCompanyBinding[] @relation("TransportationRailwayCompanyBindingCreatedBy")
   transportationRailwayCompanyBindingsUpdated TransportationRailwayCompanyBinding[] @relation("TransportationRailwayCompanyBindingUpdatedBy")
   transportationRailwaySystemLogs TransportationRailwaySystemLog[] @relation("RailwaySystemLogActor")
+  invitesCreated InviteCode[] @relation("InviteCreatedBy")
+  invitesUsed InviteCode[] @relation("InviteUsedBy")
 
   @@map("users")
 }
@@ -193,6 +195,22 @@ model PlayerMessageReaction {
 
   @@unique([messageId, userId], name: "uq_player_message_reaction_user")
   @@map("player_message_reactions")
+}
+
+model InviteCode {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  usedById    String?
+  usedAt      DateTime?
+  createdBy   User?    @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  usedBy      User?    @relation("InviteUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+  @@index([usedById])
+  @@map("invite_codes")
 }
 
 model TransportationRailwayFeaturedItem {

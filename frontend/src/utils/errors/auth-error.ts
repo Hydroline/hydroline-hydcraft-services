@@ -74,6 +74,13 @@ const STATIC_TRANSLATIONS: Record<string, string> = {
     '验证码发送失败，请稍后重试',
   'Cannot send verification code, please bind email first':
     '无法发送验证码，请先绑定邮箱',
+  'Invitation code is required': '请输入邀请码',
+  'Invitation code is invalid': '邀请码无效',
+  'Invitation code has been used': '邀请码已被使用',
+  'inviteCode must be longer than or equal to 32 characters':
+    '邀请码长度不正确',
+  'inviteCode must be shorter than or equal to 32 characters':
+    '邀请码长度不正确',
   'Cannot like yourself': '无法为自己点赞',
   'Not allowed to update biography': '不允许修改该自述',
   'Not allowed to delete message': '不允许删除该留言',

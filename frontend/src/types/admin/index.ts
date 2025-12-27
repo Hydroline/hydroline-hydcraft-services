@@ -350,3 +350,32 @@ export interface AdminPermissionCatalogEntry {
     color?: string | null
   }>
 }
+
+export interface AdminInviteUserSummary {
+  id: string
+  email: string | null
+  name: string | null
+  profile?: {
+    displayName: string | null
+  } | null
+}
+
+export interface AdminInviteEntry {
+  id: string
+  code: string
+  createdAt: string
+  updatedAt: string
+  usedAt: string | null
+  createdBy: AdminInviteUserSummary | null
+  usedBy: AdminInviteUserSummary | null
+}
+
+export interface AdminInviteListResponse {
+  items: AdminInviteEntry[]
+  pagination: {
+    total: number
+    page: number
+    pageSize: number
+    pageCount: number
+  }
+}

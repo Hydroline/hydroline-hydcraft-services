@@ -25,6 +25,8 @@ import { VerificationAdminController } from './controllers/verification-admin.co
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { CacheModule } from '../cache/cache.module';
 import { RedisModule } from '../lib/redis/redis.module';
+import { InviteAdminController } from './controllers/invite-admin.controller';
+import { InviteService } from './services/invite.service';
 
 @Module({
   imports: [
@@ -46,11 +48,13 @@ import { RedisModule } from '../lib/redis/redis.module';
     PlayersController,
     RbacSelfController,
     VerificationAdminController,
+    InviteAdminController,
   ],
   providers: [
     AuthService,
     UsersService,
     RolesService,
+    InviteService,
     ContactChannelsService,
     PlayersService,
     AdminAuditService,

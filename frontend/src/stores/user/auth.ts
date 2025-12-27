@@ -51,6 +51,7 @@ type AuthRegisterPayload =
       email: string
       password: string
       code: string
+      inviteCode?: string
       name?: string
       minecraftId?: string
       minecraftNick?: string
@@ -62,6 +63,7 @@ type AuthRegisterPayload =
       password: string
       email: string
       code: string
+      inviteCode?: string
       rememberMe?: boolean
     }
 

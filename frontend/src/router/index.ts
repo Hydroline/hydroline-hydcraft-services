@@ -350,6 +350,16 @@ export const adminRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'invites',
+        name: 'admin.invites',
+        component: () => import('@/views/admin/Users/InviteCodeDirectory.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresPermissions: ['auth.view.invites'],
+          layout: 'admin',
+        },
+      },
+      {
         path: 'attachments',
         name: 'admin.attachments',
         component: () =>

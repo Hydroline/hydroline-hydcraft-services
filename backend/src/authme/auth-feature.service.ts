@@ -28,6 +28,7 @@ export interface SecurityFeatureFlags {
 export type AuthFeatureFlags = AuthmeFeatureFlags &
   SecurityFeatureFlags & {
     oauthProviders?: OAuthProviderFeature[];
+    inviteRequired: boolean;
   };
 
 export interface FeatureSnapshot {
@@ -56,6 +57,7 @@ const DEFAULT_FLAGS: AuthFeatureFlags = {
   ...DEFAULT_AUTHME_FLAGS,
   ...DEFAULT_SECURITY_FLAGS,
   oauthProviders: [],
+  inviteRequired: false,
 };
 
 @Injectable()

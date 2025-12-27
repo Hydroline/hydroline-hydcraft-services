@@ -32,6 +32,7 @@ import { ChangePasswordWithCodeDto } from '../dto/change-password-with-code.dto'
 import { OAuthProvidersService } from '../../oauth/services/oauth-providers.service';
 import { formatDateTimeCn } from '../../lib/shared/datetime';
 import { RedisService } from '../../lib/redis/redis.service';
+import { InviteService } from './invite.service';
 
 interface AuthResponse {
   token: string | null;
@@ -86,6 +87,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly oauthProvidersService: OAuthProvidersService,
     private readonly redis: RedisService,
+    private readonly inviteService: InviteService,
   ) {}
 
   private readonly passwordCodeTtlMs = 10 * 60 * 1000;
@@ -105,13 +107,22 @@ export class AuthService {
     dto: AuthRegisterDto,
     context: RequestContext = {},
   ): Promise<AuthOperationResult> {
+    const inviteCode = await this.prepareInviteCode(dto.inviteCode);
     if (dto.mode === 'AUTHME') {
-      return this.registerWithAuthme(dto, context);
+      const result = await this.registerWithAuthme(dto, context);
+      if (inviteCode) {
+        await this.inviteService.consumeInvite(inviteCode, result.user.id);
+      }
+      return result;
     }
     if (!dto.email) {
       throw new BadRequestException('Email address cannot be empty');
     }
-    return this.registerWithEmail(dto, context);
+    const result = await this.registerWithEmail(dto, context);
+    if (inviteCode) {
+      await this.inviteService.consumeInvite(inviteCode, result.user.id);
+    }
+    return result;
   }
 
   async login(
@@ -307,10 +318,14 @@ export class AuthService {
   }
 
   async getFeatureFlags(): Promise<AuthFeatureFlags> {
-    const flags = await this.authFeatureService.getFlags();
-    const providers = await this.oauthProvidersService.listProviders();
+    const [flags, providers, inviteRequired] = await Promise.all([
+      this.authFeatureService.getFlags(),
+      this.oauthProvidersService.listProviders(),
+      this.inviteService.getInviteRequired(),
+    ]);
     return {
       ...flags,
+      inviteRequired,
       oauthProviders: providers
         .filter((provider) => provider.enabled)
         .map((provider) => ({
@@ -789,6 +804,19 @@ export class AuthService {
 
     const user = await this.usersService.getSessionUser(result.user.id);
     return { ...result, user } satisfies AuthOperationResult;
+  }
+
+  private async prepareInviteCode(rawInviteCode?: string) {
+    const inviteRequired = await this.inviteService.getInviteRequired();
+    const trimmed = (rawInviteCode ?? '').trim();
+    if (!trimmed) {
+      if (inviteRequired) {
+        throw new BadRequestException('Invitation code is required');
+      }
+      return null;
+    }
+    await this.inviteService.assertInviteAvailable(trimmed);
+    return this.inviteService.normalizeInviteCode(trimmed);
   }
 
   private normalizeEmail(email: string | null | undefined) {

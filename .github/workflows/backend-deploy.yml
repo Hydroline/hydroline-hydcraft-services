@@ -74,6 +74,7 @@ jobs:
             tar -xzf ~/backend-dist.tar.gz -C "$REMOTE_TEMP_DIR"
             rsync -a --delete --exclude='.env' "$REMOTE_TEMP_DIR/" "$REMOTE_DEPLOY_PATH/"
             cd "$REMOTE_DEPLOY_PATH"
+            pnpm --filter @hydroline/backend db:deploy
             pm2 stop "$PM2_APP_NAME"
             pm2 restart "$PM2_APP_NAME"
             rm -rf "$REMOTE_TEMP_DIR"

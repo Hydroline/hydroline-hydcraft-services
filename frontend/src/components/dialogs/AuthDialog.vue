@@ -64,18 +64,21 @@ const registerForm = reactive({
   email: '',
   password: '',
   confirmPassword: '',
+  inviteCode: '',
 })
 
 const authmeRegisterForm = reactive({
   authmeId: '',
   password: '',
   email: '',
+  inviteCode: '',
 })
 
 const authmeLoginEnabled = computed(() => featureStore.flags.authmeLoginEnabled)
 const authmeRegisterEnabled = computed(
   () => featureStore.flags.authmeRegisterEnabled,
 )
+const inviteRequired = computed(() => featureStore.flags.inviteRequired)
 const oauthProviders = computed(() =>
   (featureStore.flags.oauthProviders ?? []).filter(
     (provider) => provider.hasClientSecret !== false,
@@ -243,6 +246,10 @@ async function handleRegister() {
     registerMode.value === 'AUTHME'
       ? authmeRegisterForm.email.trim()
       : registerForm.email.trim()
+  const inviteCode =
+    registerMode.value === 'AUTHME'
+      ? authmeRegisterForm.inviteCode.trim()
+      : registerForm.inviteCode.trim()
   const trimmedCode = registerCode.value.trim()
   if (
     registerMode.value === 'EMAIL' &&
@@ -253,6 +260,10 @@ async function handleRegister() {
   }
   if (!targetEmail) {
     registerError.value = '请填写邮箱地址'
+    return
+  }
+  if (inviteRequired.value && !inviteCode) {
+    registerError.value = '请输入邀请码'
     return
   }
   if (!trimmedCode) {
@@ -275,6 +286,7 @@ async function handleRegister() {
         password: authmeRegisterForm.password,
         email: targetEmail,
         code: trimmedCode,
+        inviteCode: inviteCode || undefined,
       })
     } else {
       await authStore.register({
@@ -283,6 +295,7 @@ async function handleRegister() {
         password: registerForm.password,
         code: trimmedCode,
         rememberMe: true,
+        inviteCode: inviteCode || undefined,
       })
     }
     await portalStore.fetchHome(true)
@@ -738,6 +751,17 @@ async function confirmForgotReset() {
                         required
                       />
                     </label>
+                    <label
+                      v-if="inviteRequired"
+                      class="flex flex-col gap-1 text-left text-sm font-medium text-slate-700 dark:text-slate-200"
+                    >
+                      <span>邀请码</span>
+                      <UInput
+                        v-model="registerForm.inviteCode"
+                        placeholder="请输入邀请码"
+                        required
+                      />
+                    </label>
                   </div>
                   <div v-else key="register-authme" class="space-y-4">
                     <label
@@ -769,6 +793,17 @@ async function confirmForgotReset() {
                         v-model="authmeRegisterForm.password"
                         type="password"
                         placeholder="请输入服务器内的登录密码"
+                        required
+                      />
+                    </label>
+                    <label
+                      v-if="inviteRequired"
+                      class="flex flex-col gap-1 text-left text-sm font-medium text-slate-700 dark:text-slate-200"
+                    >
+                      <span>邀请码</span>
+                      <UInput
+                        v-model="authmeRegisterForm.inviteCode"
+                        placeholder="请输入邀请码"
                         required
                       />
                     </label>

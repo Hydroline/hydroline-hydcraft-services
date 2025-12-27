@@ -22,9 +22,11 @@ const route = useRoute()
 const showSessionLoader = computed(
   () => (!initialized.value && loading.value) || refreshing.value,
 )
-const layoutKey = computed(
-  () => (route.meta.layout as string) ?? 'default-layout',
-)
+const layoutKey = computed(() => {
+  const layout = (route.meta.layout as string) ?? 'default-layout'
+  const area = route.path.startsWith('/admin') ? 'admin' : 'user'
+  return `${area}:${layout}`
+})
 </script>
 
 <template>

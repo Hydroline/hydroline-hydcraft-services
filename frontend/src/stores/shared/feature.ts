@@ -15,6 +15,7 @@ type AuthFeatureFlags = {
   authmeBindingEnabled: boolean
   phoneVerificationEnabled: boolean
   passwordResetEnabled: boolean
+  inviteRequired: boolean
   oauthProviders?: OAuthProviderSummary[]
 }
 
@@ -26,6 +27,7 @@ const DEFAULT_FLAGS: AuthFeatureFlags = {
   oauthProviders: [],
   phoneVerificationEnabled: false,
   passwordResetEnabled: true,
+  inviteRequired: false,
 }
 
 export const useFeatureStore = defineStore('features', {
